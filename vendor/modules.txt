@@ -79,13 +79,13 @@ github.com/martini-contrib/gzip
 # github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
 ## explicit
 github.com/martini-contrib/render
-# github.com/mattn/go-colorable v0.1.14
+# github.com/mattn/go-colorable v0.1.15
 ## explicit; go 1.18
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.22
 ## explicit; go 1.21
 github.com/mattn/go-isatty
-# github.com/mattn/go-sqlite3 v1.14.44
+# github.com/mattn/go-sqlite3 v1.14.45
 ## explicit; go 1.21
 github.com/mattn/go-sqlite3
 # github.com/mitchellh/go-homedir v1.1.0
@@ -126,7 +126,7 @@ github.com/sjmudd/stopwatch
 # golang.org/x/crypto v0.52.0
 ## explicit; go 1.25.0
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a
+# golang.org/x/exp v0.0.0-20260603202125-055de637280b
 ## explicit; go 1.25.0
 golang.org/x/exp/slices
 # golang.org/x/sys v0.45.0

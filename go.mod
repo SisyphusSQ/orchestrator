@@ -1,6 +1,6 @@
 module github.com/openark/orchestrator
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/Showmax/go-fqdn v1.0.0
@@ -14,7 +14,7 @@ require (
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
-	github.com/mattn/go-sqlite3 v1.14.44
+	github.com/mattn/go-sqlite3 v1.14.45
 	github.com/montanaflynn/stats v0.9.0
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
 	github.com/outbrain/zookeepercli v1.0.12
@@ -41,13 +41,13 @@ require (
 	github.com/hashicorp/go-rootcerts v1.0.3-0.20191216101743-c8a9a31cbd76 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/serf v0.10.2 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/outbrain/golib v0.0.0-20200503083229-2531e5dbcc71 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
+	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
