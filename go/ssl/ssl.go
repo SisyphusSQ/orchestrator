@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	nethttp "net/http"
+	"os"
 	"strings"
 
 	"github.com/go-martini/martini"
-	"github.com/howeyc/gopass"
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
+	"golang.org/x/term"
 )
 
 // Determine if a string element is in a string array
@@ -169,7 +170,8 @@ func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
 // Print a password prompt on the terminal and collect a password
 func GetPEMPassword(pemFile string) []byte {
 	fmt.Printf("Password for %s: ", pemFile)
-	pass, err := gopass.GetPasswd()
+	pass, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
 	if err != nil {
 		// We'll error with an incorrect password at DecryptPEMBlock
 		return []byte("")
