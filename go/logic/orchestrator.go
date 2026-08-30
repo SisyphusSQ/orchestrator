@@ -153,7 +153,12 @@ func acceptSignals() {
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
-				os.Exit(0)
+				exitCode := 0
+				if err := log.Close(); err != nil {
+					fmt.Fprintf(os.Stderr, "logger close failed: %v\n", err)
+					exitCode = 1
+				}
+				os.Exit(exitCode)
 			}
 		}
 	}()

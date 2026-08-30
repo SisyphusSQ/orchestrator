@@ -17,9 +17,11 @@
 package inst
 
 import (
+	"errors"
 	"fmt"
 	"log/syslog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/openark/golib/log"
@@ -29,8 +31,14 @@ import (
 	"github.com/rcrowley/go-metrics"
 )
 
-// syslogWriter is optional, and defaults to nil (disabled)
-var syslogWriter *syslog.Writer
+// syslogWriter is optional, and defaults to nil (disabled).
+var syslogWriter auditSyslogSink
+var syslogMutex sync.RWMutex
+
+type auditSyslogSink interface {
+	Info(string) error
+	Close() error
+}
 
 var auditOperationCounter = metrics.NewCounter()
 
@@ -40,11 +48,30 @@ func init() {
 
 // EnableSyslogWriter enables, if possible, writes to syslog. These will execute _in addition_ to normal logging
 func EnableAuditSyslog() (err error) {
-	syslogWriter, err = syslog.New(syslog.LOG_ERR, "orchestrator")
+	writer, err := syslog.New(syslog.LOG_ERR, "orchestrator")
 	if err != nil {
-		syslogWriter = nil
+		return err
 	}
-	return err
+	syslogMutex.Lock()
+	previousWriter := syslogWriter
+	syslogWriter = writer
+	syslogMutex.Unlock()
+	if previousWriter == nil {
+		return nil
+	}
+	return previousWriter.Close()
+}
+
+// CloseAuditSyslog closes and disables the optional audit syslog sink.
+func CloseAuditSyslog() error {
+	syslogMutex.Lock()
+	writer := syslogWriter
+	syslogWriter = nil
+	syslogMutex.Unlock()
+	if writer == nil {
+		return nil
+	}
+	return writer.Close()
 }
 
 // AuditOperation creates and writes a new audit entry by given params
@@ -57,22 +84,13 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 		clusterName, _ = GetClusterName(instanceKey)
 	}
 
-	auditWrittenToFile := false
+	auditWritten := false
 	if config.Config.AuditLogFile != "" {
-		auditWrittenToFile = true
-		go func() error {
-			f, err := os.OpenFile(config.Config.AuditLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
-			if err != nil {
-				return log.Errore(err)
-			}
-
-			defer f.Close()
-			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format(log.TimeFormat), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
-			if _, err = f.WriteString(text); err != nil {
-				return log.Errore(err)
-			}
-			return nil
-		}()
+		text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format(log.TimeFormat), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
+		if err := appendAuditFile(config.Config.AuditLogFile, text); err != nil {
+			return log.Errore(err)
+		}
+		auditWritten = true
 	}
 	if config.Config.AuditToBackendDB {
 		_, err := db.ExecOrchestrator(`
@@ -94,18 +112,40 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 		}
 	}
 	logMessage := fmt.Sprintf("auditType:%s instance:%s cluster:%s message:%s", auditType, instanceKey.DisplayString(), clusterName, message)
-	if syslogWriter != nil {
-		auditWrittenToFile = true
-		go func() {
-			syslogWriter.Info(logMessage)
-		}()
+	writtenToSyslog, err := writeAuditSyslog(logMessage)
+	if err != nil {
+		return log.Errore(err)
 	}
-	if !auditWrittenToFile {
+	if writtenToSyslog {
+		auditWritten = true
+	}
+	if !auditWritten {
 		log.Infof("%s", logMessage)
 	}
 	auditOperationCounter.Inc(1)
 
 	return nil
+}
+
+func appendAuditFile(path, text string) (err error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0640)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
+	_, err = file.WriteString(text)
+	return err
+}
+
+func writeAuditSyslog(message string) (bool, error) {
+	syslogMutex.RLock()
+	defer syslogMutex.RUnlock()
+	if syslogWriter == nil {
+		return false, nil
+	}
+	return true, syslogWriter.Info(message)
 }
 
 // ReadRecentAudit returns a list of audit entries order chronologically descending, using page number.

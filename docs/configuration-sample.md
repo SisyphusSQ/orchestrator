@@ -2,6 +2,8 @@
 
 The following is a production configuration file, with some details redacted.
 
+`EnableSyslog` and `AuditToSyslog` remain disabled in this sample. When either option is enabled, the corresponding local syslog writer must initialize successfully or startup fails. See [Logging](configuration-logging.md) for the output format, priority mapping, and audit write behavior.
+
 ```json
 {
   "Debug": true,

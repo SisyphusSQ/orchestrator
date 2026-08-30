@@ -4,6 +4,14 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### Log output and syslog failure behavior changed
+
+Application logging now uses Uber Zap v1.28.0 and writes text lines to stderr in the form `time\t[LEVEL]\t[caller]\tmessage`. The added caller field and Tab separators replace the previous space-separated format. Console output remains plain text, not JSON, and CLI data on stdout remains separate. Update log parsers, collection rules, and alerts that depend on the previous layout before replacing the binary.
+
+When `EnableSyslog` is `true`, failure to initialize the local syslog writer now stops startup instead of silently continuing with stderr only. The same explicit startup failure applies to `AuditToSyslog`. Confirm syslog access from the actual host, container, or service sandbox before rollout.
+
+Application and audit syslog writes no longer start an unbounded goroutine per entry. They are synchronous, and audit file/syslog errors are returned and logged. Verify local syslog latency under representative load and ensure the service is supervised before enabling these sinks.
+
 ### Built-in ZooKeeper KV publishing removed
 
 `orchestrator` no longer includes a ZooKeeper adapter or client dependencies. The internal KV store, Consul KV providers, `submit-masters-to-kv-stores` CLI/API, and Raft `put-key-value` command remain supported.

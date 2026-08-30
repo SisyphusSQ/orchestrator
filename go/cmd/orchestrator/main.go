@@ -34,6 +34,23 @@ var AppVersion, GitCommit string
 
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
+	log.RegisterCloseHook(func() error {
+		if err := inst.CloseAuditSyslog(); err != nil {
+			return fmt.Errorf("close audit syslog: %w", err)
+		}
+		return nil
+	})
+	exitCode := run()
+	if err := log.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "logger close failed: %v\n", err)
+		exitCode = 1
+	}
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+}
+
+func run() int {
 	configFile := flag.String("config", "", "config file name")
 	command := flag.String("c", "", "command, required. See full list of commands via 'orchestrator -c help'")
 	strict := flag.Bool("strict", false, "strict mode (more checks, slower)")
@@ -97,7 +114,7 @@ func main() {
 	if *config.RuntimeCLIFlags.Version {
 		fmt.Println(AppVersion)
 		fmt.Println(GitCommit)
-		return
+		return 0
 	}
 
 	startText := "starting orchestrator"
@@ -124,12 +141,13 @@ func main() {
 		// Override!!
 		log.SetLevel(log.ERROR)
 	}
-	if config.Config.EnableSyslog {
-		log.EnableSyslogWriter("orchestrator")
-		log.SetSyslogLevel(log.INFO)
+	if err := configureSyslog(config.Config.EnableSyslog, log.EnableSyslogWriter); err != nil {
+		log.Fatalf("%v", err)
 	}
 	if config.Config.AuditToSyslog {
-		inst.EnableAuditSyslog()
+		if err := inst.EnableAuditSyslog(); err != nil {
+			log.Fatalf("initialize audit syslog: %v", err)
+		}
 	}
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
@@ -137,7 +155,7 @@ func main() {
 	if len(flag.Args()) == 0 && *command == "" {
 		// No command, no argument: just prompt
 		fmt.Print(app.AppPrompt)
-		return
+		return 0
 	}
 
 	helpTopic := ""
@@ -169,6 +187,18 @@ See complete list of commands:
   orchestrator -c help
 Full blown documentation:
   orchestrator`)
-		os.Exit(1)
+		return 1
 	}
+	return 0
+}
+
+func configureSyslog(enabled bool, enable func(string) error) error {
+	if !enabled {
+		return nil
+	}
+	if err := enable("orchestrator"); err != nil {
+		return fmt.Errorf("initialize syslog: %w", err)
+	}
+	log.SetSyslogLevel(log.INFO)
+	return nil
 }
