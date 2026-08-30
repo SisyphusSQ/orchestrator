@@ -56,7 +56,6 @@ func InitKVStores() {
 	kvInitOnce.Do(func() {
 		kvStores = []KVStore{
 			NewInternalKVStore(),
-			NewZkStore(),
 		}
 		switch config.Config.ConsulKVStoreProvider {
 		case "consul-txn", "consul_txn":

@@ -4,7 +4,6 @@
 
 - An internal store based on a relational table
 - [Consul](https://github.com/hashicorp/consul)
-- [ZooKeeper](https://zookeeper.apache.org/)
 
 See also [Key-Value configuration](configuration-kv.md).
 
@@ -16,18 +15,18 @@ At this time Key-Value (aka KV) stores are used for:
 
 ### Master discoveries, key-values and failovers
 
-The objective is that service discoveries such as `Consul` or `ZookKeeper`-based would be able serve master discovery and/or take action based on cluster's master identity and change.
+The objective is that Consul-based service discovery can serve master discovery and/or take action based on cluster's master identity and change. Other discovery systems can consume the same master identity through an external recovery hook or independently managed integration.
 
 The most common scenario is to update a Proxy to direct cluster's write traffic to a specific master. As an example, one may set up `HAProxy` via `consul-template`, such that `consul-template` populates a single-host master pool based on the key-value store authored by `orchestrator`.
 
-`orchestrator` updates all KV stores upon master failover.
+`orchestrator` updates its internal KV store and the configured Consul store upon master failover.
 
 #### Populating master entries
 
 Clusters' master entries are populated on:
 
 - Encountering a new cluster, or encountering a master for which there is no existing KV entry. This check runs automatically and periodically.
-  - The periodic check first consults with `orchestrator`'s internal KV store. It will only attempt to populate external stores (`Consul`, `Zookeeper`) if the internal store does not already have the master entries.
+  - The periodic check first consults with `orchestrator`'s internal KV store. It will only attempt to populate Consul if the internal store does not already have the master entries.
   It follows that the periodic checks will only inject external KV _once_.
 - An actual failover: `orchestrator` overwrites existing entry with identity of new master
 - A manual request for entry population:
@@ -45,6 +44,8 @@ Clusters' master entries are populated on:
   respectively.
 
 Both actual failover and manual request will override any existing KV entries, internal and external.
+
+Built-in ZooKeeper publishing has been removed. Existing deployments must migrate to Consul KV or an [external recovery hook](configuration-recovery.md#hooks) before upgrading; see the [upgrade notes](upgrading.md#built-in-zookeeper-kv-publishing-removed). The generic `submit-masters-to-kv-stores` CLI and API remain available for the internal and Consul stores.
 
 ### KV and orchestrator/raft
 

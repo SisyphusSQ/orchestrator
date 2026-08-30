@@ -76,8 +76,9 @@ Recovering from a dead master is a much more complex operation, for various reas
 
 Master service discovery is largely the user's responsibility to implement. Common solutions are:
 - DNS based discovery; `orchestrator` will need to invoke a hook that modifies DNS entries.
-- ZooKeeper/Consul KV/etcd/other key-value based discovery; `orchestrator` has built-in support for Consul KV, otherwise an external hook must update KV stores
-- Proxy based discovery; `orchestrator` will call upon external hook that modifies proxy config, or will update Consul/Zk/etcd as above, which will itself trigger an update to proxy configuration.
+- Consul KV based discovery; `orchestrator` has built-in support for publishing the promoted master's identity to Consul.
+- ZooKeeper, etcd, or other key-value based discovery; an external recovery hook or independently managed integration must update those stores.
+- Proxy based discovery; `orchestrator` will call an external hook that modifies proxy config, or will update Consul, which can trigger an update to proxy configuration.
 - Other solutions...
 
 `orchestrator` attempts to be a generic solution hence takes no stance on your service discovery method.

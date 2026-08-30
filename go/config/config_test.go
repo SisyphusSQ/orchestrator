@@ -1,15 +1,99 @@
 package config
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/openark/golib/log"
 	test "github.com/openark/golib/tests"
 )
 
+const (
+	forceReadChildEnv      = "ORCHESTRATOR_FORCE_READ_CHILD"
+	forceReadConfigPathEnv = "ORCHESTRATOR_FORCE_READ_CONFIG_PATH"
+	forceReadStdinChildEnv = "ORCHESTRATOR_FORCE_READ_STDIN_CHILD"
+)
+
 func init() {
 	Config.HostnameResolveMethod = "none"
 	log.SetLevel(log.ERROR)
+}
+
+func runForceReadInChildProcess(t *testing.T, testName string, content string) ([]byte, error) {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "orchestrator.conf.json")
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config fixture: %v", err)
+	}
+
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+testName+"$")
+	cmd.Env = append(os.Environ(),
+		forceReadChildEnv+"=1",
+		forceReadConfigPathEnv+"="+configPath,
+	)
+	return cmd.CombinedOutput()
+}
+
+func forceReadChildConfig() bool {
+	if os.Getenv(forceReadChildEnv) == "" {
+		return false
+	}
+	ForceRead(os.Getenv(forceReadConfigPathEnv))
+	return true
+}
+
+func TestForceReadRejectsRemovedZkAddress(t *testing.T) {
+	if forceReadChildConfig() {
+		return
+	}
+
+	testCases := map[string]string{
+		"configured":       `{"ZkAddress":"zk-1:2181"}`,
+		"empty":            `{"ZkAddress":""}`,
+		"case-insensitive": `{"zkaddress":"zk-1:2181"}`,
+	}
+	for name, content := range testCases {
+		t.Run(name, func(t *testing.T) {
+			output, err := runForceReadInChildProcess(t, "TestForceReadRejectsRemovedZkAddress", content)
+			if err == nil {
+				t.Fatalf("expected configuration containing ZkAddress to fail, output: %s", output)
+			}
+			for _, expected := range []string{"ZkAddress", "ZooKeeper", "Consul KV", "external failover hook"} {
+				if !strings.Contains(string(output), expected) {
+					t.Fatalf("expected failure output to contain %q, got: %s", expected, output)
+				}
+			}
+		})
+	}
+}
+
+func TestForceReadAllowsOtherUnknownFields(t *testing.T) {
+	if forceReadChildConfig() {
+		return
+	}
+
+	output, err := runForceReadInChildProcess(t, "TestForceReadAllowsOtherUnknownFields", `{"Debug":true,"FutureSetting":true}`)
+	if err != nil {
+		t.Fatalf("expected unrelated unknown configuration fields to remain accepted, got %v: %s", err, output)
+	}
+}
+
+func TestForceReadAllowsNonSeekableInput(t *testing.T) {
+	if os.Getenv(forceReadStdinChildEnv) != "" {
+		ForceRead("/dev/stdin")
+		return
+	}
+
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestForceReadAllowsNonSeekableInput$")
+	cmd.Env = append(os.Environ(), forceReadStdinChildEnv+"=1")
+	cmd.Stdin = strings.NewReader(`{"Debug":true}`)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("expected non-seekable configuration input to remain accepted, got %v: %s", err, output)
+	}
 }
 
 func TestReplicationLagQuery(t *testing.T) {

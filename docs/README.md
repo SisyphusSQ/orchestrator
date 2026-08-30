@@ -8,6 +8,7 @@
 
 #### Setup
 - [Installation](install.md): installing the service/binary
+- [Upgrading](upgrading.md): breaking changes and required migration checks
 - [Configuration](configuration.md): breakdown of major configuration variables by topic.
 
 #### Use

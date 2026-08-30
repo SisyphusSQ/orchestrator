@@ -4,14 +4,12 @@
 
 - An internal store based on a relational table
 - [Consul](https://github.com/hashicorp/consul)
-- [ZooKeeper](https://zookeeper.apache.org/)
 
 `orchestrator` supports master discovery by storing clusters' masters in KV.
 
 ```json
   "KVClusterMasterPrefix": "mysql/master",
   "ConsulAddress": "127.0.0.1:8500",
-  "ZkAddress": "srv-a,srv-b:12181,srv-c",
   "ConsulCrossDataCenterDistribution": true,
 ```
 
@@ -19,8 +17,6 @@
 
 - The Key is `mysql/master/mycluster`
 - The Value is `some.host-17.com:3306`
-
-Note: on ZooKeeper the key will automatically prefix with a `/` if not already so.
 
 #### Breakdown entries
 
@@ -37,11 +33,11 @@ The `/hostname`, `/port`, `/ipv4` and `/ipv6` extensions are automatically added
 
 If specified, `ConsulAddress` indicates an address where a Consul HTTP service is available. If unspecified, no Consul access is attempted.
 
-If specified, `ZkAddress` indicates one or more ZooKeeper servers to connect to. Default port per server is `2181`. All the following are equivalent:
+### ZooKeeper removal
 
-- `srv-a,srv-b:12181,srv-c`
-- `srv-a,srv-b:12181,srv-c:2181`
-- `srv-a:2181,srv-b:12181,srv-c:2181`
+Built-in ZooKeeper publishing has been removed. `ZkAddress` is no longer a supported configuration field; if it is present, including with an empty value or different letter casing, `orchestrator` exits with an upgrade error instead of silently ignoring it.
+
+Before upgrading, migrate master discovery consumers to Consul KV or an [external recovery hook](configuration-recovery.md#hooks), then remove `ZkAddress` from every configuration layer. See the [upgrade notes](upgrading.md#built-in-zookeeper-kv-publishing-removed) for the required checks. An external hook or independently managed integration may still publish the master identity to ZooKeeper, but `orchestrator` no longer includes a ZooKeeper client or write path.
 
 ### Consul specific
 

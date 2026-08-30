@@ -16,10 +16,8 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.45
 	github.com/montanaflynn/stats v0.9.0
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
-	github.com/outbrain/zookeepercli v1.0.12
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
-	github.com/samuel/go-zookeeper v0.0.0-20201211165307-7117e9ea2414
 	github.com/sjmudd/stopwatch v0.1.1
 	golang.org/x/term v0.43.0
 	gopkg.in/gcfg.v1 v1.2.3
@@ -44,7 +42,6 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/outbrain/golib v0.0.0-20200503083229-2531e5dbcc71 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/net v0.54.0 // indirect

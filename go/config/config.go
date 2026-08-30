@@ -19,6 +19,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"regexp"
@@ -280,8 +281,7 @@ type Configuration struct {
 	ConsulCrossDataCenterDistribution          bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
 	ConsulKVStoreProvider                      string            // Consul KV store provider (consul or consul-txn), default: "consul"
 	ConsulMaxKVsPerTransaction                 int               // Maximum number of KV operations to perform in a single Consul Transaction. Requires the "consul-txn" ConsulKVStoreProvider
-	ZkAddress                                  string            // UNSUPPERTED YET. Address where (single or multiple) ZooKeeper servers are found, in `srv1[:port1][,srv2[:port2]...]` format. Default port is 2181. Example: srv-a,srv-b:12181,srv-c
-	KVClusterMasterPrefix                      string            // Prefix to use for clusters' masters entries in KV stores (internal, consul, ZK), default: "mysql/master"
+	KVClusterMasterPrefix                      string            // Prefix to use for clusters' masters entries in KV stores (internal and Consul), default: "mysql/master"
 	WebMessage                                 string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations             int               // Maximum number of concurrent operations on replicas
 	EnforceExactSemiSyncReplicas               bool              // If true, semi-sync replicas will be enabled/disabled to match the wait count in the desired priority order; this applies to LockedSemiSyncMaster and MasterWithTooManySemiSyncReplicas
@@ -465,7 +465,6 @@ func newConfiguration() *Configuration {
 		ConsulCrossDataCenterDistribution:          false,
 		ConsulKVStoreProvider:                      "consul",
 		ConsulMaxKVsPerTransaction:                 ConsulKVsPerCluster,
-		ZkAddress:                                  "",
 		KVClusterMasterPrefix:                      "mysql/master",
 		WebMessage:                                 "",
 		MaxConcurrentReplicaOperations:             5,
@@ -658,6 +657,30 @@ func (this *Configuration) IsMySQL() bool {
 	return this.BackendDB == "mysql" || this.BackendDB == ""
 }
 
+func rejectRemovedConfigurationFields(fields map[string]json.RawMessage) error {
+	for field := range fields {
+		if strings.EqualFold(field, "ZkAddress") {
+			return fmt.Errorf("configuration field %q was removed; migrate ZooKeeper master publishing to Consul KV or an external failover hook before upgrading", "ZkAddress")
+		}
+	}
+	return nil
+}
+
+func decodeConfiguration(reader io.Reader, configuration *Configuration) error {
+	var rawConfiguration json.RawMessage
+	if err := json.NewDecoder(reader).Decode(&rawConfiguration); err != nil {
+		return err
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(rawConfiguration, &fields); err == nil {
+		if err := rejectRemovedConfigurationFields(fields); err != nil {
+			return err
+		}
+	}
+	return json.Unmarshal(rawConfiguration, configuration)
+}
+
 // read reads configuration from given file, or silently skips if the file does not exist.
 // If the file does exist, then it is expected to be in valid JSON format or the function bails out.
 func read(fileName string) (*Configuration, error) {
@@ -668,8 +691,9 @@ func read(fileName string) (*Configuration, error) {
 	if err != nil {
 		return Config, err
 	}
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(Config)
+	defer file.Close()
+
+	err = decodeConfiguration(file, Config)
 	if err == nil {
 		log.Infof("Read config: %s", fileName)
 	} else {
