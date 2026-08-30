@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -486,12 +487,11 @@ func (this *Configuration) postReadAdjustments() error {
 		}{}
 		err := gcfg.ReadFileInto(&mySQLConfig, this.MySQLOrchestratorCredentialsConfigFile)
 		if err != nil {
-			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
-		} else {
-			log.Debugf("Parsed orchestrator credentials from %s", this.MySQLOrchestratorCredentialsConfigFile)
-			this.MySQLOrchestratorUser = mySQLConfig.Client.User
-			this.MySQLOrchestratorPassword = mySQLConfig.Client.Password
+			return fmt.Errorf("parse orchestrator credentials file %s: %w", this.MySQLOrchestratorCredentialsConfigFile, err)
 		}
+		log.Debugf("Parsed orchestrator credentials from %s", this.MySQLOrchestratorCredentialsConfigFile)
+		this.MySQLOrchestratorUser = mySQLConfig.Client.User
+		this.MySQLOrchestratorPassword = mySQLConfig.Client.Password
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
@@ -510,12 +510,11 @@ func (this *Configuration) postReadAdjustments() error {
 		}{}
 		err := gcfg.ReadFileInto(&mySQLConfig, this.MySQLTopologyCredentialsConfigFile)
 		if err != nil {
-			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
-		} else {
-			log.Debugf("Parsed topology credentials from %s", this.MySQLTopologyCredentialsConfigFile)
-			this.MySQLTopologyUser = mySQLConfig.Client.User
-			this.MySQLTopologyPassword = mySQLConfig.Client.Password
+			return fmt.Errorf("parse topology credentials file %s: %w", this.MySQLTopologyCredentialsConfigFile, err)
 		}
+		log.Debugf("Parsed topology credentials from %s", this.MySQLTopologyCredentialsConfigFile)
+		this.MySQLTopologyUser = mySQLConfig.Client.User
+		this.MySQLTopologyPassword = mySQLConfig.Client.Password
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
@@ -681,59 +680,90 @@ func decodeConfiguration(reader io.Reader, configuration *Configuration) error {
 	return json.Unmarshal(rawConfiguration, configuration)
 }
 
-// read reads configuration from given file, or silently skips if the file does not exist.
-// If the file does exist, then it is expected to be in valid JSON format or the function bails out.
-func read(fileName string) (*Configuration, error) {
+// readInto applies one configuration file to the provided candidate.
+func readInto(fileName string, candidate *Configuration) error {
 	if fileName == "" {
-		return Config, fmt.Errorf("Empty file name")
+		return fmt.Errorf("empty file name")
 	}
 	file, err := os.Open(fileName)
 	if err != nil {
-		return Config, err
+		return fmt.Errorf("open configuration %s: %w", fileName, err)
 	}
 	defer file.Close()
 
-	err = decodeConfiguration(file, Config)
-	if err == nil {
+	if err := decodeConfiguration(file, candidate); err != nil {
+		return fmt.Errorf("decode configuration %s: %w", fileName, err)
+	}
+	if err := candidate.postReadAdjustments(); err != nil {
+		return fmt.Errorf("adjust configuration %s: %w", fileName, err)
+	}
+	return nil
+}
+
+func cloneConfiguration(configuration *Configuration) (*Configuration, error) {
+	data, err := json.Marshal(configuration)
+	if err != nil {
+		return nil, fmt.Errorf("marshal configuration clone: %w", err)
+	}
+	cloned := new(Configuration)
+	if err := json.Unmarshal(data, cloned); err != nil {
+		return nil, fmt.Errorf("unmarshal configuration clone: %w", err)
+	}
+	return cloned, nil
+}
+
+func applyFiles(fileNames []string, skipMissing bool) (*Configuration, error) {
+	candidate, err := cloneConfiguration(Config)
+	if err != nil {
+		return Config, err
+	}
+	appliedFiles := make([]string, 0, len(fileNames))
+	for _, fileName := range fileNames {
+		if fileName == "" {
+			continue
+		}
+		if err := readInto(fileName, candidate); err != nil {
+			if skipMissing && errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return Config, err
+		}
+		appliedFiles = append(appliedFiles, fileName)
+	}
+	*Config = *candidate
+	for _, fileName := range appliedFiles {
 		log.Infof("Read config: %s", fileName)
-	} else {
-		log.Fatal("Cannot read config file:", fileName, err)
 	}
-	if err := Config.postReadAdjustments(); err != nil {
-		log.Fatale(err)
-	}
-	return Config, err
+	return Config, nil
 }
 
 // Read reads configuration from zero, either, some or all given files, in order of input.
 // A file can override configuration provided in previous file.
-func Read(fileNames ...string) *Configuration {
-	for _, fileName := range fileNames {
-		read(fileName)
+func Read(fileNames ...string) (*Configuration, error) {
+	configuration, err := applyFiles(fileNames, true)
+	if err != nil {
+		return configuration, err
 	}
 	readFileNames = fileNames
-	return Config
+	return configuration, nil
 }
 
-// ForceRead reads configuration from given file name or bails out if it fails
-func ForceRead(fileName string) *Configuration {
-	_, err := read(fileName)
+// ForceRead reads configuration from a required file.
+func ForceRead(fileName string) (*Configuration, error) {
+	configuration, err := applyFiles([]string{fileName}, false)
 	if err != nil {
-		log.Fatal("Cannot read config file:", fileName, err)
+		return configuration, err
 	}
 	readFileNames = []string{fileName}
-	return Config
+	return configuration, nil
 }
 
 // Reload re-reads configuration from last used files
-func Reload(extraFileNames ...string) *Configuration {
-	for _, fileName := range readFileNames {
-		read(fileName)
-	}
-	for _, fileName := range extraFileNames {
-		read(fileName)
-	}
-	return Config
+func Reload(extraFileNames ...string) (*Configuration, error) {
+	fileNames := make([]string, 0, len(readFileNames)+len(extraFileNames))
+	fileNames = append(fileNames, readFileNames...)
+	fileNames = append(fileNames, extraFileNames...)
+	return applyFiles(fileNames, true)
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

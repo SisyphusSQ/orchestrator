@@ -3179,7 +3179,10 @@ func (this *HttpAPI) ReloadConfiguration(params martini.Params, r render.Render,
 		return
 	}
 	extraConfigFile := req.URL.Query().Get("config")
-	config.Reload(extraConfigFile)
+	if _, err := config.Reload(extraConfigFile); err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot reload config: %+v", err)})
+		return
+	}
 	inst.AuditOperation("reload-configuration", nil, "Triggered via API")
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Config reloaded"), Details: extraConfigFile})

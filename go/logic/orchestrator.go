@@ -146,7 +146,9 @@ func acceptSignals() {
 			case syscall.SIGHUP:
 				log.Infof("Received SIGHUP. Reloading configuration")
 				inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
-				config.Reload()
+				if _, err := config.Reload(); err != nil {
+					log.Errorf("reload configuration after SIGHUP: %v", err)
+				}
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
 				log.Infof("Received SIGTERM. Shutting down orchestrator")
