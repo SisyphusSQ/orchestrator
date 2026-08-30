@@ -40,20 +40,20 @@ jobs:
         sed -i -e "s/backend-db-placeholder/mysql/g" ${test_config_file}
         echo "MySQL config generated"
 
-    - name: check out master branch
+    - name: check out main branch
       uses: actions/checkout@v2
       with:
-        ref: master
+        ref: main
 
-    - name: build master
+    - name: build main
       run:  script/test-build
 
-    - name: execute master via SQLite
+    - name: execute main via SQLite
       run: |
         test_config_file=/tmp/orchestrator-ci-sqlite.conf.json
         bin/orchestrator --config=$test_config_file -c clusters
 
-    - name: execute master via MySQL
+    - name: execute main via MySQL
       run: |
         test_config_file=/tmp/orchestrator-ci-mysql.conf.json
         bin/orchestrator --config=$test_config_file -c clusters

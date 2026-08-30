@@ -27,5 +27,5 @@ Please make sure the PR passes CI tests. For your information, CI tests the foll
 - code passes integration tests with MySQL backend
 - code passes integration tests with SQLite backend
 - There are no orphaned docs/ pages (there's some link in the docs to point to any page)
-- upgrade from previous version (`master` branch) is successful
+- upgrade from previous version (`main` branch) is successful
  -->
