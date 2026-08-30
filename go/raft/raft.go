@@ -88,7 +88,7 @@ func IsRaftEnabled() bool {
 
 func FatalRaftError(err error) error {
 	if err != nil && !enqueueFatalRaftError(fatalRaftErrorChan, err) {
-		log.Errorf("raft fatal error already pending: %v", err)
+		log.Sugar().Errorw("raft fatal error already pending", "error", err)
 	}
 	return err
 }

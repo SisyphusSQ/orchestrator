@@ -125,22 +125,33 @@ func assignThisInstanceKey() *inst.InstanceKey {
 	return thisInstanceKey
 }
 
-func validateInstanceIsFound(instanceKey *inst.InstanceKey) (instance *inst.Instance) {
+func cliError(message string, args ...interface{}) error {
+	for _, arg := range args {
+		message += fmt.Sprintf(" %v", arg)
+	}
+	return fmt.Errorf("%s", message)
+}
+
+func validateInstanceIsFound(instanceKey *inst.InstanceKey) (*inst.Instance, error) {
+	if instanceKey == nil {
+		return nil, fmt.Errorf("instance key is unresolved")
+	}
 	instance, _, err := inst.ReadInstance(instanceKey)
 	if err != nil {
-		log.Fatale(err)
+		return nil, err
 	}
 	if instance == nil {
-		log.Fatalf("Instance not found: %+v", *instanceKey)
+		return nil, fmt.Errorf("instance not found: %+v", *instanceKey)
 	}
-	return instance
+	return instance, nil
 }
 
 // CliWrapper is called from main and allows for the instance parameter
 // to take multiple instance names separated by a comma or whitespace.
-func CliWrapper(command string, strict bool, instances string, destination string, owner string, reason string, duration string, pattern string, clusterAlias string, pool string, hostnameFlag string) {
-	if config.Config.RaftEnabled && !*config.RuntimeCLIFlags.IgnoreRaftSetup {
-		log.Fatalf(`Orchestrator configured to run raft ("RaftEnabled": true). All access must go through the web API of the active raft node. You may use the orchestrator-client script which has a similar interface to the command line invocation. You may override this with --ignore-raft-setup`)
+func CliWrapper(command string, strict bool, instances string, destination string, owner string, reason string, duration string, pattern string, clusterAlias string, pool string, hostnameFlag string) error {
+	ignoreRaftSetup := config.RuntimeCLIFlags.IgnoreRaftSetup != nil && *config.RuntimeCLIFlags.IgnoreRaftSetup
+	if config.Config.RaftEnabled && !ignoreRaftSetup {
+		return fmt.Errorf(`orchestrator is configured to run raft ("RaftEnabled": true); all access must go through the web API of the active raft node; use orchestrator-client or override with --ignore-raft-setup`)
 	}
 	r := regexp.MustCompile(`[ ,\r\n\t]+`)
 	tokens := r.Split(instances, -1)
@@ -153,13 +164,16 @@ func CliWrapper(command string, strict bool, instances string, destination strin
 	}
 	for _, instance := range tokens {
 		if instance != "" || len(tokens) == 1 {
-			Cli(command, strict, instance, destination, owner, reason, duration, pattern, clusterAlias, pool, hostnameFlag)
+			if err := Cli(command, strict, instance, destination, owner, reason, duration, pattern, clusterAlias, pool, hostnameFlag); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 // Cli initiates a command line interface, executing requested command.
-func Cli(command string, strict bool, instance string, destination string, owner string, reason string, duration string, pattern string, clusterAlias string, pool string, hostnameFlag string) {
+func Cli(command string, strict bool, instance string, destination string, owner string, reason string, duration string, pattern string, clusterAlias string, pool string, hostnameFlag string) error {
 	if synonym, ok := commandSynonyms[command]; ok {
 		command = synonym
 	}
@@ -203,7 +217,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		// get os username as owner
 		usr, err := user.Current()
 		if err != nil {
-			log.Fatale(err)
+			return err
 		}
 		owner = usr.Username
 	}
@@ -221,11 +235,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 			_, err := inst.RelocateBelow(instanceKey, destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), destinationKey.DisplayString()))
 		}
@@ -233,11 +247,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 			replicas, _, err, errs := inst.RelocateReplicas(instanceKey, destinationKey, pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, e := range errs {
 					log.Errore(e)
@@ -251,11 +265,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			_, _, err := inst.TakeSiblings(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -263,21 +277,23 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
-			validateInstanceIsFound(instanceKey)
+			if _, err := validateInstanceIsFound(instanceKey); err != nil {
+				return err
+			}
 
 			lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicas(instanceKey, false, func(candidateReplica *inst.Instance) { fmt.Println(candidateReplica.Key.DisplayString()) }, postponedFunctionsContainer)
 			lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 			postponedFunctionsContainer.Wait()
 			if promotedReplica == nil {
-				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
+				return fmt.Errorf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Println(fmt.Sprintf("%s lost: %d, trivial: %d, pseudo-gtid: %d",
 				promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 		// General replication commands
@@ -287,7 +303,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			instance, err := inst.MoveUp(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), instance.MasterKey.DisplayString()))
 		}
@@ -295,12 +311,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 
 			movedReplicas, _, err, errs := inst.MoveUpReplicas(instanceKey, pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, e := range errs {
 					log.Errore(e)
@@ -314,11 +330,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination/sibling:", destination)
+				return cliError("Cannot deduce destination/sibling:", destination)
 			}
 			_, err := inst.MoveBelow(instanceKey, destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), destinationKey.DisplayString()))
 		}
@@ -326,11 +342,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 			_, err := inst.MoveEquivalent(instanceKey, destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), destinationKey.DisplayString()))
 		}
@@ -340,7 +356,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			// destinationKey can be null, in which case the instance repoints to its existing master
 			instance, err := inst.Repoint(instanceKey, destinationKey, inst.GTIDHintNeutral)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), instance.MasterKey.DisplayString()))
 		}
@@ -349,7 +365,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			repointedReplicas, err, errs := inst.RepointReplicasTo(instanceKey, pattern, destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, e := range errs {
 					log.Errore(e)
@@ -363,11 +379,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			_, err := inst.TakeMaster(instanceKey, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -376,7 +392,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.MakeCoMaster(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -384,12 +400,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 
 			instance, _, _, _, _, err := inst.GetCandidateReplica(instanceKey, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				fmt.Println(instance.Key.DisplayString())
 			}
@@ -398,17 +414,19 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
-			validateInstanceIsFound(instanceKey)
+			if _, err := validateInstanceIsFound(instanceKey); err != nil {
+				return err
+			}
 
 			_, promotedBinlogServer, err := inst.RegroupReplicasBinlogServers(instanceKey, false)
 			if promotedBinlogServer == nil {
-				log.Fatalf("Could not regroup binlog server replicas of %+v; error: %+v", *instanceKey, err)
+				return fmt.Errorf("Could not regroup binlog server replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Println(promotedBinlogServer.Key.DisplayString())
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 	// move, GTID
@@ -416,11 +434,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 			_, err := inst.MoveBelowGTID(instanceKey, destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), destinationKey.DisplayString()))
 		}
@@ -428,11 +446,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 			movedReplicas, _, err, errs := inst.MoveReplicasGTID(instanceKey, destinationKey, pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, e := range errs {
 					log.Errore(e)
@@ -446,20 +464,22 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
-			validateInstanceIsFound(instanceKey)
+			if _, err := validateInstanceIsFound(instanceKey); err != nil {
+				return err
+			}
 
 			lostReplicas, movedReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasGTID(instanceKey, false, true, func(candidateReplica *inst.Instance) { fmt.Println(candidateReplica.Key.DisplayString()) }, postponedFunctionsContainer, nil)
 			lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 			if promotedReplica == nil {
-				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
+				return fmt.Errorf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Println(fmt.Sprintf("%s lost: %d, moved: %d",
 				promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas)))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 		// Pseudo-GTID
@@ -467,11 +487,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 			_, _, err := inst.MatchBelow(instanceKey, destinationKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), destinationKey.DisplayString()))
 		}
@@ -480,7 +500,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			instance, _, err := inst.MatchUp(instanceKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), instance.MasterKey.DisplayString()))
 		}
@@ -489,7 +509,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			instance, _, err := inst.RematchReplica(instanceKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%s<%s", instanceKey.DisplayString(), instance.MasterKey.DisplayString()))
 		}
@@ -498,15 +518,15 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			// Move all replicas of "instance" beneath "destination"
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination:", destination)
+				return cliError("Cannot deduce destination:", destination)
 			}
 
 			matchedReplicas, _, err, errs := inst.MultiMatchReplicas(instanceKey, destinationKey, pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, e := range errs {
 					log.Errore(e)
@@ -520,12 +540,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 
 			matchedReplicas, _, err, errs := inst.MatchUpReplicas(instanceKey, pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, e := range errs {
 					log.Errore(e)
@@ -539,21 +559,23 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
-			validateInstanceIsFound(instanceKey)
+			if _, err := validateInstanceIsFound(instanceKey); err != nil {
+				return err
+			}
 
 			onCandidateReplicaChosen := func(candidateReplica *inst.Instance) { fmt.Println(candidateReplica.Key.DisplayString()) }
 			lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasPseudoGTID(instanceKey, false, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
 			lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 			postponedFunctionsContainer.Wait()
 			if promotedReplica == nil {
-				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
+				return fmt.Errorf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Println(fmt.Sprintf("%s lost: %d, trivial: %d, pseudo-gtid: %d",
 				promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 		// General replication commands
@@ -562,7 +584,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.EnableGTID(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -571,7 +593,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.DisableGTID(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -581,10 +603,10 @@ func Cli(command string, strict bool, instance string, destination string, owner
 
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			fmt.Println(instance.GtidErrant)
 		}
@@ -593,7 +615,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.ErrantGTIDResetMaster(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -602,7 +624,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SkipQuery(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -611,7 +633,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.StopReplication(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -620,7 +642,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.StartReplication(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -629,7 +651,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.RestartReplication(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -638,7 +660,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.ResetReplicationOperation(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -646,14 +668,14 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			creds, err := inst.ReadReplicationCredentials(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if _, err := inst.ChangeMasterCredentials(instanceKey, creds); err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -661,11 +683,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			_, err := inst.DetachReplicaMasterHost(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -673,11 +695,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			_, err := inst.ReattachReplicaMasterHost(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -685,23 +707,23 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			var binlogCoordinates *inst.BinlogCoordinates
 
 			if binlogCoordinates, err = inst.ParseBinlogCoordinates(*config.RuntimeCLIFlags.BinlogFile); err != nil {
-				log.Fatalf("Expecing --binlog argument as file:pos")
+				return fmt.Errorf("Expecing --binlog argument as file:pos")
 			}
 			_, err = inst.MasterPosWait(instanceKey, binlogCoordinates)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -710,7 +732,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SetSemiSyncMaster(instanceKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -719,7 +741,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SetSemiSyncMaster(instanceKey, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -728,7 +750,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SetSemiSyncReplica(instanceKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -737,7 +759,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SetSemiSyncReplica(instanceKey, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -745,11 +767,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			statements, err := inst.GetReplicationRestartPreserveStatements(instanceKey, *config.RuntimeCLIFlags.Statement)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, statement := range statements {
 				fmt.Println(statement)
@@ -760,13 +782,19 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
-			instance := validateInstanceIsFound(instanceKey)
+			instance, err := validateInstanceIsFound(instanceKey)
+			if err != nil {
+				return err
+			}
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce target instance:", destination)
+				return cliError("Cannot deduce target instance:", destination)
 			}
-			otherInstance := validateInstanceIsFound(destinationKey)
+			otherInstance, err := validateInstanceIsFound(destinationKey)
+			if err != nil {
+				return err
+			}
 
 			if canReplicate, _ := instance.CanReplicateFromEx(otherInstance, "CLI: can-replicate-from"); canReplicate {
 				fmt.Println(destinationKey.DisplayString())
@@ -776,9 +804,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
-			instance := validateInstanceIsFound(instanceKey)
+			instance, err := validateInstanceIsFound(instanceKey)
+			if err != nil {
+				return err
+			}
 			if instance.ReplicaRunning() {
 				fmt.Println(instance.Key.DisplayString())
 			}
@@ -787,9 +818,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
-			instance := validateInstanceIsFound(instanceKey)
+			instance, err := validateInstanceIsFound(instanceKey)
+			if err != nil {
+				return err
+			}
 			if instance.ReplicationThreadsStopped() {
 				fmt.Println(instance.Key.DisplayString())
 			}
@@ -800,7 +834,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SetReadOnly(instanceKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -809,7 +843,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.SetReadOnly(instanceKey, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -824,7 +858,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				_, err = inst.FlushBinaryLogsTo(instanceKey, *config.RuntimeCLIFlags.BinlogFile)
 			}
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -833,12 +867,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			var err error
 			if *config.RuntimeCLIFlags.BinlogFile == "" {
-				log.Fatal("expecting --binlog value")
+				return cliError("expecting --binlog value")
 			}
 
 			_, err = inst.PurgeBinaryLogsTo(instanceKey, *config.RuntimeCLIFlags.BinlogFile, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -846,18 +880,18 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			coordinates, text, err := inst.FindLastPseudoGTIDEntry(instance, instance.RelaylogCoordinates, nil, strict, nil)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%+v:%s", *coordinates, text))
 		}
@@ -865,11 +899,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			errantBinlogs, err := inst.LocateErrantGTID(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, binlog := range errantBinlogs {
 				fmt.Println(binlog)
@@ -879,22 +913,22 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			minCoordinates, err := inst.GetPreviousKnownRelayLogCoordinatesForInstance(instance)
 			if err != nil {
-				log.Fatalf("Error reading last known coordinates for %+v: %+v", instance.Key, err)
+				return fmt.Errorf("Error reading last known coordinates for %+v: %+v", instance.Key, err)
 			}
 			binlogEvent, err := inst.GetLastExecutedEntryInRelayLogs(instance, minCoordinates, instance.RelaylogCoordinates)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%+v:%d", *binlogEvent, binlogEvent.NextEventPos))
 		}
@@ -902,57 +936,57 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce target instance:", destination)
+				return cliError("Cannot deduce target instance:", destination)
 			}
 			otherInstance, err := inst.ReadTopologyInstance(destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if otherInstance == nil {
-				log.Fatalf("Instance not found: %+v", *destinationKey)
+				return fmt.Errorf("Instance not found: %+v", *destinationKey)
 			}
 
 			var relaylogCoordinates *inst.BinlogCoordinates
 			if *config.RuntimeCLIFlags.BinlogFile != "" {
 				if relaylogCoordinates, err = inst.ParseBinlogCoordinates(*config.RuntimeCLIFlags.BinlogFile); err != nil {
-					log.Fatalf("Expecing --binlog argument as file:pos")
+					return fmt.Errorf("Expecing --binlog argument as file:pos")
 				}
 			}
 			instanceCoordinates, correlatedCoordinates, nextCoordinates, _, err := inst.CorrelateRelaylogCoordinates(instance, relaylogCoordinates, otherInstance)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%+v;%+v;%+v", *instanceCoordinates, *correlatedCoordinates, *nextCoordinates))
 		}
 	case registerCliCommand("find-binlog-entry", "Binary logs", `Get binlog file:pos of entry given by --pattern (exact full match, not a regular expression) in a given instance`):
 		{
 			if pattern == "" {
-				log.Fatal("No pattern given")
+				return cliError("No pattern given")
 			}
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			coordinates, err := inst.SearchEntryInInstanceBinlogs(instance, pattern, false, nil)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%+v", *coordinates))
 		}
@@ -960,40 +994,40 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unresolved instance")
+				return fmt.Errorf("Unresolved instance")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if instance == nil {
-				log.Fatalf("Instance not found: %+v", *instanceKey)
+				return fmt.Errorf("Instance not found: %+v", *instanceKey)
 			}
 			if !instance.LogBinEnabled {
-				log.Fatalf("Instance does not have binary logs: %+v", *instanceKey)
+				return fmt.Errorf("Instance does not have binary logs: %+v", *instanceKey)
 			}
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce target instance:", destination)
+				return cliError("Cannot deduce target instance:", destination)
 			}
 			otherInstance, err := inst.ReadTopologyInstance(destinationKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if otherInstance == nil {
-				log.Fatalf("Instance not found: %+v", *destinationKey)
+				return fmt.Errorf("Instance not found: %+v", *destinationKey)
 			}
 			var binlogCoordinates *inst.BinlogCoordinates
 			if *config.RuntimeCLIFlags.BinlogFile == "" {
 				binlogCoordinates = &instance.SelfBinlogCoordinates
 			} else {
 				if binlogCoordinates, err = inst.ParseBinlogCoordinates(*config.RuntimeCLIFlags.BinlogFile); err != nil {
-					log.Fatalf("Expecing --binlog argument as file:pos")
+					return fmt.Errorf("Expecing --binlog argument as file:pos")
 				}
 			}
 
 			coordinates, _, err := inst.CorrelateBinlogCoordinates(instance, binlogCoordinates, otherInstance)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%+v", *coordinates))
 		}
@@ -1001,18 +1035,18 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("submit-pool-instances", "Pools", `Submit a pool name with a list of instances in that pool`):
 		{
 			if pool == "" {
-				log.Fatal("Please submit --pool")
+				return cliError("Please submit --pool")
 			}
 			err := inst.ApplyPoolInstances(inst.NewPoolInstancesSubmission(pool, instance))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 	case registerCliCommand("cluster-pool-instances", "Pools", `List all pools and their associated instances`):
 		{
 			clusterPoolInstances, err := inst.ReadAllClusterPoolInstances()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, clusterPoolInstance := range clusterPoolInstances {
 				fmt.Println(fmt.Sprintf("%s\t%s\t%s\t%s:%d", clusterPoolInstance.ClusterName, clusterPoolInstance.ClusterAlias, clusterPoolInstance.Pool, clusterPoolInstance.Hostname, clusterPoolInstance.Port))
@@ -1024,7 +1058,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 
 			instances, err := inst.GetHeuristicClusterPoolInstances(clusterName, pool)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, instance := range instances {
 					fmt.Println(instance.Key.DisplayString())
@@ -1035,11 +1069,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("find", "Information", `Find instances whose hostname matches given regex pattern`):
 		{
 			if pattern == "" {
-				log.Fatal("No pattern given")
+				return cliError("No pattern given")
 			}
 			instances, err := inst.FindInstances(pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, instance := range instances {
 					fmt.Println(instance.Key.DisplayString())
@@ -1049,11 +1083,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("search", "Information", `Search instances by name, version, version comment, port`):
 		{
 			if pattern == "" {
-				log.Fatal("No pattern given")
+				return cliError("No pattern given")
 			}
 			instances, err := inst.SearchInstances(pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, instance := range instances {
 					fmt.Println(instance.Key.DisplayString())
@@ -1064,7 +1098,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			clusters, err := inst.ReadClusters()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(strings.Join(clusters, "\n"))
 		}
@@ -1072,7 +1106,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			clusters, err := inst.ReadClustersInfo("")
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, cluster := range clusters {
 				fmt.Println(fmt.Sprintf("%s\t%s", cluster.ClusterName, cluster.ClusterAlias))
@@ -1082,7 +1116,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instances, err := inst.ReadWriteableClustersMasters()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, instance := range instances {
 					fmt.Println(instance.Key.DisplayString())
@@ -1094,7 +1128,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			output, err := inst.ASCIITopology(clusterName, pattern, false, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(output)
 		}
@@ -1103,7 +1137,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			output, err := inst.ASCIITopology(clusterName, pattern, true, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(output)
 		}
@@ -1112,7 +1146,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			output, err := inst.ASCIITopology(clusterName, pattern, false, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(output)
 		}
@@ -1120,7 +1154,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instances, err := inst.SearchInstances("")
 			if err != nil {
-				log.Fatale(err)
+				return err
 			} else {
 				for _, instance := range instances {
 					fmt.Println(instance.Key.DisplayString())
@@ -1131,9 +1165,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get master: unresolved instance")
+				return fmt.Errorf("Unable to get master: unresolved instance")
 			}
-			instance := validateInstanceIsFound(instanceKey)
+			instance, err := validateInstanceIsFound(instanceKey)
+			if err != nil {
+				return err
+			}
 			fmt.Println(instance.Key.DisplayString())
 		}
 	case registerCliCommand("which-cluster", "Information", `Output the name of the cluster an instance belongs to, or error if unknown to orchestrator`):
@@ -1146,7 +1183,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			clusterInfo, err := inst.ReadClusterInfo(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(clusterInfo.ClusterAlias)
 		}
@@ -1155,7 +1192,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			clusterInfo, err := inst.ReadClusterInfo(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(clusterInfo.ClusterDomain)
 		}
@@ -1164,7 +1201,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instanceKey, err := inst.GetHeuristicClusterDomainInstanceAttribute(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1173,10 +1210,10 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			masters, err := inst.ReadClusterMaster(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if len(masters) == 0 {
-				log.Fatalf("No writeable masters found for cluster %+v", clusterName)
+				return fmt.Errorf("No writeable masters found for cluster %+v", clusterName)
 			}
 			fmt.Println(masters[0].Key.DisplayString())
 		}
@@ -1185,7 +1222,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instances, err := inst.ReadClusterInstances(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, clusterInstance := range instances {
 				fmt.Println(clusterInstance.Key.DisplayString())
@@ -1196,7 +1233,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instances, err := inst.GetClusterOSCReplicas(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, clusterInstance := range instances {
 				fmt.Println(clusterInstance.Key.DisplayString())
@@ -1207,7 +1244,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instances, err := inst.GetClusterGhostReplicas(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, clusterInstance := range instances {
 				fmt.Println(clusterInstance.Key.DisplayString())
@@ -1217,9 +1254,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get master: unresolved instance")
+				return fmt.Errorf("Unable to get master: unresolved instance")
 			}
-			instance := validateInstanceIsFound(instanceKey)
+			instance, err := validateInstanceIsFound(instanceKey)
+			if err != nil {
+				return err
+			}
 			if instance.MasterKey.IsValid() {
 				fmt.Println(instance.MasterKey.DisplayString())
 			}
@@ -1229,7 +1269,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instances, err := inst.ReadDowntimedInstances(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, clusterInstance := range instances {
 				fmt.Println(clusterInstance.Key.DisplayString())
@@ -1239,11 +1279,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get replicas: unresolved instance")
+				return fmt.Errorf("Unable to get replicas: unresolved instance")
 			}
 			replicas, err := inst.ReadReplicaInstances(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, replica := range replicas {
 				fmt.Println(replica.Key.DisplayString())
@@ -1253,7 +1293,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instances, err := inst.ReadLostInRecoveryInstances("")
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, instance := range instances {
 				fmt.Println(instance.Key.DisplayString())
@@ -1263,9 +1303,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatalf("Unable to get status: unresolved instance")
+				return fmt.Errorf("Unable to get status: unresolved instance")
 			}
-			instance := validateInstanceIsFound(instanceKey)
+			instance, err := validateInstanceIsFound(instanceKey)
+			if err != nil {
+				return err
+			}
 			fmt.Println(instance.HumanReadableDescription())
 		}
 	case registerCliCommand("get-cluster-heuristic-lag", "Information", `For a given cluster (indicated by an instance or alias), output a heuristic "representative" lag of that cluster`):
@@ -1273,7 +1316,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			lag, err := inst.GetClusterHeuristicLag(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(lag)
 		}
@@ -1284,7 +1327,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 
 			kvPairs, _, err := logic.SubmitMastersToKvStores(clusterName, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, kvPair := range kvPairs {
 				fmt.Println(fmt.Sprintf("%s:%s", kvPair.Key, kvPair.Value))
@@ -1296,7 +1339,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			tags, err := inst.ReadInstanceTags(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, tag := range tags {
 				fmt.Println(tag.String())
@@ -1307,12 +1350,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			tag, err := inst.ParseTag(*config.RuntimeCLIFlags.Tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 
 			tagExists, err := inst.ReadInstanceTag(instanceKey, tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if tagExists {
 				fmt.Println(tag.TagValue)
@@ -1323,7 +1366,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			tagsString := *config.RuntimeCLIFlags.Tag
 			instanceKeyMap, err := inst.GetInstanceKeysByTags(tagsString)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			keysDisplayStrings := []string{}
 			for _, key := range instanceKeyMap.GetInstanceKeys() {
@@ -1339,7 +1382,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			tag, err := inst.ParseTag(*config.RuntimeCLIFlags.Tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			inst.PutInstanceTag(instanceKey, tag)
 			fmt.Println(instanceKey.DisplayString())
@@ -1349,11 +1392,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			tag, err := inst.ParseTag(*config.RuntimeCLIFlags.Tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			untagged, err := inst.Untag(instanceKey, tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, key := range untagged.GetInstanceKeys() {
 				fmt.Println(key.DisplayString())
@@ -1363,11 +1406,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			tag, err := inst.ParseTag(*config.RuntimeCLIFlags.Tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			untagged, err := inst.Untag(nil, tag)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, key := range untagged.GetInstanceKeys() {
 				fmt.Println(key.DisplayString())
@@ -1381,23 +1424,23 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				instanceKey = thisInstanceKey
 			}
 			if instanceKey == nil {
-				log.Fatalf("Cannot figure instance key")
+				return fmt.Errorf("Cannot figure instance key")
 			}
 			instance, err := inst.ReadTopologyInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instance.Key.DisplayString())
 		}
 	case registerCliCommand("forget", "Instance management", `Forget about an instance's existence`):
 		{
 			if rawInstanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			instanceKey, _ = inst.FigureInstanceKey(rawInstanceKey, nil)
 			err := inst.ForgetInstance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1405,16 +1448,16 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if reason == "" {
-				log.Fatal("--reason option required")
+				return cliError("--reason option required")
 			}
 			var durationSeconds int = 0
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
-					log.Fatale(err)
+					return err
 				}
 				if durationSeconds < 0 {
-					log.Fatalf("Duration value must be non-negative. Given value: %d", durationSeconds)
+					return fmt.Errorf("Duration value must be non-negative. Given value: %d", durationSeconds)
 				}
 			}
 			maintenanceKey, err := inst.BeginBoundedMaintenance(instanceKey, inst.GetMaintenanceOwner(), reason, uint(durationSeconds), true)
@@ -1423,7 +1466,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 				log.Infof("Maintenance duration: %d seconds", durationSeconds)
 			}
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1432,7 +1475,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.EndMaintenanceByInstanceKey(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1441,7 +1484,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			inMaintenance, err := inst.InMaintenance(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if inMaintenance {
 				fmt.Println(instanceKey.DisplayString())
@@ -1451,16 +1494,16 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if reason == "" {
-				log.Fatal("--reason option required")
+				return cliError("--reason option required")
 			}
 			var durationSeconds int = 0
 			if duration != "" {
 				durationSeconds, err = util.SimpleTimeToSeconds(duration)
 				if err != nil {
-					log.Fatale(err)
+					return err
 				}
 				if durationSeconds < 0 {
-					log.Fatalf("Duration value must be non-negative. Given value: %d", durationSeconds)
+					return fmt.Errorf("Duration value must be non-negative. Given value: %d", durationSeconds)
 				}
 			}
 			duration := time.Duration(durationSeconds) * time.Second
@@ -1468,7 +1511,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err == nil {
 				log.Infof("Downtime duration: %d seconds", durationSeconds)
 			} else {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1477,7 +1520,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			_, err := inst.EndDowntime(instanceKey)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1486,16 +1529,16 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			if instanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 
 			recoveryAttempted, promotedInstanceKey, err := logic.CheckAndRecover(instanceKey, destinationKey, (command == "recover-lite"))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			if recoveryAttempted {
 				if promotedInstanceKey == nil {
-					log.Fatalf("Recovery attempted yet no replica promoted")
+					return fmt.Errorf("Recovery attempted yet no replica promoted")
 				}
 				fmt.Println(promotedInstanceKey.DisplayString())
 			}
@@ -1505,7 +1548,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			topologyRecovery, err := logic.ForceMasterFailover(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 		}
@@ -1513,12 +1556,15 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			if destinationKey == nil {
-				log.Fatal("Cannot deduce destination, the instance to promote in place of the master. Please provide with -d")
+				return cliError("Cannot deduce destination, the instance to promote in place of the master. Please provide with -d")
 			}
-			destination := validateInstanceIsFound(destinationKey)
+			destination, err := validateInstanceIsFound(destinationKey)
+			if err != nil {
+				return err
+			}
 			topologyRecovery, err := logic.ForceMasterTakeover(clusterName, destination)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 		}
@@ -1526,11 +1572,13 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			if destinationKey != nil {
-				validateInstanceIsFound(destinationKey)
+				if _, err := validateInstanceIsFound(destinationKey); err != nil {
+					return err
+				}
 			}
 			topologyRecovery, promotedMasterCoordinates, err := logic.GracefulMasterTakeover(clusterName, destinationKey, false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 			fmt.Println(*promotedMasterCoordinates)
@@ -1542,11 +1590,13 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			// destinationKey doesn't _have_ to be specified: if unspecified, orchestrator will auto-deduce a replica.
 			// but if specified, then that's the replica to promote, and it must be valid.
 			if destinationKey != nil {
-				validateInstanceIsFound(destinationKey)
+				if _, err := validateInstanceIsFound(destinationKey); err != nil {
+					return err
+				}
 			}
 			topologyRecovery, promotedMasterCoordinates, err := logic.GracefulMasterTakeover(clusterName, destinationKey, true)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
 			fmt.Println(*promotedMasterCoordinates)
@@ -1556,7 +1606,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			analysis, err := inst.GetReplicationAnalysis("", &inst.ReplicationAnalysisHints{})
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, entry := range analysis {
 				fmt.Println(fmt.Sprintf("%s (cluster %s): %s", entry.AnalyzedInstanceKey.DisplayString(), entry.ClusterDetails.ClusterName, entry.AnalysisString()))
@@ -1565,36 +1615,36 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("ack-all-recoveries", "Recovery", `Acknowledge all recoveries; this unblocks pending future recoveries`):
 		{
 			if reason == "" {
-				log.Fatal("--reason option required (comment your ack)")
+				return cliError("--reason option required (comment your ack)")
 			}
 			countRecoveries, err := logic.AcknowledgeAllRecoveries(inst.GetMaintenanceOwner(), reason)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%d recoveries acknowledged", countRecoveries))
 		}
 	case registerCliCommand("ack-cluster-recoveries", "Recovery", `Acknowledge recoveries for a given cluster; this unblocks pending future recoveries`):
 		{
 			if reason == "" {
-				log.Fatal("--reason option required (comment your ack)")
+				return cliError("--reason option required (comment your ack)")
 			}
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			countRecoveries, err := logic.AcknowledgeClusterRecoveries(clusterName, inst.GetMaintenanceOwner(), reason)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%d recoveries acknowledged", countRecoveries))
 		}
 	case registerCliCommand("ack-instance-recoveries", "Recovery", `Acknowledge recoveries for a given instance; this unblocks pending future recoveries`):
 		{
 			if reason == "" {
-				log.Fatal("--reason option required (comment your ack)")
+				return cliError("--reason option required (comment your ack)")
 			}
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 
 			countRecoveries, err := logic.AcknowledgeInstanceRecoveries(instanceKey, inst.GetMaintenanceOwner(), reason)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(fmt.Sprintf("%d recoveries acknowledged", countRecoveries))
 		}
@@ -1604,11 +1654,11 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			promotionRule, err := inst.ParseCandidatePromotionRule(*config.RuntimeCLIFlags.PromotionRule)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			err = inst.RegisterCandidateInstance(inst.NewCandidateDatabaseInstance(instanceKey, promotionRule).WithCurrentTime())
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1617,7 +1667,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			err := inst.RegisterHostnameUnresolve(inst.NewHostnameRegistration(instanceKey, hostnameFlag))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1626,7 +1676,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
 			err := inst.RegisterHostnameUnresolve(inst.NewHostnameDeregistration(instanceKey))
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1635,7 +1685,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			clusterName := getClusterName(clusterAlias, instanceKey)
 			instanceKey, err := inst.HeuristicallyApplyClusterDomainInstanceAttribute(clusterName)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
@@ -1645,20 +1695,20 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			err := inst.SnapshotTopologies()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 	case registerCliCommand("continuous", "Meta", `Enter continuous mode, and actively poll for instances, diagnose problems, do maintenance`):
 		{
 			if err := logic.ContinuousDiscovery(); err != nil {
-				log.Fatale(err)
+				return err
 			}
 		}
 	case registerCliCommand("active-nodes", "Meta", `List currently active orchestrator nodes`):
 		{
 			nodes, err := process.ReadAvailableNodes(false)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, node := range nodes {
 				fmt.Println(node)
@@ -1668,34 +1718,34 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			publicToken, err := process.GenerateAccessToken(owner)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(publicToken)
 		}
 	case registerCliCommand("resolve", "Meta", `Resolve given hostname`):
 		{
 			if rawInstanceKey == nil {
-				log.Fatal("Cannot deduce instance:", instance)
+				return cliError("Cannot deduce instance:", instance)
 			}
 			if conn, err := net.Dial("tcp", rawInstanceKey.DisplayString()); err == nil {
 				log.Debugf("tcp test is good; got connection %+v", conn)
 				conn.Close()
 			} else {
-				log.Fatale(err)
+				return err
 			}
 			if cname, err := inst.GetCNAME(rawInstanceKey.Hostname); err == nil {
 				log.Debugf("GetCNAME() %+v, %+v", cname, err)
 				rawInstanceKey.Hostname = cname
 				fmt.Println(rawInstanceKey.DisplayString())
 			} else {
-				log.Fatale(err)
+				return err
 			}
 		}
 	case registerCliCommand("reset-hostname-resolve-cache", "Meta", `Clear the hostname resolve cache`):
 		{
 			err := inst.ResetHostnameResolveCache()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println("hostname resolve cache cleared")
 		}
@@ -1708,7 +1758,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			resolves, err := inst.ReadAllHostnameResolves()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, r := range resolves {
 				fmt.Println(r)
@@ -1718,7 +1768,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			unresolves, err := inst.ReadAllHostnameUnresolves()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			for _, r := range unresolves {
 				fmt.Println(r)
@@ -1729,16 +1779,19 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			config.RuntimeCLIFlags.ConfiguredVersion = ""
 			_, err := inst.ReadClusters()
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println("Redeployed internal db")
 		}
 	case registerCliCommand("internal-suggest-promoted-replacement", "Internal", `Internal only, used to test promotion logic in CI`):
 		{
-			destination := validateInstanceIsFound(destinationKey)
+			destination, err := validateInstanceIsFound(destinationKey)
+			if err != nil {
+				return err
+			}
 			replacement, _, err := logic.SuggestReplacementForPromotedReplica(&logic.TopologyRecovery{}, instanceKey, destination, nil)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 			fmt.Println(replacement.Key.DisplayString())
 		}
@@ -1746,7 +1799,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			output, err := agent.CustomCommand(hostnameFlag, pattern)
 			if err != nil {
-				log.Fatale(err)
+				return err
 			}
 
 			fmt.Printf("%v\n", output)
@@ -1754,14 +1807,14 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("disable-global-recoveries", "", `Disallow orchestrator from performing recoveries globally`):
 		{
 			if err := logic.DisableRecovery(); err != nil {
-				log.Fatalf("ERROR: Failed to disable recoveries globally: %v\n", err)
+				return fmt.Errorf("ERROR: Failed to disable recoveries globally: %v\n", err)
 			}
 			fmt.Println("OK: Orchestrator recoveries DISABLED globally")
 		}
 	case registerCliCommand("enable-global-recoveries", "", `Allow orchestrator to perform recoveries globally`):
 		{
 			if err := logic.EnableRecovery(); err != nil {
-				log.Fatalf("ERROR: Failed to enable recoveries globally: %v\n", err)
+				return fmt.Errorf("ERROR: Failed to enable recoveries globally: %v\n", err)
 			}
 			fmt.Println("OK: Orchestrator recoveries ENABLED globally")
 		}
@@ -1769,7 +1822,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			isDisabled, err := logic.IsRecoveryDisabled()
 			if err != nil {
-				log.Fatalf("ERROR: Failed to determine if recoveries are disabled globally: %v\n", err)
+				return fmt.Errorf("ERROR: Failed to determine if recoveries are disabled globally: %v\n", err)
 			}
 			fmt.Printf("OK: Global recoveries disabled: %v\n", isDisabled)
 		}
@@ -1777,8 +1830,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			instances, err := inst.BulkReadInstance()
 			if err != nil {
-				log.Fatalf("Error: Failed to retrieve instances: %v\n", err)
-				return
+				return fmt.Errorf("Error: Failed to retrieve instances: %v\n", err)
 			}
 			var asciiInstances stringSlice
 			for _, v := range instances {
@@ -1791,7 +1843,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		{
 			promotionRules, err := inst.BulkReadCandidateDatabaseInstance()
 			if err != nil {
-				log.Fatalf("Error: Failed to retrieve promotion rules: %v\n", err)
+				return fmt.Errorf("Error: Failed to retrieve promotion rules: %v\n", err)
 			}
 			var asciiPromotionRules stringSlice
 			for _, v := range promotionRules {
@@ -1807,6 +1859,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			fmt.Fprint(os.Stderr, availableCommandsUsage())
 		}
 	default:
-		log.Fatalf("Unknown command: \"%s\". %s", command, availableCommandsUsage())
+		return fmt.Errorf("Unknown command: \"%s\". %s", command, availableCommandsUsage())
 	}
+	return nil
 }

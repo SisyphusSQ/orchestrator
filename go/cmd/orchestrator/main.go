@@ -185,7 +185,9 @@ func run() int {
 	case helpTopic != "":
 		app.HelpCommand(helpTopic)
 	case len(flag.Args()) == 0 || flag.Arg(0) == "cli":
-		app.CliWrapper(*command, *strict, *instance, *destination, *owner, *reason, *duration, *pattern, *clusterAlias, *pool, *hostnameFlag)
+		if err := app.CliWrapper(*command, *strict, *instance, *destination, *owner, *reason, *duration, *pattern, *clusterAlias, *pool, *hostnameFlag); err != nil {
+			log.Fatalf("%v", err)
+		}
 	case flag.Arg(0) == "http":
 		if err := app.Http(*discovery); err != nil {
 			log.Fatalf("run HTTP services: %v", err)

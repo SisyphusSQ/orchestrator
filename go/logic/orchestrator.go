@@ -147,7 +147,7 @@ func acceptSignals() {
 				log.Infof("Received SIGHUP. Reloading configuration")
 				inst.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 				if _, err := config.Reload(); err != nil {
-					log.Errorf("reload configuration after SIGHUP: %v", err)
+					log.Sugar().Errorw("configuration reload failed", "trigger", "SIGHUP", "error", err)
 				}
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
