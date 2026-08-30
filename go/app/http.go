@@ -17,6 +17,7 @@
 package app
 
 import (
+	"fmt"
 	"net"
 	nethttp "net/http"
 	"strings"
@@ -45,15 +46,27 @@ var agentSSLPEMPassword []byte
 var discoveryMetrics *collection.Collection
 
 // Http starts serving
-func Http(continuousDiscovery bool) {
+func Http(continuousDiscovery bool) error {
 	promptForSSLPasswords()
 	process.ContinuousRegistration(process.OrchestratorExecutionHttpMode, "")
 
 	martini.Env = martini.Prod
+	runtimeErrors := make(chan error, 3)
+	go reportRuntimeError(runtimeErrors, "standard HTTP server", func() error {
+		return standardHttp(continuousDiscovery, runtimeErrors)
+	})
 	if config.Config.ServeAgentsHttp {
-		go agentsHttp()
+		go reportRuntimeError(runtimeErrors, "agent HTTP server", agentsHttp)
 	}
-	standardHttp(continuousDiscovery)
+	return <-runtimeErrors
+}
+
+func reportRuntimeError(runtimeErrors chan<- error, component string, run func() error) {
+	err := run()
+	if err == nil {
+		err = fmt.Errorf("stopped without an error")
+	}
+	runtimeErrors <- fmt.Errorf("%s: %w", component, err)
 }
 
 // Iterate over the private keys and get passwords for them
@@ -72,7 +85,7 @@ func promptForSSLPasswords() {
 }
 
 // standardHttp starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
-func standardHttp(continuousDiscovery bool) {
+func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
 	m := martini.Classic()
 
 	switch strings.ToLower(config.Config.AuthenticationMethod) {
@@ -88,7 +101,7 @@ func standardHttp(continuousDiscovery bool) {
 		{
 			if config.Config.HTTPAuthUser == "" {
 				// Still allowed; may be disallowed in future versions
-				log.Fatal("AuthenticationMethod is configured as 'multi' but HTTPAuthUser undefined")
+				return fmt.Errorf("AuthenticationMethod is 'multi' but HTTPAuthUser is undefined")
 			}
 
 			m.Use(auth.BasicFunc(func(username, password string) bool {
@@ -126,7 +139,7 @@ func standardHttp(continuousDiscovery bool) {
 		discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 
 		log.Info("Starting Discovery")
-		go logic.ContinuousDiscovery()
+		go reportRuntimeError(runtimeErrors, "continuous discovery", logic.ContinuousDiscovery)
 	}
 
 	log.Info("Registering endpoints")
@@ -140,36 +153,37 @@ func standardHttp(continuousDiscovery bool) {
 		log.Infof("Starting HTTP listener on unix socket %v", config.Config.ListenSocket)
 		unixListener, err := net.Listen("unix", config.Config.ListenSocket)
 		if err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("listen on unix socket %s: %w", config.Config.ListenSocket, err)
 		}
 		defer unixListener.Close()
 		if err := nethttp.Serve(unixListener, m); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("serve HTTP on unix socket %s: %w", config.Config.ListenSocket, err)
 		}
 	} else if config.Config.UseSSL {
 		log.Info("Starting HTTPS listener")
 		tlsConfig, err := ssl.NewTLSConfig(config.Config.SSLCAFile, config.Config.UseMutualTLS)
 		if err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("create HTTP TLS configuration: %w", err)
 		}
 		tlsConfig.InsecureSkipVerify = config.Config.SSLSkipVerify
 		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.SSLCertFile, config.Config.SSLPrivateKeyFile, sslPEMPassword); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("load HTTP TLS key pair: %w", err)
 		}
 		if err = ssl.ListenAndServeTLS(config.Config.ListenAddress, m, tlsConfig); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("serve HTTPS on %s: %w", config.Config.ListenAddress, err)
 		}
 	} else {
 		log.Infof("Starting HTTP listener on %+v", config.Config.ListenAddress)
 		if err := nethttp.ListenAndServe(config.Config.ListenAddress, m); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("serve HTTP on %s: %w", config.Config.ListenAddress, err)
 		}
 	}
 	log.Info("Web server started")
+	return nil
 }
 
 // agentsHttp startes serving agents HTTP or HTTPS API requests
-func agentsHttp() {
+func agentsHttp() error {
 	m := martini.Classic()
 	m.Use(gzip.All())
 	m.Use(render.Renderer())
@@ -190,20 +204,21 @@ func agentsHttp() {
 		log.Info("Starting agent HTTPS listener")
 		tlsConfig, err := ssl.NewTLSConfig(config.Config.AgentSSLCAFile, config.Config.AgentsUseMutualTLS)
 		if err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("create agent HTTP TLS configuration: %w", err)
 		}
 		tlsConfig.InsecureSkipVerify = config.Config.AgentSSLSkipVerify
 		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.AgentSSLCertFile, config.Config.AgentSSLPrivateKeyFile, agentSSLPEMPassword); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("load agent HTTP TLS key pair: %w", err)
 		}
 		if err = ssl.ListenAndServeTLS(config.Config.AgentsServerPort, m, tlsConfig); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("serve agent HTTPS on %s: %w", config.Config.AgentsServerPort, err)
 		}
 	} else {
 		log.Info("Starting agent HTTP listener")
 		if err := nethttp.ListenAndServe(config.Config.AgentsServerPort, m); err != nil {
-			log.Fatale(err)
+			return fmt.Errorf("serve agent HTTP on %s: %w", config.Config.AgentsServerPort, err)
 		}
 	}
 	log.Info("Agent server started")
+	return nil
 }

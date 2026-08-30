@@ -562,25 +562,45 @@ func injectSeeds(seedOnce *sync.Once) {
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-func ContinuousDiscovery() {
+func ContinuousDiscovery() error {
 	log.Infof("continuous discovery: setting up")
 	continuousDiscoveryStartTime := time.Now()
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
+	var raftErrors <-chan error
+	if config.Config.RaftEnabled {
+		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
+			return fmt.Errorf("set up raft runtime: %w", err)
+		}
+		errors := make(chan error, 1)
+		go func() {
+			errors <- orcraft.Monitor()
+		}()
+		raftErrors = errors
+	}
 
 	inst.LoadHostnameResolveCache()
 	go handleDiscoveryRequests()
 
-	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
-	instancePollTick := time.Tick(instancePollSecondsDuration())
-	caretakingTick := time.Tick(time.Minute)
-	raftCaretakingTick := time.Tick(10 * time.Minute)
-	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
-	autoPseudoGTIDTick := time.Tick(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
+	healthTicker := time.NewTicker(config.HealthPollSeconds * time.Second)
+	instancePollTicker := time.NewTicker(instancePollSecondsDuration())
+	caretakingTicker := time.NewTicker(time.Minute)
+	raftCaretakingTicker := time.NewTicker(10 * time.Minute)
+	recoveryTicker := time.NewTicker(time.Duration(config.RecoveryPollSeconds) * time.Second)
+	autoPseudoGTIDTicker := time.NewTicker(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
+	defer healthTicker.Stop()
+	defer instancePollTicker.Stop()
+	defer caretakingTicker.Stop()
+	defer raftCaretakingTicker.Stop()
+	defer recoveryTicker.Stop()
+	defer autoPseudoGTIDTicker.Stop()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
+	var snapshotTopologiesTicker *time.Ticker
 	if config.Config.SnapshotTopologiesIntervalHours > 0 {
-		snapshotTopologiesTick = time.Tick(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
+		snapshotTopologiesTicker = time.NewTicker(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
+		defer snapshotTopologiesTicker.Stop()
+		snapshotTopologiesTick = snapshotTopologiesTicker.C
 	}
 
 	runCheckAndRecoverOperationsTimeRipe := func() bool {
@@ -593,12 +613,6 @@ func ContinuousDiscovery() {
 	go ometrics.InitGraphiteMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	if config.Config.RaftEnabled {
-		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
-			log.Fatale(err)
-		}
-		go orcraft.Monitor()
-	}
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -607,11 +621,16 @@ func ContinuousDiscovery() {
 	log.Infof("continuous discovery: starting")
 	for {
 		select {
-		case <-healthTick:
+		case err := <-raftErrors:
+			if err == nil {
+				return fmt.Errorf("raft monitor stopped without an error")
+			}
+			return fmt.Errorf("monitor raft runtime: %w", err)
+		case <-healthTicker.C:
 			go func() {
 				onHealthTick()
 			}()
-		case <-instancePollTick:
+		case <-instancePollTicker.C:
 			go func() {
 				// This tick does NOT do instance poll (these are handled by the oversampling discoveryTick)
 				// But rather should invoke such routinely operations that need to be as (or roughly as) frequent
@@ -622,13 +641,13 @@ func ContinuousDiscovery() {
 					go injectSeeds(&seedOnce)
 				}
 			}()
-		case <-autoPseudoGTIDTick:
+		case <-autoPseudoGTIDTicker.C:
 			go func() {
 				if config.Config.AutoPseudoGTID && IsLeader() {
 					go InjectPseudoGTIDOnWriters()
 				}
 			}()
-		case <-caretakingTick:
+		case <-caretakingTicker.C:
 			// Various periodic internal maintenance tasks
 			go func() {
 				if IsLeaderOrActive() {
@@ -667,11 +686,11 @@ func ContinuousDiscovery() {
 					go inst.LoadHostnameResolveCache()
 				}
 			}()
-		case <-raftCaretakingTick:
+		case <-raftCaretakingTicker.C:
 			if orcraft.IsRaftEnabled() && orcraft.IsLeader() {
 				go publishDiscoverMasters()
 			}
-		case <-recoveryTick:
+		case <-recoveryTicker.C:
 			go func() {
 				if IsLeaderOrActive() {
 					go ClearActiveFailureDetections()

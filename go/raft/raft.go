@@ -54,7 +54,7 @@ var healthRequestAuthenticationTokenCache = cache.New(config.RaftHealthPollSecon
 var healthReportsCache = cache.New(config.RaftHealthPollSeconds*2*time.Second, time.Second)
 var healthRequestReportCache = cache.New(time.Second, time.Second)
 
-var fatalRaftErrorChan = make(chan error)
+var fatalRaftErrorChan = make(chan error, 1)
 
 type leaderURI struct {
 	uri string
@@ -87,10 +87,19 @@ func IsRaftEnabled() bool {
 }
 
 func FatalRaftError(err error) error {
-	if err != nil {
-		go func() { fatalRaftErrorChan <- err }()
+	if err != nil && !enqueueFatalRaftError(fatalRaftErrorChan, err) {
+		log.Errorf("raft fatal error already pending: %v", err)
 	}
 	return err
+}
+
+func enqueueFatalRaftError(fatalErrors chan<- error, err error) bool {
+	select {
+	case fatalErrors <- err:
+		return true
+	default:
+		return false
+	}
 }
 
 func computeLeaderURI() (uri string, err error) {
@@ -376,15 +385,21 @@ func HealthyMembers() (advertised []string) {
 	return advertised
 }
 
-// Monitor is a utility function to routinely observe leadership state.
-// It doesn't actually do much; merely takes notes.
-func Monitor() {
-	t := time.Tick(5 * time.Second)
-	heartbeat := time.Tick(1 * time.Minute)
-	followerHealthTick := time.Tick(config.RaftHealthPollSeconds * time.Second)
+// Monitor observes leadership state until the Raft runtime reports a fatal error.
+func Monitor() error {
+	tick := time.NewTicker(5 * time.Second)
+	heartbeat := time.NewTicker(1 * time.Minute)
+	followerHealthTick := time.NewTicker(config.RaftHealthPollSeconds * time.Second)
+	defer tick.Stop()
+	defer heartbeat.Stop()
+	defer followerHealthTick.Stop()
+	return monitor(tick.C, heartbeat.C, followerHealthTick.C, fatalRaftErrorChan)
+}
+
+func monitor(tick, heartbeat, followerHealthTick <-chan time.Time, fatalErrors <-chan error) error {
 	for {
 		select {
-		case <-t:
+		case <-tick:
 			leaderHint := GetLeader()
 
 			if IsLeader() {
@@ -402,8 +417,14 @@ func Monitor() {
 				healthRequestAuthenticationTokenCache.Set(athenticationToken, true, cache.DefaultExpiration)
 				go PublishCommand("request-health-report", athenticationToken)
 			}
-		case err := <-fatalRaftErrorChan:
-			log.Fatale(err)
+		case err, ok := <-fatalErrors:
+			if !ok {
+				return fmt.Errorf("fatal raft error channel closed")
+			}
+			if err == nil {
+				return fmt.Errorf("raft runtime reported a nil fatal error")
+			}
+			return fmt.Errorf("raft runtime failed: %w", err)
 		}
 	}
 }

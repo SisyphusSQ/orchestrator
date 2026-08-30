@@ -187,7 +187,9 @@ func run() int {
 	case len(flag.Args()) == 0 || flag.Arg(0) == "cli":
 		app.CliWrapper(*command, *strict, *instance, *destination, *owner, *reason, *duration, *pattern, *clusterAlias, *pool, *hostnameFlag)
 	case flag.Arg(0) == "http":
-		app.Http(*discovery)
+		if err := app.Http(*discovery); err != nil {
+			log.Fatalf("run HTTP services: %v", err)
+		}
 	default:
 		fmt.Fprintln(os.Stderr, `Usage:
   orchestrator --options... [cli|http]

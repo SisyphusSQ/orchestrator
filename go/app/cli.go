@@ -1650,7 +1650,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		}
 	case registerCliCommand("continuous", "Meta", `Enter continuous mode, and actively poll for instances, diagnose problems, do maintenance`):
 		{
-			logic.ContinuousDiscovery()
+			if err := logic.ContinuousDiscovery(); err != nil {
+				log.Fatale(err)
+			}
 		}
 	case registerCliCommand("active-nodes", "Meta", `List currently active orchestrator nodes`):
 		{
