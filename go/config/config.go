@@ -90,7 +90,7 @@ var deprecatedConfigurationVariables = []string{
 // strictly expected from user.
 type Configuration struct {
 	Debug                                      bool   // set debug mode (similar to --debug option)
-	EnableSyslog                               bool   // Should logs be directed (in addition) to syslog daemon?
+	EnableSyslog                               bool   // Direct logs to syslog in addition to stderr; initialization failure stops startup.
 	ListenAddress                              string // Where orchestrator HTTP should listen for TCP
 	ListenSocket                               string // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	HTTPAdvertise                              string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
@@ -172,7 +172,7 @@ type Configuration struct {
 	ReasonableMaintenanceReplicationLagSeconds int      // Above this value move-up and move-below are blocked
 	CandidateInstanceExpireMinutes             uint     // Minutes after which a suggestion to use an instance as a candidate replica (to be preferably promoted on master failover) is expired.
 	AuditLogFile                               string   // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                              bool     // If true, audit messages are written to syslog
+	AuditToSyslog                              bool     // Write audit messages to syslog; initialization failure stops startup.
 	AuditToBackendDB                           bool     // If true, audit messages are written to the backend DB's `audit` table (default: true)
 	AuditPurgeDays                             uint     // Days after which audit entries are purged from the database
 	RemoveTextFromHostnameDisplay              string   // Text to strip off the hostname on cluster/clusters pages
