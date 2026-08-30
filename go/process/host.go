@@ -17,16 +17,16 @@
 package process
 
 import (
-	"github.com/openark/golib/log"
+	"fmt"
 	"os"
 )
 
-var ThisHostname string
+var ThisHostname, thisHostnameErr = os.Hostname()
 
-func init() {
-	var err error
-	ThisHostname, err = os.Hostname()
-	if err != nil {
-		log.Fatalf("Cannot resolve self hostname; required. Aborting. %+v", err)
+// HostnameError reports whether the process hostname was resolved during package initialization.
+func HostnameError() error {
+	if thisHostnameErr == nil {
+		return nil
 	}
+	return fmt.Errorf("resolve self hostname: %w", thisHostnameErr)
 }

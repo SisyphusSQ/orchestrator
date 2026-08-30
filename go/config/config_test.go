@@ -12,8 +12,6 @@ import (
 )
 
 const (
-	forceReadChildEnv      = "ORCHESTRATOR_FORCE_READ_CHILD"
-	forceReadConfigPathEnv = "ORCHESTRATOR_FORCE_READ_CONFIG_PATH"
 	forceReadStdinChildEnv = "ORCHESTRATOR_FORCE_READ_STDIN_CHILD"
 )
 
@@ -22,35 +20,17 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func runForceReadInChildProcess(t *testing.T, testName string, content string) ([]byte, error) {
+func writeConfigFixture(t *testing.T, content string) string {
 	t.Helper()
 
 	configPath := filepath.Join(t.TempDir(), "orchestrator.conf.json")
 	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("write config fixture: %v", err)
 	}
-
-	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+testName+"$")
-	cmd.Env = append(os.Environ(),
-		forceReadChildEnv+"=1",
-		forceReadConfigPathEnv+"="+configPath,
-	)
-	return cmd.CombinedOutput()
-}
-
-func forceReadChildConfig() bool {
-	if os.Getenv(forceReadChildEnv) == "" {
-		return false
-	}
-	ForceRead(os.Getenv(forceReadConfigPathEnv))
-	return true
+	return configPath
 }
 
 func TestForceReadRejectsRemovedZkAddress(t *testing.T) {
-	if forceReadChildConfig() {
-		return
-	}
-
 	testCases := map[string]string{
 		"configured":       `{"ZkAddress":"zk-1:2181"}`,
 		"empty":            `{"ZkAddress":""}`,
@@ -58,13 +38,13 @@ func TestForceReadRejectsRemovedZkAddress(t *testing.T) {
 	}
 	for name, content := range testCases {
 		t.Run(name, func(t *testing.T) {
-			output, err := runForceReadInChildProcess(t, "TestForceReadRejectsRemovedZkAddress", content)
+			_, err := ForceRead(writeConfigFixture(t, content))
 			if err == nil {
-				t.Fatalf("expected configuration containing ZkAddress to fail, output: %s", output)
+				t.Fatal("expected configuration containing ZkAddress to fail")
 			}
 			for _, expected := range []string{"ZkAddress", "ZooKeeper", "Consul KV", "external failover hook"} {
-				if !strings.Contains(string(output), expected) {
-					t.Fatalf("expected failure output to contain %q, got: %s", expected, output)
+				if !strings.Contains(err.Error(), expected) {
+					t.Fatalf("expected failure error to contain %q, got: %v", expected, err)
 				}
 			}
 		})
@@ -72,19 +52,23 @@ func TestForceReadRejectsRemovedZkAddress(t *testing.T) {
 }
 
 func TestForceReadAllowsOtherUnknownFields(t *testing.T) {
-	if forceReadChildConfig() {
-		return
-	}
-
-	output, err := runForceReadInChildProcess(t, "TestForceReadAllowsOtherUnknownFields", `{"Debug":true,"FutureSetting":true}`)
+	previous := *Config
+	previousReadFileNames := append([]string(nil), readFileNames...)
+	t.Cleanup(func() {
+		*Config = previous
+		readFileNames = previousReadFileNames
+	})
+	_, err := ForceRead(writeConfigFixture(t, `{"Debug":true,"FutureSetting":true}`))
 	if err != nil {
-		t.Fatalf("expected unrelated unknown configuration fields to remain accepted, got %v: %s", err, output)
+		t.Fatalf("expected unrelated unknown configuration fields to remain accepted: %v", err)
 	}
 }
 
 func TestForceReadAllowsNonSeekableInput(t *testing.T) {
 	if os.Getenv(forceReadStdinChildEnv) != "" {
-		ForceRead("/dev/stdin")
+		if _, err := ForceRead("/dev/stdin"); err != nil {
+			t.Fatalf("ForceRead(/dev/stdin) error: %v", err)
+		}
 		return
 	}
 
@@ -93,6 +77,46 @@ func TestForceReadAllowsNonSeekableInput(t *testing.T) {
 	cmd.Stdin = strings.NewReader(`{"Debug":true}`)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("expected non-seekable configuration input to remain accepted, got %v: %s", err, output)
+	}
+}
+
+func TestForceReadReturnsMalformedJSONError(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "malformed.conf.json")
+	if err := os.WriteFile(configPath, []byte(`{"Debug":`), 0600); err != nil {
+		t.Fatalf("write config fixture: %v", err)
+	}
+
+	_, err := ForceRead(configPath)
+	if err == nil {
+		t.Fatal("ForceRead() returned nil for malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "malformed.conf.json") {
+		t.Fatalf("ForceRead() error = %q; want config path", err)
+	}
+}
+
+func TestForceReadDoesNotApplyInvalidConfigurationPartially(t *testing.T) {
+	previous := *Config
+	Config.Debug = false
+	Config.BackendDB = "mysql"
+	Config.ClusterNameToAlias = map[string]string{"existing": "cluster"}
+	t.Cleanup(func() {
+		*Config = previous
+	})
+
+	configPath := writeConfigFixture(t, `{"Debug":true,"BackendDB":"sqlite3","SQLite3DataFile":"","ClusterNameToAlias":{"new":"cluster"}}`)
+	_, err := ForceRead(configPath)
+	if err == nil {
+		t.Fatal("ForceRead() returned nil for invalid sqlite configuration")
+	}
+	if Config.Debug {
+		t.Fatal("ForceRead() partially applied Debug from an invalid configuration")
+	}
+	if Config.BackendDB != "mysql" {
+		t.Fatalf("BackendDB = %q; want previous value %q", Config.BackendDB, "mysql")
+	}
+	if _, found := Config.ClusterNameToAlias["new"]; found {
+		t.Fatal("ForceRead() partially applied a map entry from an invalid configuration")
 	}
 }
 

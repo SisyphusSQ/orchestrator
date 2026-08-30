@@ -25,6 +25,7 @@ import (
 	"github.com/openark/orchestrator/go/app"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/inst"
+	"github.com/openark/orchestrator/go/process"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -83,6 +84,9 @@ func run() int {
 	config.RuntimeCLIFlags.IgnoreRaftSetup = flag.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
 	config.RuntimeCLIFlags.Tag = flag.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 	flag.Parse()
+	if err := process.HostnameError(); err != nil {
+		log.Fatalf("%v", err)
+	}
 
 	if *destination != "" && *sibling != "" {
 		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
@@ -126,10 +130,14 @@ func run() int {
 	}
 	log.Info(startText)
 
+	var configErr error
 	if len(*configFile) > 0 {
-		config.ForceRead(*configFile)
+		_, configErr = config.ForceRead(*configFile)
 	} else {
-		config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
+		_, configErr = config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
+	}
+	if configErr != nil {
+		log.Fatalf("load configuration: %v", configErr)
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
