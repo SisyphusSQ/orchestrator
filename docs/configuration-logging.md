@@ -14,6 +14,8 @@ The timestamp uses the process local timezone. The caller uses a trimmed source 
 
 `Debug` and the `--debug` CLI option enable debug output. The `--verbose` option enables informational output. Without either option, the command-line default is error output; the `Debug` configuration value can enable debug output after configuration is loaded.
 
+Library and application packages return errors to their callers. Only the process entry point emits a fatal log and terminates the process, including failures returned by CLI dispatch, HTTP listeners, continuous discovery, Raft, database initialization, and configuration loading.
+
 Legacy log levels map to console and syslog levels as follows:
 
 | Legacy level | Console level | syslog priority |

@@ -7,3 +7,4 @@
   - Make configured application and audit syslog initialization failures fatal during startup, and make audit file/syslog write failures observable to callers instead of discarding them in per-entry goroutines.
   - Return database initialization, TLS setup, hostname resolution, and configuration parsing failures to process entry points instead of terminating from library packages. Failed configuration reloads leave the active configuration unchanged and return an API error or SIGHUP log entry.
   - Propagate HTTP listener, continuous discovery, and Raft monitor failures to the process entry point. Raft retains only the first pending fatal runtime error and no longer creates a goroutine for each report.
+  - Return CLI dispatch failures through `Cli` and `CliWrapper`, leaving process termination exclusively to `main` while preserving exit status, stderr logging, and stdout command output.
