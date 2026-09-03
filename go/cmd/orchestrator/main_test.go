@@ -42,6 +42,38 @@ func TestConfigureSyslogDoesNothingWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestRegisterProcessCloseHooksRegistersAuditAndDatabaseCleanup(t *testing.T) {
+	var hooks []func() error
+	register := func(hook func() error) {
+		hooks = append(hooks, hook)
+	}
+	auditClosed := false
+	databaseClosed := false
+	registerProcessCloseHooks(
+		register,
+		func() error {
+			auditClosed = true
+			return nil
+		},
+		func() error {
+			databaseClosed = true
+			return nil
+		},
+	)
+
+	if len(hooks) != 2 {
+		t.Fatalf("registered close hooks = %d; want 2", len(hooks))
+	}
+	for _, hook := range hooks {
+		if err := hook(); err != nil {
+			t.Fatalf("close hook error: %v", err)
+		}
+	}
+	if !auditClosed || !databaseClosed {
+		t.Fatalf("cleanup state audit/database = %t/%t; want true/true", auditClosed, databaseClosed)
+	}
+}
+
 func TestEnabledSyslogInitializationFailureExitsProcess(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestSyslogStartupFailureHelperProcess$")
 	command.Env = append(os.Environ(), "GO_WANT_SYSLOG_STARTUP_FAILURE_HELPER=1")

@@ -24,6 +24,7 @@ import (
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/app"
 	"github.com/openark/orchestrator/go/config"
+	"github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/inst"
 	"github.com/openark/orchestrator/go/process"
 
@@ -35,12 +36,7 @@ var AppVersion, GitCommit string
 
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
-	log.RegisterCloseHook(func() error {
-		if err := inst.CloseAuditSyslog(); err != nil {
-			return fmt.Errorf("close audit syslog: %w", err)
-		}
-		return nil
-	})
+	registerProcessCloseHooks(log.RegisterCloseHook, inst.CloseAuditSyslog, db.Close)
 	exitCode := run()
 	if err := log.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "logger close failed: %v\n", err)
@@ -49,6 +45,25 @@ func main() {
 	if exitCode != 0 {
 		os.Exit(exitCode)
 	}
+}
+
+func registerProcessCloseHooks(
+	register func(func() error),
+	closeAuditSyslog func() error,
+	closeDatabaseRuntime func() error,
+) {
+	register(func() error {
+		if err := closeAuditSyslog(); err != nil {
+			return fmt.Errorf("close audit syslog: %w", err)
+		}
+		return nil
+	})
+	register(func() error {
+		if err := closeDatabaseRuntime(); err != nil {
+			return fmt.Errorf("close database runtime: %w", err)
+		}
+		return nil
+	})
 }
 
 func run() int {

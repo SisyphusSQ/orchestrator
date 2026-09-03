@@ -17,13 +17,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
-	"errors"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/openark/golib/log"
@@ -31,17 +28,7 @@ import (
 	"github.com/openark/orchestrator/go/config"
 )
 
-const dsnRegexp = `^([^:]+)(:.*)?(@(socket|tcp)\(.+\)/.*)$`
-
-var (
-	EmptyArgs  []interface{}
-	ErrNoMatch = errors.New("no match")
-)
-
-var mysqlURI string
-var dbMutex sync.Mutex
-var orchestratorDBInitMutex sync.Mutex
-var orchestratorDBInitialized bool
+var EmptyArgs []interface{}
 
 type DummySqlResult struct {
 }
@@ -54,94 +41,65 @@ func (this DummySqlResult) RowsAffected() (int64, error) {
 	return 1, nil
 }
 
-func getMySQLURI() (string, error) {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-	if mysqlURI != "" {
-		return mysqlURI, nil
-	}
-	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=%ds&readTimeout=%ds&rejectReadOnly=%t&interpolateParams=true",
-		config.Config.MySQLOrchestratorUser,
-		config.Config.MySQLOrchestratorPassword,
-		config.Config.MySQLOrchestratorHost,
-		config.Config.MySQLOrchestratorPort,
-		config.Config.MySQLOrchestratorDatabase,
-		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLOrchestratorReadTimeoutSeconds,
-		config.Config.MySQLOrchestratorRejectReadOnly,
-	)
-	if config.Config.MySQLOrchestratorUseMutualTLS {
-		var err error
-		uri, err = SetupMySQLOrchestratorTLS(uri)
-		if err != nil {
-			return "", err
-		}
-	}
-	if config.Config.MySQLOrchestratorMaxAllowedPacket >= 0 {
-		uri = fmt.Sprintf("%s&maxAllowedPacket=%d", uri, config.Config.MySQLOrchestratorMaxAllowedPacket)
-	}
-	return uri, nil
-}
-
 // OpenDiscovery returns a DB instance to access a topology instance.
 // It has lower read timeout than OpenTopology and is intended to
 // be used with low-latency discovery queries.
 func OpenDiscovery(host string, port int) (*sql.DB, error) {
-	return openTopology(host, port, config.Config.MySQLDiscoveryReadTimeoutSeconds)
+	return OpenDiscoveryContext(context.Background(), host, port)
 }
 
 // OpenTopology returns a DB instance to access a topology instance.
 func OpenTopology(host string, port int) (*sql.DB, error) {
-	return openTopology(host, port, config.Config.MySQLTopologyReadTimeoutSeconds)
+	return OpenTopologyContext(context.Background(), host, port)
 }
 
-func openTopology(host string, port int, readTimeout int) (db *sql.DB, err error) {
-	mysql_uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLTopologyUser,
-		config.Config.MySQLTopologyPassword,
-		host, port,
-		config.Config.MySQLConnectTimeoutSeconds,
-		readTimeout,
+// OpenDiscoveryContext is the context-aware form of OpenDiscovery.
+func OpenDiscoveryContext(ctx context.Context, host string, port int) (*sql.DB, error) {
+	return openTopologyContext(
+		ctx,
+		topologyConnectionDiscovery,
+		host,
+		port,
+		time.Duration(config.Config.MySQLDiscoveryReadTimeoutSeconds)*time.Second,
 	)
+}
 
-	if config.Config.MySQLTopologyMaxAllowedPacket >= 0 {
-		mysqlURI = fmt.Sprintf("%s&maxAllowedPacket=%d", mysqlURI, config.Config.MySQLTopologyMaxAllowedPacket)
-	}
-	if config.Config.MySQLTopologyUseMutualTLS ||
-		(config.Config.MySQLTopologyUseMixedTLS && requiresTLS(host, port, mysql_uri)) {
-		if mysql_uri, err = SetupMySQLTopologyTLS(mysql_uri); err != nil {
+// OpenTopologyContext is the context-aware form of OpenTopology.
+func OpenTopologyContext(ctx context.Context, host string, port int) (*sql.DB, error) {
+	return openTopologyContext(
+		ctx,
+		topologyConnectionOperation,
+		host,
+		port,
+		time.Duration(config.Config.MySQLTopologyReadTimeoutSeconds)*time.Second,
+	)
+}
+
+func openTopologyContext(
+	ctx context.Context,
+	role topologyConnectionRole,
+	host string,
+	port int,
+	readTimeout time.Duration,
+) (*sql.DB, error) {
+	cfg := newTopologyMySQLConfig(host, port, readTimeout)
+	if config.Config.MySQLTopologyUseMutualTLS {
+		if err := configureTopologyTLS(cfg); err != nil {
 			return nil, err
 		}
-	}
-	sqlUtilsLogger := SqlUtilsLogger{client_context: host + ":" + strconv.Itoa(port), backend_connection: false}
-	if db, _, err = sqlutils.GetDB(mysql_uri, sqlUtilsLogger); err != nil {
-		return nil, err
-	}
-	if config.Config.MySQLConnectionLifetimeSeconds > 0 {
-		db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
-	}
-	db.SetMaxOpenConns(config.MySQLTopologyMaxPoolConnections)
-	db.SetMaxIdleConns(config.MySQLTopologyMaxPoolConnections)
-	return db, err
-}
-
-func openOrchestratorMySQLGeneric() (db *sql.DB, fromCache bool, err error) {
-	uri := fmt.Sprintf("%s:%s@tcp(%s:%d)/?timeout=%ds&readTimeout=%ds&interpolateParams=true",
-		config.Config.MySQLOrchestratorUser,
-		config.Config.MySQLOrchestratorPassword,
-		config.Config.MySQLOrchestratorHost,
-		config.Config.MySQLOrchestratorPort,
-		config.Config.MySQLConnectTimeoutSeconds,
-		config.Config.MySQLOrchestratorReadTimeoutSeconds,
-	)
-	if config.Config.MySQLOrchestratorUseMutualTLS {
-		uri, err = SetupMySQLOrchestratorTLS(uri)
+	} else if config.Config.MySQLTopologyUseMixedTLS {
+		required, err := requiresTLSContext(ctx, host, port, cfg)
 		if err != nil {
-			return nil, false, err
+			return nil, err
+		}
+		if required {
+			if err := configureTopologyTLS(cfg); err != nil {
+				return nil, err
+			}
 		}
 	}
-	sqlUtilsLogger := SqlUtilsLogger{client_context: config.Config.MySQLOrchestratorHost + ":" + strconv.FormatUint(uint64(config.Config.MySQLOrchestratorPort), 10), backend_connection: true}
-	return sqlutils.GetDB(uri, sqlUtilsLogger)
+	logger := SqlUtilsLogger{client_context: cfg.Addr, backend_connection: false}
+	return processDatabaseRuntime.openTopologyPool(ctx, role, cfg, logger)
 }
 
 func IsSQLite() bool {
@@ -152,115 +110,10 @@ func isInMemorySQLite() bool {
 	return config.Config.IsSQLite() && strings.Contains(config.Config.SQLite3DataFile, ":memory:")
 }
 
-// matchDSN tries to match the DSN or returns an error
-func matchDSN(dsn string) (string, error) {
-	re := regexp.MustCompile(dsnRegexp)
-
-	matches := re.FindStringSubmatch(dsn)
-	if matches == nil {
-		return "", ErrNoMatch
-	}
-
-	// matching dsn so printout excluding the password
-	// - if no password is provided the lack of a password will be visible!
-	maskedPass := ""
-	if len(matches[2]) > 0 {
-		maskedPass = `:?`
-	}
-
-	return matches[1] + maskedPass + matches[3], nil
-}
-
-// safeMySQLURI returns a version of the dsn without showing the password so it can be logged safely.
-// - if we are unable to correctly match the provided dsn we build an incomplete one based on some of the settings.
-func safeMySQLURI(dsn string) string {
-	if safeDSN, err := matchDSN(dsn); err == nil {
-		return safeDSN
-	}
-
-	// Fallback to use an incomplete dsn which may be good enough.
-	// Do not show the password but do show what we connect to.
-	return fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds (incomplete dsn!)",
-		config.Config.MySQLOrchestratorUser,
-		config.Config.MySQLOrchestratorHost,
-		config.Config.MySQLOrchestratorPort,
-		config.Config.MySQLOrchestratorDatabase,
-		config.Config.MySQLConnectTimeoutSeconds)
-}
-
-// OpenTopology returns the DB instance for the orchestrator backed database
-func OpenOrchestrator() (db *sql.DB, err error) {
-	var fromCache bool
-	if IsSQLite() {
-		db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile, nil)
-		if err == nil && !fromCache {
-			log.Debugf("Connected to orchestrator backend: sqlite on %v", config.Config.SQLite3DataFile)
-		}
-		db.SetMaxOpenConns(1)
-		db.SetMaxIdleConns(1)
-	} else {
-		if db, fromCache, err := openOrchestratorMySQLGeneric(); err != nil {
-			return db, log.Errore(err)
-		} else if !fromCache {
-			// first time ever we talk to MySQL
-			query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLOrchestratorDatabase)
-			if _, err := db.Exec(query); err != nil {
-				return db, log.Errore(err)
-			}
-		}
-		dsn, err := getMySQLURI()
-		if err != nil {
-			return db, err
-		}
-		sqlUtilsLogger := SqlUtilsLogger{client_context: config.Config.MySQLOrchestratorHost + ":" + strconv.FormatUint(uint64(config.Config.MySQLOrchestratorPort), 10), backend_connection: true}
-		db, fromCache, err = sqlutils.GetDB(dsn, sqlUtilsLogger)
-		if err == nil && !fromCache {
-			log.Debugf("Connected to orchestrator backend: %v", safeMySQLURI(dsn))
-
-			if config.Config.MySQLOrchestratorMaxPoolConnections > 0 {
-				log.Debugf("Orchestrator pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
-				db.SetMaxOpenConns(config.Config.MySQLOrchestratorMaxPoolConnections)
-			}
-			if config.Config.MySQLConnectionLifetimeSeconds > 0 {
-				db.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
-			}
-		}
-	}
-	if err == nil && !config.Config.SkipOrchestratorDatabaseUpdate {
-		orchestratorDBInitMutex.Lock()
-		if !orchestratorDBInitialized {
-			err = initOrchestratorDB(db)
-			if err == nil {
-				orchestratorDBInitialized = true
-			}
-		}
-		orchestratorDBInitMutex.Unlock()
-		if err != nil {
-			return db, err
-		}
-	}
-	if err == nil && !fromCache {
-		// A low value here will trigger reconnects which could
-		// make the number of backend connections hit the tcp
-		// limit. That's bad.  I could make this setting dynamic
-		// but then people need to know which value to use. For now
-		// allow up to 25% of MySQLOrchestratorMaxPoolConnections
-		// to be idle.  That should provide a good number which
-		// does not keep the maximum number of connections open but
-		// at the same time does not trigger disconnections and
-		// reconnections too frequently.
-		maxIdleConns := int(config.Config.MySQLOrchestratorMaxPoolConnections * 25 / 100)
-		if maxIdleConns < 10 {
-			maxIdleConns = 10
-		}
-		log.Infof("Connecting to backend %s:%d: maxConnections: %d, maxIdleConns: %d",
-			config.Config.MySQLOrchestratorHost,
-			config.Config.MySQLOrchestratorPort,
-			config.Config.MySQLOrchestratorMaxPoolConnections,
-			maxIdleConns)
-		db.SetMaxIdleConns(maxIdleConns)
-	}
-	return db, err
+// OpenOrchestrator returns the process-owned orchestrator backend pool.
+// New code should use OpenOrchestratorContext so cancellation reaches the driver.
+func OpenOrchestrator() (*sql.DB, error) {
+	return OpenOrchestratorContext(context.Background())
 }
 
 func translateStatement(statement string) (string, error) {
@@ -272,6 +125,10 @@ func translateStatement(statement string) (string, error) {
 
 // versionIsDeployed checks if given version has already been deployed
 func versionIsDeployed(db *sql.DB) (result bool, err error) {
+	return versionIsDeployedContext(context.Background(), db)
+}
+
+func versionIsDeployedContext(ctx context.Context, db *sql.DB) (result bool, err error) {
 	query := `
 		select
 			count(*) as is_deployed
@@ -280,7 +137,7 @@ func versionIsDeployed(db *sql.DB) (result bool, err error) {
 		where
 			deployed_version = ?
 		`
-	err = db.QueryRow(query, config.RuntimeCLIFlags.ConfiguredVersion).Scan(&result)
+	err = db.QueryRowContext(ctx, query, config.RuntimeCLIFlags.ConfiguredVersion).Scan(&result)
 	// err means the table 'orchestrator_db_deployments' does not even exist, in which case we proceed
 	// to deploy.
 	// If there's another error to this, like DB gone bad, then we're about to find out anyway.
@@ -289,6 +146,10 @@ func versionIsDeployed(db *sql.DB) (result bool, err error) {
 
 // registerOrchestratorDeployment updates the orchestrator_metadata table upon successful deployment
 func registerOrchestratorDeployment(db *sql.DB) error {
+	return registerOrchestratorDeploymentContext(context.Background(), db)
+}
+
+func registerOrchestratorDeploymentContext(ctx context.Context, db *sql.DB) error {
 	query := `
     	replace into orchestrator_db_deployments (
 				deployed_version, deployed_timestamp
@@ -296,7 +157,7 @@ func registerOrchestratorDeployment(db *sql.DB) error {
 				?, NOW()
 			)
 				`
-	if _, err := execInternal(db, query, config.RuntimeCLIFlags.ConfiguredVersion); err != nil {
+	if _, err := execInternalContext(ctx, db, query, config.RuntimeCLIFlags.ConfiguredVersion); err != nil {
 		return fmt.Errorf("write orchestrator deployment metadata: %w", err)
 	}
 	log.Debugf("Migrated database schema to version [%+v]", config.RuntimeCLIFlags.ConfiguredVersion)
@@ -306,7 +167,11 @@ func registerOrchestratorDeployment(db *sql.DB) error {
 // deployStatements will issue given sql queries that are not already known to be deployed.
 // This iterates both lists (to-run and already-deployed) and also verifies no contraditions.
 func deployStatements(db *sql.DB, queries []string) error {
-	tx, err := db.Begin()
+	return deployStatementsContext(context.Background(), db, queries)
+}
+
+func deployStatementsContext(ctx context.Context, db *sql.DB, queries []string) error {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin orchestrator deployment transaction: %w", err)
 	}
@@ -321,11 +186,14 @@ func deployStatements(db *sql.DB, queries []string) error {
 	// My bad.
 	originalSqlMode := ""
 	if config.Config.IsMySQL() {
-		err = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSqlMode)
-		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', '')`); err != nil {
+		err = tx.QueryRowContext(ctx, `select @@session.sql_mode`).Scan(&originalSqlMode)
+		if err != nil {
+			return fmt.Errorf("read SQL mode before orchestrator deployment: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', '')`); err != nil {
 			return fmt.Errorf("relax NO_ZERO_DATE for orchestrator deployment: %w", err)
 		}
-		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_IN_DATE', '')`); err != nil {
+		if _, err := tx.ExecContext(ctx, `set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_IN_DATE', '')`); err != nil {
 			return fmt.Errorf("relax NO_ZERO_IN_DATE for orchestrator deployment: %w", err)
 		}
 	}
@@ -338,7 +206,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 		if err != nil {
 			return fmt.Errorf("translate orchestrator deployment query %q: %w", query, err)
 		}
-		if _, err := tx.Exec(query); err != nil {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
 			if strings.Contains(err.Error(), "syntax error") {
 				return fmt.Errorf("execute orchestrator deployment query %q: %w", query, err)
 			}
@@ -355,7 +223,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 		}
 	}
 	if config.Config.IsMySQL() {
-		if _, err := tx.Exec(`set session sql_mode=?`, originalSqlMode); err != nil {
+		if _, err := tx.ExecContext(ctx, `set session sql_mode=?`, originalSqlMode); err != nil {
 			return fmt.Errorf("restore SQL mode after orchestrator deployment: %w", err)
 		}
 	}
@@ -368,9 +236,13 @@ func deployStatements(db *sql.DB, queries []string) error {
 // initOrchestratorDB attempts to create/upgrade the orchestrator backend database. It is created once in the
 // application's lifetime.
 func initOrchestratorDB(db *sql.DB) error {
+	return initOrchestratorDBContext(context.Background(), db)
+}
+
+func initOrchestratorDBContext(ctx context.Context, db *sql.DB) error {
 	log.Debug("Initializing orchestrator")
 
-	versionAlreadyDeployed, err := versionIsDeployed(db)
+	versionAlreadyDeployed, err := versionIsDeployedContext(ctx, db)
 	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
 		// Already deployed with this version
 		return nil
@@ -379,21 +251,21 @@ func initOrchestratorDB(db *sql.DB) error {
 		return fmt.Errorf("PanicIfDifferentDatabaseDeploy is set: configured version %s is not present in the database", config.RuntimeCLIFlags.ConfiguredVersion)
 	}
 	log.Debugf("Migrating database schema")
-	if err := deployStatements(db, generateSQLBase); err != nil {
+	if err := deployStatementsContext(ctx, db, generateSQLBase); err != nil {
 		return err
 	}
-	if err := deployStatements(db, generateSQLPatches); err != nil {
+	if err := deployStatementsContext(ctx, db, generateSQLPatches); err != nil {
 		return err
 	}
-	if err := registerOrchestratorDeployment(db); err != nil {
+	if err := registerOrchestratorDeploymentContext(ctx, db); err != nil {
 		return err
 	}
 
 	if IsSQLite() {
-		if _, err := execInternal(db, `PRAGMA journal_mode = WAL`); err != nil {
+		if _, err := execInternalContext(ctx, db, `PRAGMA journal_mode = WAL`); err != nil {
 			return fmt.Errorf("enable SQLite WAL mode: %w", err)
 		}
-		if _, err := execInternal(db, `PRAGMA synchronous = NORMAL`); err != nil {
+		if _, err := execInternalContext(ctx, db, `PRAGMA synchronous = NORMAL`); err != nil {
 			return fmt.Errorf("configure SQLite synchronous mode: %w", err)
 		}
 	}
@@ -403,28 +275,34 @@ func initOrchestratorDB(db *sql.DB) error {
 
 // execInternal
 func execInternal(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
-	var err error
-	query, err = translateStatement(query)
+	return execInternalContext(context.Background(), db, query, args...)
+}
+
+func execInternalContext(ctx context.Context, db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+	translated, err := translateStatement(query)
 	if err != nil {
 		return nil, err
 	}
-	res, err := sqlutils.ExecNoPrepare(db, query, args...)
-	return res, err
+	return sqlutils.ExecNoPrepareContext(ctx, db, translated, args...)
 }
 
 // ExecOrchestrator will execute given query on the orchestrator backend database.
 func ExecOrchestrator(query string, args ...interface{}) (sql.Result, error) {
-	var err error
-	query, err = translateStatement(query)
+	return ExecOrchestratorContext(context.Background(), query, args...)
+}
+
+// ExecOrchestratorContext executes a backend statement with caller-provided
+// cancellation and deadline semantics.
+func ExecOrchestratorContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	translated, err := translateStatement(query)
 	if err != nil {
 		return nil, err
 	}
-	db, err := OpenOrchestrator()
+	database, err := OpenOrchestratorContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res, err := sqlutils.ExecNoPrepare(db, query, args...)
-	return res, err
+	return sqlutils.ExecNoPrepareContext(ctx, database, translated, args...)
 }
 
 // QueryRowsMapOrchestrator

@@ -69,6 +69,24 @@ Allowed values are:
 
 `> 0` - use the value provided
 
+The two settings are applied independently. `MySQLOrchestratorMaxAllowedPacket`
+only configures the backend connection, while `MySQLTopologyMaxAllowedPacket`
+only configures connections to managed MySQL instances.
+
+#### Connection pool lifecycle
+
+`orchestrator` maps the backend and topology settings into typed MySQL driver
+configuration. It owns one backend pool for the lifetime of the process and
+separate topology pools for discovery and topology operations. Discovery and
+topology-operation pools remain distinct even when their configured timeouts
+are equal, so a slow operation cannot consume the discovery pool's identity.
+
+The process closes all owned pools during normal shutdown and `SIGTERM`.
+Connection-affecting configuration changes loaded by `SIGHUP` apply to newly
+constructed configuration, but existing process-owned pools are not rebuilt.
+Restart `orchestrator` after changing database endpoints, credentials, TLS,
+timeouts, packet limits, or pool sizing.
+
 ## SQLite backend
 
 Default backend is `MySQL`. To setup `SQLite`, use:
@@ -83,3 +101,6 @@ Default backend is `MySQL`. To setup `SQLite`, use:
 `SQLite` is embedded within `orchestrator`.
 
 If the file indicated by `SQLite3DataFile` does not exist, `orchestrator` will create it. It will need write permissions on given path/file.
+
+The SQLite backend also uses one process-owned pool, limited to one open and
+idle connection, and is closed through the same shutdown lifecycle as MySQL.

@@ -4,6 +4,22 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### Database connections now have an explicit process lifecycle
+
+Backend and topology connections are now created from typed MySQL driver
+configuration and owned by the `orchestrator` process. Shutdown closes the
+backend pool, the discovery pools, and the topology-operation pools. The
+`MySQLTopologyMaxAllowedPacket` setting now applies to topology connections;
+previous builds accidentally wrote that value to an unrelated cached backend
+DSN, so deployments that set it may observe the intended topology packet limit
+for the first time.
+
+Database connection settings reloaded with `SIGHUP` do not rebuild pools that
+are already open. Restart every `orchestrator` process after changing database
+endpoints, credentials, TLS files or verification, connection timeouts, packet
+limits, lifetime, or pool sizing. No configuration keys or JSON value formats
+changed in this migration.
+
 ### Log output and syslog failure behavior changed
 
 Application logging now uses Uber Zap v1.28.0 and writes text lines to stderr in the form `time\t[LEVEL]\t[caller]\tmessage`. The added caller field and Tab separators replace the previous space-separated format. Console output remains plain text, not JSON, and CLI data on stdout remains separate. Update log parsers, collection rules, and alerts that depend on the previous layout before replacing the binary.

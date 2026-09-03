@@ -17,6 +17,7 @@
 package sqlutils
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -170,62 +171,56 @@ func (this *RowMap) GetTime(key string) time.Time {
 	return time.Time{}
 }
 
-func validateQuery(query string, db *sql.DB) {
-	// dev purposes only. Remove this return to call query validator function.
-	return
-
-	knownDBsMutex.RLock()
-	defer knownDBsMutex.RUnlock()
-
-	if logger, exists := DB2logger[db]; exists && logger != nil {
-		logger.ValidateQuery((query))
-	}
+func validateQuery(_ string, _ *sql.DB) {
+	// Query validation remains disabled for compatibility.
 }
-
-// knownDBs is a DB cache by uri
-var knownDBs map[string]*sql.DB = make(map[string]*sql.DB)
-var knownDBsMutex = &sync.RWMutex{}
 
 type Logger interface {
 	OnError(context string, query string, err error) error
 	ValidateQuery(query string)
 }
 
-// it is also protected by knownDBsMutex
+var dbLoggersMutex sync.RWMutex
 var DB2logger map[*sql.DB]Logger = make(map[*sql.DB]Logger)
 
-// GetDB returns a DB instance based on uri.
-// logger parameter is optional. If nil, internal logging will be used.
-// bool result indicates whether the DB was returned from cache; err
-func GetGenericDB(driverName, dataSourceName string, logger Logger) (*sql.DB, bool, error) {
-	knownDBsMutex.Lock()
-	defer func() {
-		knownDBsMutex.Unlock()
-	}()
-
-	var exists bool
-	if _, exists = knownDBs[dataSourceName]; !exists {
-		if db, err := sql.Open(driverName, dataSourceName); err == nil {
-			knownDBs[dataSourceName] = db
-		} else {
-			return db, exists, err
-		}
+// RegisterLogger associates query errors from a caller-owned pool with its logger.
+func RegisterLogger(db *sql.DB, logger Logger) {
+	if db == nil || logger == nil {
+		return
 	}
-	db := knownDBs[dataSourceName]
+	dbLoggersMutex.Lock()
 	DB2logger[db] = logger
-	return db, exists, nil
+	dbLoggersMutex.Unlock()
 }
 
-// GetDB returns a MySQL DB instance based on uri.
-// logger parameter is optional. If nil, internal logging will be used.
-// bool result indicates whether the DB was returned from cache; err
+// UnregisterLogger removes the logger association for a caller-owned pool.
+func UnregisterLogger(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	dbLoggersMutex.Lock()
+	delete(DB2logger, db)
+	dbLoggersMutex.Unlock()
+}
+
+// GetGenericDB opens a caller-owned DB instance. The bool result is retained
+// for API compatibility and is always false because sqlutils no longer caches
+// process-global connection pools.
+func GetGenericDB(driverName, dataSourceName string, logger Logger) (*sql.DB, bool, error) {
+	db, err := sql.Open(driverName, dataSourceName)
+	if err != nil {
+		return db, false, err
+	}
+	RegisterLogger(db, logger)
+	return db, false, nil
+}
+
+// GetDB opens a caller-owned MySQL DB instance.
 func GetDB(mysql_uri string, logger Logger) (*sql.DB, bool, error) {
 	return GetGenericDB("mysql", mysql_uri, logger)
 }
 
-// GetDB returns a SQLite DB instance based on DB file name.
-// logger parameter is optional. If nil, internal logging will be used.
-// bool result indicates whether the DB was returned from cache; err
+// GetSQLiteDB opens a caller-owned SQLite DB instance.
 func GetSQLiteDB(dbFile string, logger Logger) (*sql.DB, bool, error) {
 	return GetGenericDB("sqlite3", dbFile, logger)
 }
@@ -281,8 +276,8 @@ func ScanRowsToMaps(rows *sql.Rows, on_row func(RowMap) error) error {
 
 func logErrorInternal(context string, db *sql.DB, query string, err error) error {
 	// find logger registered by the client
-	knownDBsMutex.RLock()
-	defer knownDBsMutex.RUnlock()
+	dbLoggersMutex.RLock()
+	defer dbLoggersMutex.RUnlock()
 
 	if logger, exists := DB2logger[db]; exists && logger != nil {
 		return logger.OnError(context, query, err)
@@ -372,6 +367,11 @@ func QueryRowsMapBuffered(db *sql.DB, query string, on_row func(RowMap) error, a
 
 // ExecNoPrepare executes given query using given args on given DB, without using prepared statements.
 func ExecNoPrepare(db *sql.DB, query string, args ...interface{}) (res sql.Result, err error) {
+	return ExecNoPrepareContext(context.Background(), db, query, args...)
+}
+
+// ExecNoPrepareContext is the context-aware form of ExecNoPrepare.
+func ExecNoPrepareContext(ctx context.Context, db *sql.DB, query string, args ...interface{}) (res sql.Result, err error) {
 	validateQuery(query, db)
 	defer func() {
 		if derr := recover(); derr != nil {
@@ -379,7 +379,7 @@ func ExecNoPrepare(db *sql.DB, query string, args ...interface{}) (res sql.Resul
 		}
 	}()
 
-	res, err = db.Exec(query, args...)
+	res, err = db.ExecContext(ctx, query, args...)
 	if err != nil {
 		logErrorInternal("ExecNoPrepare", db, query, err)
 	}
