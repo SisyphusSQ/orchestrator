@@ -11,16 +11,16 @@ jobs:
     #     backend: [sqlite, MySQL]
 
     steps:
-    - name: Set up Go 1.16
-      uses: actions/setup-go@v1
+    - name: check out
+      uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
       with:
-        go-version: 1.16
+        go-version-file: go.mod
 
     - name: Start local MySQL
       run: sudo /etc/init.d/mysql start
-
-    - name: check out
-      uses: actions/checkout@v2
 
     - name: copy config file template
       run: |
@@ -41,7 +41,7 @@ jobs:
         echo "MySQL config generated"
 
     - name: check out main branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         ref: main
 
@@ -60,7 +60,7 @@ jobs:
 
 
     - name: check out PR branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
 
     - name: build branch
       run:  script/test-build

@@ -13,12 +13,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
 
-    - name: Set up Go 1.16
-      uses: actions/setup-go@v1
+    - name: Set up Go
+      uses: actions/setup-go@v7
       with:
-        go-version: 1.16
+        go-version-file: go.mod
 
     - name: Test source code
       run:  script/test-source
@@ -45,7 +45,7 @@ jobs:
       run:  script/test-docs
 
     - name: Upload orchestrator binary artifact
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v7
       with:
         name: orchestrator
         path: bin/orchestrator
