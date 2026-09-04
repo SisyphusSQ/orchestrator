@@ -18,4 +18,4 @@ jobs:
     - name: Run containerized system tests
       env:
         RUN_TESTS: "YES"
-      run: script/dock system-no-it
+      run: make system-ci

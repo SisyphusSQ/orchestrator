@@ -16,17 +16,14 @@
 
 FROM golang:1.26.5-alpine3.23 as build
 
-RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git
+RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git make
 
 WORKDIR /orchestrator
 COPY go.mod go.sum ./
 COPY go/golib/go.mod go/golib/go.sum ./go/golib/
 RUN go mod download
 COPY . .
-RUN bash build.sh -b -P
-RUN rsync -av $(find /tmp/orchestrator-release -type d -name orchestrator -maxdepth 2)/ /
-RUN rsync -av $(find /tmp/orchestrator-release -type d -name orchestrator-client -maxdepth 2)/ /
-RUN cp conf/orchestrator-sample-sqlite.conf.json /etc/orchestrator.conf.json
+RUN make build
 
 FROM alpine:3.23
 
@@ -34,10 +31,11 @@ RUN apk --no-cache add bash curl jq
 
 EXPOSE 3000
 
-COPY --from=build /usr/local/orchestrator /usr/local/orchestrator
-COPY --from=build /usr/bin/orchestrator-client /usr/bin/orchestrator-client
-COPY --from=build /etc/orchestrator.conf.json /etc/orchestrator.conf.json
+COPY --from=build /orchestrator/bin/ /usr/local/orchestrator/
+COPY --from=build /orchestrator/bin/resources/bin/orchestrator-client /usr/bin/orchestrator-client
+COPY --from=build /orchestrator/conf/orchestrator-sample*.conf.json /usr/local/orchestrator/
+COPY --from=build /orchestrator/conf/orchestrator-sample-sqlite.conf.json /etc/orchestrator.conf.json
 
 WORKDIR /usr/local/orchestrator
-ADD docker/entrypoint.sh /entrypoint.sh
-CMD /entrypoint.sh
+COPY docker/entrypoint.sh /entrypoint.sh
+CMD ["/entrypoint.sh"]

@@ -18,4 +18,4 @@ export MOUNT_TEST_DIR=YES
 #export CI_ENV_REPO=https://github.com/percona/orchestrator-ci-env.git
 #export CI_ENV_BRANCH=master
 
-script/dock system
+exec make system

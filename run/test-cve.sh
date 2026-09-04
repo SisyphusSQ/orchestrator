@@ -1,3 +1,5 @@
 #!/bin/bash
 
-script/dock cve
+set -e
+
+exec make docker-cve

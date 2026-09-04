@@ -8,7 +8,7 @@ RUN echo "ci_env_repo: $ci_env_repo"
 RUN echo "ci_env_branch: $ci_env_branch"
 
 RUN apt-get update -q -y
-RUN apt-get install -y sudo haproxy python-is-python3 2to3 git jq rsync libaio1 libnuma1 default-mysql-client bsdmainutils less vim libncurses5
+RUN apt-get install -y sudo haproxy python-is-python3 2to3 git jq rsync libaio1 libnuma1 default-mysql-client bsdmainutils less vim libncurses5 make
 
 RUN mkdir /orchestrator
 WORKDIR /orchestrator
@@ -47,6 +47,6 @@ RUN (cd /orchestrator/orchestrator-ci-env && script/deploy-heartbeat)
 
 WORKDIR /orchestrator
 COPY . .
-RUN (cd /orchestrator && script/build)
+RUN make build
 
 CMD (cd /orchestrator/orchestrator-ci-env && script/docker-entry && cd /orchestrator && docker/docker-entry-system && docker/docker-entry-system-tests)

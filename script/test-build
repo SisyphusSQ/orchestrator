@@ -1,4 +1,5 @@
 #!/bin/bash
 
-echo "# Building"
-script/build
+set -e
+
+exec make build

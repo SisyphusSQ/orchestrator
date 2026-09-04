@@ -2,9 +2,4 @@
 
 set -e
 
-script/test-modules
-script/test-source
-script/test-build
-script/test-unit
-script/test-integration
-script/test-docs
+exec make test

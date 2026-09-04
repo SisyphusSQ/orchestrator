@@ -8,7 +8,9 @@ Multiple Dockerfiles are available, to:
 - Run a 3-node raft setup
 - Run a full blown CI environment
 
-[`script/dock`](https://github.com/openark/orchestrator/blob/master/script/dock) is a convenience script to build/spawn each of these docker images.
+The root [`Makefile`](https://github.com/openark/orchestrator/blob/master/Makefile)
+is the supported entrypoint for building and running these images. `script/dock`
+remains as a compatibility wrapper for existing automation.
 
 ## Build and test
 
@@ -16,7 +18,7 @@ First, it should be noted that you can let GitHub Actions do all the work for yo
 
 If you wish to build and test on your host, but do not want to set up a development environment, use:
 ```shell
-$ script/dock test
+$ make docker-test
 ```
 
 This will use [`docker/Dockerfile.test`](https://github.com/openark/orchestrator/blob/master/docker/Dockerfile.test) to build, unit test, integration test, run doc validation on your behalf.
@@ -25,7 +27,7 @@ This will use [`docker/Dockerfile.test`](https://github.com/openark/orchestrator
 
 Run this command:
 ```shell
-$ script/dock alpine
+$ make run
 ```
 which uses [`docker/Dockerfile`](https://github.com/openark/orchestrator/blob/master/docker/Dockerfile) to build `orchestrator` on an Alpine Linux, and run the service. Docker will map port `:3000` onto your machine, you may browse onto `http://127.0.0.1:3000` to access the orchestrator web interface.
 
@@ -46,7 +48,7 @@ To set these variables you could add these to an environment file where you add 
 
 Run this command:
 ```shell
-$ script/dock pkg
+$ make package
 ```
 To create (via [`fpm`](https://fpm.readthedocs.io/en/latest/)) release packages:
 - `.deb`
@@ -61,7 +63,7 @@ Uses [`Dockerfile.packaging`](https://github.com/openark/orchestrator/blob/maste
 
 Execute:
 ```
-$ script/dock system
+$ make system
 ```
 
 to run a full blown environment (see [ci-env.md](ci-env.md)), consisting of:
@@ -87,7 +89,7 @@ Uses [`Dockerfile.system`](https://github.com/openark/orchestrator/blob/master/d
 
 Execute:
 ```
-$ script/dock raft
+$ make raft
 ```
 
 This will spin three `orchestrator` services:
