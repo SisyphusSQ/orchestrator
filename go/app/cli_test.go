@@ -1,12 +1,14 @@
 package app
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/openark/golib/log"
 	test "github.com/openark/golib/tests"
 	"github.com/openark/orchestrator/go/config"
+	"github.com/openark/orchestrator/go/kv"
 )
 
 func init() {
@@ -58,6 +60,26 @@ func TestCliWrapperReturnsRaftConfigurationError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "RaftEnabled") {
 		t.Fatalf("CliWrapper() error = %q; want RaftEnabled context", err)
+	}
+}
+
+func TestCliReturnsKVInitError(t *testing.T) {
+	previous := *config.Config
+	t.Cleanup(func() {
+		*config.Config = previous
+		kv.ResetKVStoresForTest()
+	})
+	kv.ResetKVStoresForTest()
+	config.Config.ConsulAddress = "https://127.0.0.1:8501"
+	config.Config.ConsulScheme = "https"
+	config.Config.ConsulTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+
+	err := Cli("help", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", "")
+	if err == nil {
+		t.Fatal("Cli() returned nil for a Consul TLS initialization failure")
+	}
+	if !strings.Contains(err.Error(), "initialize KV stores") {
+		t.Fatalf("Cli() error = %q; want initialize KV stores", err)
 	}
 }
 

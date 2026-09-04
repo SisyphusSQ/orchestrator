@@ -17,9 +17,9 @@
 package kv
 
 import (
-	"crypto/tls"
+	"errors"
 	"fmt"
-	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,29 +32,39 @@ import (
 	"github.com/openark/golib/log"
 )
 
+func clusterKeyPrefix(key, clusterMasterPrefix string) string {
+	prefix := key
+	if strings.HasPrefix(prefix, clusterMasterPrefix) {
+		prefix = strings.Replace(prefix, clusterMasterPrefix, "", 1)
+		if path := strings.Split(prefix, "/"); len(path) > 0 {
+			prefix = path[0]
+		}
+	}
+	return prefix
+}
+
 // groupKVPairsByKeyPrefix groups Consul Transaction operations by KV key prefix. This
-// ensures KVs for a single cluster are grouped into a single transaction
+// ensures KVs for a single cluster are grouped into a single transaction. Prefixes
+// are sorted so grouping is stable across runs.
 func groupKVPairsByKeyPrefix(kvPairs consulapi.KVPairs) (groups []consulapi.KVPairs) {
 	maxOpsPerTxn := config.Config.ConsulMaxKVsPerTransaction
 	clusterMasterPrefix := config.Config.KVClusterMasterPrefix + "/"
 	groupsMap := map[string]consulapi.KVPairs{}
+	var prefixes []string
+	seen := map[string]struct{}{}
 	for _, pair := range kvPairs {
-		prefix := pair.Key
-		if strings.HasPrefix(prefix, clusterMasterPrefix) {
-			prefix = strings.Replace(prefix, clusterMasterPrefix, "", 1)
-			if path := strings.Split(prefix, "/"); len(path) > 0 {
-				prefix = path[0]
-			}
+		prefix := clusterKeyPrefix(pair.Key, clusterMasterPrefix)
+		if _, found := seen[prefix]; !found {
+			seen[prefix] = struct{}{}
+			prefixes = append(prefixes, prefix)
 		}
-		if _, found := groupsMap[prefix]; found {
-			groupsMap[prefix] = append(groupsMap[prefix], pair)
-		} else {
-			groupsMap[prefix] = consulapi.KVPairs{pair}
-		}
+		groupsMap[prefix] = append(groupsMap[prefix], pair)
 	}
+	sort.Strings(prefixes)
 
 	pairsBuf := consulapi.KVPairs{}
-	for _, group := range groupsMap {
+	for _, prefix := range prefixes {
+		group := groupsMap[prefix]
 		groupLen := len(group)
 		pairsBufLen := len(pairsBuf)
 		if (pairsBufLen + groupLen) > maxOpsPerTxn {
@@ -71,37 +81,18 @@ func groupKVPairsByKeyPrefix(kvPairs consulapi.KVPairs) (groups []consulapi.KVPa
 
 // A Consul store based on config's `ConsulAddress`, `ConsulScheme`, and `ConsulKVPrefix`
 type consulTxnStore struct {
-	client                        *consulapi.Client
-	kvCache                       *cache.Cache
-	pairsDistributionSuccessMutex sync.Mutex
-	distributionReentry           int64
+	client              *consulapi.Client
+	kvCache             *cache.Cache
+	distributionReentry int64
 }
 
-// NewConsulTxnStore creates a new consul store that uses Consul Transactions to read/write multiple KVPairs.
-// It is possible that the client for this store is nil, which is the case if no consul config is provided
-func NewConsulTxnStore() KVStore {
-	store := &consulTxnStore{
+// NewConsulTxnStore creates a Consul store that uses Consul Transactions to read/write multiple KVPairs.
+// A nil client is valid and makes every operation a no-op.
+func NewConsulTxnStore(client *consulapi.Client) KVStore {
+	return &consulTxnStore{
+		client:  client,
 		kvCache: cache.New(cache.NoExpiration, cache.DefaultExpiration),
 	}
-
-	if config.Config.ConsulAddress != "" {
-		consulConfig := consulapi.DefaultConfig()
-		consulConfig.Address = config.Config.ConsulAddress
-		consulConfig.Scheme = config.Config.ConsulScheme
-		if config.Config.ConsulScheme == "https" {
-			consulConfig.HttpClient = &http.Client{
-				Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-			}
-		}
-		// ConsulAclToken defaults to ""
-		consulConfig.Token = config.Config.ConsulAclToken
-		if client, err := consulapi.NewClient(consulConfig); err != nil {
-			log.Errore(err)
-		} else {
-			store.client = client
-		}
-	}
-	return store
 }
 
 // doWriteTxn performs one or many of write operations using a Consul Transaction and handles any client/server
@@ -134,16 +125,13 @@ type updateDatacenterKVPairsResponse struct {
 
 // updateDatacenterKVPairs handles updating a list of Consul KV pairs for a single datacenter. Current values are
 // read from the server in a single transaction and any necessary updates are made in a second transaction. If a
-// KVPair from a group is missing on the server all KVPairs will be updated.
-func (this *consulTxnStore) updateDatacenterKVPairs(wg *sync.WaitGroup, dc string, kvPairs []*consulapi.KVPair, responses chan updateDatacenterKVPairsResponse) {
-	defer wg.Done()
-
+// KVPair from a group is missing on the server all KVPairs will be updated. A failed read is only an optimization
+// miss: the originally intended writes still run once. Failed writes are not retried.
+func (this *consulTxnStore) updateDatacenterKVPairs(dc string, kvPairs []*consulapi.KVPair) updateDatacenterKVPairsResponse {
 	queryOptions := &consulapi.QueryOptions{Datacenter: dc}
 	kcCacheKeys := make([]string, 0)
 
-	// get the current key-values in a single transaction
 	resp := updateDatacenterKVPairsResponse{}
-	var terr error
 	var getTxnOps consulapi.TxnOps
 	var getTxnResp *consulapi.TxnResponse
 	var possibleSetKVPairs []*consulapi.KVPair
@@ -163,19 +151,24 @@ func (this *consulTxnStore) updateDatacenterKVPairs(wg *sync.WaitGroup, dc strin
 		})
 		possibleSetKVPairs = append(possibleSetKVPairs, kvPair)
 	}
+	readOK := false
 	if len(getTxnOps) > 0 {
-		_, getTxnResp, _, terr = this.client.Txn().Txn(getTxnOps, queryOptions)
-		if terr != nil {
-			log.Errorf("consulTxnStore.DistributePairs(): %v", terr)
-		}
+		ok, txnResp, _, terr := this.client.Txn().Txn(getTxnOps, queryOptions)
 		resp.getTxns++
+		if terr != nil {
+			log.Errorf("consulTxnStore.DistributePairs(): read-before-write optimization failed; proceeding with intended writes: %v", terr)
+		} else if ok {
+			readOK = true
+			getTxnResp = txnResp
+		} else {
+			log.Debugf("consulTxnStore.DistributePairs(): read-before-write transaction did not succeed; proceeding with intended writes")
+		}
 	}
 
-	// find key-value pairs that need updating, add pairs that need updating to set transaction
 	var setTxnOps consulapi.TxnOps
 	for _, pair := range possibleSetKVPairs {
-		var kvExistsAndEqual bool
-		if getTxnResp != nil {
+		kvExistsAndEqual := false
+		if readOK && getTxnResp != nil {
 			for _, result := range getTxnResp.Results {
 				if pair.Key == result.KV.Key && string(pair.Value) == string(result.KV.Value) {
 					this.kvCache.SetDefault(getConsulKVCacheKey(dc, pair.Key), string(pair.Value))
@@ -196,7 +189,6 @@ func (this *consulTxnStore) updateDatacenterKVPairs(wg *sync.WaitGroup, dc strin
 		}
 	}
 
-	// update key-value pairs in a single Consul Transaction
 	if len(setTxnOps) > 0 {
 		if resp.err = this.doWriteTxn(setTxnOps, queryOptions); resp.err != nil {
 			log.Errorf("consulTxnStore.DistributePairs(): failed %v, error %v", kcCacheKeys, resp.err)
@@ -210,19 +202,22 @@ func (this *consulTxnStore) updateDatacenterKVPairs(wg *sync.WaitGroup, dc strin
 		resp.setTxns++
 	}
 
-	responses <- resp
+	return resp
 }
 
 // GetKeyValue returns the value of a Consul KV if it exists
 func (this *consulTxnStore) GetKeyValue(key string) (value string, found bool, err error) {
 	if this.client == nil {
-		return value, found, nil
+		return "", false, nil
 	}
 	pair, _, err := this.client.KV().Get(key, nil)
 	if err != nil {
-		return value, found, err
+		return "", false, err
 	}
-	return string(pair.Value), (pair != nil), nil
+	if pair == nil {
+		return "", false, nil
+	}
+	return string(pair.Value), true, nil
 }
 
 // PutKeyValue performs a Consul KV put operation for a key/value
@@ -241,7 +236,6 @@ func (this *consulTxnStore) PutKVPairs(kvPairs []*KVPair) (err error) {
 	if this.client == nil {
 		return nil
 	}
-	// use .PutKeyValue for single KVPair puts
 	if len(kvPairs) == 1 {
 		return this.PutKeyValue(kvPairs[0].Key, kvPairs[0].Value)
 	}
@@ -264,10 +258,13 @@ func (this *consulTxnStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 	if atomic.CompareAndSwapInt64(&this.distributionReentry, 0, 1) {
 		defer atomic.StoreInt64(&this.distributionReentry, 0)
 	} else {
-		return
+		return nil
 	}
 
 	if !config.Config.ConsulCrossDataCenterDistribution {
+		return nil
+	}
+	if this.client == nil {
 		return nil
 	}
 
@@ -280,43 +277,51 @@ func (this *consulTxnStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 	for _, kvPair := range kvPairs {
 		consulPairs = append(consulPairs, &consulapi.KVPair{Key: kvPair.Key, Value: []byte(kvPair.Value)})
 	}
+	groups := groupKVPairsByKeyPrefix(consulPairs)
 
+	var mu sync.Mutex
+	var errs []error
 	var wg sync.WaitGroup
 	for _, datacenter := range datacenters {
 		datacenter := datacenter
-		responses := make(chan updateDatacenterKVPairsResponse)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			// receive responses from .updateDatacenterKVPairs()
-			// goroutines, log a summary when channel is closed
-			go func() {
-				sum := updateDatacenterKVPairsResponse{}
-				for resp := range responses {
+			sum := updateDatacenterKVPairsResponse{}
+			var dcErrs []error
+			var dcWg sync.WaitGroup
+			var dcMu sync.Mutex
+			for _, kvPairGroup := range groups {
+				kvPairGroup := kvPairGroup
+				dcWg.Add(1)
+				go func() {
+					defer dcWg.Done()
+					resp := this.updateDatacenterKVPairs(datacenter, kvPairGroup)
+					dcMu.Lock()
+					defer dcMu.Unlock()
 					sum.existing += resp.existing
 					sum.failed += resp.failed
 					sum.skipped += resp.skipped
 					sum.written += resp.written
 					sum.getTxns += resp.getTxns
 					sum.setTxns += resp.setTxns
-				}
-				log.Debugf("consulTxnStore.DistributePairs(): datacenter: %s; getTxns: %d, setTxns: %d, skipped: %d, existing: %d, written: %d, failed: %d",
-					datacenter, sum.getTxns, sum.setTxns, sum.skipped, sum.existing, sum.written, sum.failed,
-				)
-			}()
-
-			// launch an .updateDatacenterKVPairs() goroutine
-			// for each grouping of consul KV pairs and wait
-			var dcWg sync.WaitGroup
-			for _, kvPairGroup := range groupKVPairsByKeyPrefix(consulPairs) {
-				dcWg.Add(1)
-				go this.updateDatacenterKVPairs(&dcWg, datacenter, kvPairGroup, responses)
+					if resp.err != nil {
+						dcErrs = append(dcErrs, resp.err)
+					}
+				}()
 			}
 			dcWg.Wait()
-			close(responses)
+			log.Debugf("consulTxnStore.DistributePairs(): datacenter: %s; getTxns: %d, setTxns: %d, skipped: %d, existing: %d, written: %d, failed: %d",
+				datacenter, sum.getTxns, sum.setTxns, sum.skipped, sum.existing, sum.written, sum.failed,
+			)
+			if joined := errors.Join(dcErrs...); joined != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("consul datacenter %s: %w", datacenter, joined))
+				mu.Unlock()
+			}
 		}()
 	}
 	wg.Wait()
-	return err
+	return errors.Join(errs...)
 }

@@ -127,5 +127,11 @@
   "MasterFailoverLostInstancesDowntimeMinutes": 0,
   "PostponeReplicaRecoveryOnLagMinutes": 0,
   "ConsulAddress": "",
-  "ConsulAclToken": ""
+  "ConsulScheme": "http",
+  "ConsulAclToken": "",
+  "ConsulDatacenter": "",
+  "ConsulTLSSkipVerify": false,
+  "ConsulHttpTimeoutSeconds": 60,
+  "ConsulKVStoreProvider": "consul",
+  "ConsulCrossDataCenterDistribution": false
 }

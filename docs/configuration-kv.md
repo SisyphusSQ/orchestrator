@@ -10,6 +10,12 @@
 ```json
   "KVClusterMasterPrefix": "mysql/master",
   "ConsulAddress": "127.0.0.1:8500",
+  "ConsulScheme": "http",
+  "ConsulAclToken": "",
+  "ConsulDatacenter": "",
+  "ConsulTLSSkipVerify": false,
+  "ConsulHttpTimeoutSeconds": 60,
+  "ConsulKVStoreProvider": "consul",
   "ConsulCrossDataCenterDistribution": true,
 ```
 
@@ -31,7 +37,7 @@ The `/hostname`, `/port`, `/ipv4` and `/ipv6` extensions are automatically added
 
 ### Stores
 
-If specified, `ConsulAddress` indicates an address where a Consul HTTP service is available. If unspecified, no Consul access is attempted.
+If specified, `ConsulAddress` indicates a Consul HTTP API. It accepts `host:port` or `http[s]://host:port`. When the address includes a scheme, that scheme wins over `ConsulScheme`. Userinfo, path, query, fragment, and non-HTTP schemes are rejected. If unspecified, no Consul client is created; the internal KV store still works. Consul client settings are not rebuilt on configuration reload — restart after changing them.
 
 ### ZooKeeper removal
 

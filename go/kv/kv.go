@@ -45,25 +45,41 @@ type KVStore interface {
 
 var kvMutex sync.Mutex
 var kvInitOnce sync.Once
+var kvInitErr error
 var kvStores = []KVStore{}
 
-// InitKVStores initializes the KV stores (duh), once in the lifetime of this app.
-// Configuration reload does not affect a running instance.
-func InitKVStores() {
+// InitKVStores initializes the KV stores once in the lifetime of this app.
+// Configuration reload does not rebuild the store or Consul client; restart after Consul settings change.
+func InitKVStores() error {
+	kvInitOnce.Do(func() {
+		kvInitErr = initKVStores()
+	})
+	return kvInitErr
+}
+
+func initKVStores() error {
 	kvMutex.Lock()
 	defer kvMutex.Unlock()
 
-	kvInitOnce.Do(func() {
-		kvStores = []KVStore{
-			NewInternalKVStore(),
+	stores := []KVStore{NewInternalKVStore()}
+	client, err := newConsulClientFromConfig(config.Config)
+	if err != nil {
+		return err
+	}
+	if client != nil {
+		provider, err := config.NormalizeConsulKVStoreProvider(config.Config.ConsulKVStoreProvider)
+		if err != nil {
+			return err
 		}
-		switch config.Config.ConsulKVStoreProvider {
-		case "consul-txn", "consul_txn":
-			kvStores = append(kvStores, NewConsulTxnStore())
+		switch provider {
+		case "consul-txn":
+			stores = append(stores, NewConsulTxnStore(client))
 		default:
-			kvStores = append(kvStores, NewConsulStore())
+			stores = append(stores, NewConsulStore(client))
 		}
-	})
+	}
+	kvStores = stores
+	return nil
 }
 
 func getKVStores() (stores []KVStore) {
@@ -72,6 +88,15 @@ func getKVStores() (stores []KVStore) {
 
 	stores = kvStores
 	return stores
+}
+
+// ResetKVStoresForTest re-enables KV initialization. Tests only.
+func ResetKVStoresForTest() {
+	kvMutex.Lock()
+	defer kvMutex.Unlock()
+	kvInitOnce = sync.Once{}
+	kvInitErr = nil
+	kvStores = nil
 }
 
 func GetValue(key string) (value string, found bool, err error) {

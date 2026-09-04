@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -542,8 +543,8 @@ func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVP
 			selectedError = err
 		}
 	}
-	if err := kv.DistributePairs(kvPairs); err != nil {
-		log.Errore(err)
+	if distributeErr := kv.DistributePairs(kvPairs); distributeErr != nil {
+		selectedError = errors.Join(selectedError, distributeErr)
 	}
 	return kvPairs, submittedCount, log.Errore(selectedError)
 }
@@ -566,6 +567,9 @@ func injectSeeds(seedOnce *sync.Once) {
 // purged and forgotten.
 func ContinuousDiscovery() error {
 	log.Infof("continuous discovery: setting up")
+	if err := kv.InitKVStores(); err != nil {
+		return fmt.Errorf("initialize KV stores: %w", err)
+	}
 	continuousDiscoveryStartTime := time.Now()
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
@@ -614,7 +618,6 @@ func ContinuousDiscovery() error {
 	go ometrics.InitMetrics()
 	go ometrics.InitGraphiteMetrics()
 	go acceptSignals()
-	go kv.InitKVStores()
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()

@@ -90,5 +90,11 @@
   "RaftBind": "127.0.0.1",
   "DefaultRaftPort": 10008,
   "ConsulAddress": "127.0.0.1:8500",
-  "ConsulAclToken": ""
+  "ConsulScheme": "http",
+  "ConsulAclToken": "",
+  "ConsulDatacenter": "",
+  "ConsulTLSSkipVerify": false,
+  "ConsulHttpTimeoutSeconds": 60,
+  "ConsulKVStoreProvider": "consul",
+  "ConsulCrossDataCenterDistribution": false
 }

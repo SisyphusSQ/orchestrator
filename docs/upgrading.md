@@ -74,3 +74,23 @@ Before upgrading:
 4. Validate master discovery after a manual `submit-masters-to-kv-stores` request and after a representative failover in an environment that contains the real external consumers.
 
 This change does not migrate existing ZooKeeper data or consumers. If rollback is required before consumers have migrated, restore a pre-removal binary together with its matching configuration; do not add `ZkAddress` back to the new binary.
+
+### Consul uses the official Go SDK with strict TLS by default
+
+`orchestrator` no longer uses `github.com/armon/consul-api`. Ordinary Consul KV and `consul-txn` now share one official `github.com/hashicorp/consul/api` v1.34.3 client. ACL tokens are sent only as `X-Consul-Token`.
+
+Previous HTTPS clients set `InsecureSkipVerify: true` unconditionally. The new default verifies certificates against the system trust store, or against `ConsulTLSCAFile` / `ConsulTLSCAPath` when configured. `CONSUL_HTTP_SSL_VERIFY` cannot turn verification off. Historical HTTPS deployments that relied on skipped verification must configure a trusted CA and `ConsulTLSServerName` before upgrading. Only a temporary compatibility path should set `"ConsulTLSSkipVerify": true`, which logs one non-sensitive startup warning.
+
+Client construction and TLS file errors now fail CLI and continuous-mode startup instead of logging and continuing with a nil Consul client. `ConsulCrossDataCenterDistribution` requires `ConsulAddress`. Cross-DC updates can still succeed in some datacenters and fail in others; the caller receives an aggregated error and successful datacenters are not rolled back.
+
+Consul settings are not rebuilt on `SIGHUP` configuration reload. Restart every `orchestrator` process after changing Consul address, scheme, token, datacenter, TLS files, skip-verify, timeout, or provider. `ConsulHttpTimeoutSeconds` defaults to `60`; `0` means no overall deadline. Timed-out writes are not retried.
+
+Before upgrading:
+
+1. Confirm every Consul HTTPS endpoint presents a certificate that the process trust store, or an explicit CA setting, will accept.
+2. Set `ConsulTLSServerName` when the certificate hostname does not match the configured address.
+3. Configure `ConsulTLSCertFile` and `ConsulTLSPrivateKeyFile` together if Consul requires mTLS.
+4. Keep `ConsulTLSSkipVerify` false unless a short-lived compatibility window is required.
+5. Validate with unit/fixture tests, then an isolated Consul HTTP/HTTPS/ACL/mTLS environment. Existing system tests that only grep CLI output do not prove Consul KV contents.
+
+Rollback restores the previous binary and its matching configuration. The new TLS fields do not change KV data already stored in Consul. Do not add the removed armon client back to the new binary.

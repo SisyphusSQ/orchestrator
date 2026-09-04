@@ -66,6 +66,32 @@ Shortly following a master failover, `orchestrator` generates a `raft` snapshot.
 
 ### Consul specific
 
+Ordinary KV and transaction providers share one official Consul Go client (`github.com/hashicorp/consul/api`). TLS is verified by default. Set `ConsulTLSSkipVerify` only as an explicit, temporary compatibility switch; it logs one startup warning and is not implied by `CONSUL_HTTP_SSL_VERIFY`.
+
+```json
+  "ConsulAddress": "127.0.0.1:8500",
+  "ConsulScheme": "http",
+  "ConsulAclToken": "",
+  "ConsulDatacenter": "",
+  "ConsulTLSCAFile": "",
+  "ConsulTLSCAPath": "",
+  "ConsulTLSCertFile": "",
+  "ConsulTLSPrivateKeyFile": "",
+  "ConsulTLSServerName": "",
+  "ConsulTLSSkipVerify": false,
+  "ConsulHttpTimeoutSeconds": 60,
+  "ConsulKVStoreProvider": "consul",
+  "ConsulCrossDataCenterDistribution": true
+```
+
+- `ConsulAddress` may be `host:port` or `http[s]://host:port`. An address-embedded scheme wins. Only HTTP and HTTPS are allowed.
+- HTTPS uses the system trust store unless `ConsulTLSCAFile` / `ConsulTLSCAPath` is set. `ConsulTLSServerName` sets SNI / hostname verification. Client certificate and private key must be configured together for mTLS.
+- `ConsulHttpTimeoutSeconds` defaults to `60`. `0` disables the overall request deadline. Timed-out writes are not retried, because Consul may already have applied them.
+- A non-empty JSON `ConsulAclToken` is sent as the `X-Consul-Token` header. When it is empty, the official `CONSUL_HTTP_TOKEN_FILE` / `CONSUL_HTTP_TOKEN` environment fallback is allowed. Tokens are not placed in URLs or logs.
+- `ConsulKVStoreProvider` accepts `consul`, `consul-txn`, and the historical alias `consul_txn`.
+- `ConsulCrossDataCenterDistribution` requires `ConsulAddress`. Cross-DC updates wait for every datacenter and return an aggregated error; successful datacenters are not rolled back.
+- Consul client construction failures, including TLS file errors, fail CLI and continuous-mode startup. Configuration reload does not rebuild the client; restart after Consul setting changes.
+
 Optionally, you may configure:
 
 ```json
@@ -91,4 +117,4 @@ _Note: this feature requires Consul version 0.7 or greater._
 
 This causes Orchestrator to use a [Consul Transaction](https://www.consul.io/api-docs/txn) when distributing one or more Consul KVs. KVs are read from the server in one transaction and any necessary updates are performed in a second transaction.
 
-Orchestrator groups KV updates by key-prefix into groups of of 5 to 64 operations _(default 5)_. This grouping ensures updates to a single cluster _(5 x KVs)_ happen atomically. Increasing the `ConsulMaxKVsPerTransaction` configuration setting from `5` _(default)_ to a max of `64` _(Consul Transaction API limit)_ allows more operations to be grouped into fewer transactions but more can fail at once.
+Orchestrator groups KV updates by key-prefix into groups of 5 to 64 operations _(default 5)_. Prefixes are sorted so grouping is stable. This grouping ensures updates to a single cluster _(5 x KVs)_ happen atomically in one datacenter. Increasing the `ConsulMaxKVsPerTransaction` configuration setting from `5` _(default)_ to a max of `64` _(Consul Transaction API limit)_ allows more operations to be grouped into fewer transactions but more can fail at once. Transaction errors, including HTTP 409, are returned to the caller. A failed read-before-write check still performs the originally intended write once; uncertain writes are not retried.
