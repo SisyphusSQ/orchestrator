@@ -21,16 +21,16 @@ jobs:
         go-version-file: go.mod
 
     - name: Test modules
-      run:  script/test-modules
+      run: make deps
 
     - name: Test source code
-      run:  script/test-source
+      run: make fmt-check
 
     - name: Test build
-      run:  script/test-build
+      run: make build
 
     - name: Test unit
-      run:  script/test-unit
+      run: make test-unit
 
     - name: Update packages
       run:  sudo apt-get update
@@ -42,10 +42,10 @@ jobs:
       run:  sudo /etc/init.d/mysql start
 
     - name: Test integration
-      run:  script/test-integration
+      run: make test-integration
 
     - name: Test documentation
-      run:  script/test-docs
+      run: make test-docs
 
     - name: Upload orchestrator binary artifact
       uses: actions/upload-artifact@v7

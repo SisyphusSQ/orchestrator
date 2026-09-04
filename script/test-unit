@@ -2,10 +2,4 @@
 
 set -e
 
-unit_tests() {
-  echo "# Running unit tests"
-  go test -mod=readonly ./go/...
-  go -C go/golib test -mod=readonly ./...
-}
-
-unit_tests
+exec make test-unit

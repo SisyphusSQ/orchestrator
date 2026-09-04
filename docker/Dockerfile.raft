@@ -2,7 +2,7 @@ FROM golang:1.26.5-bookworm
 LABEL maintainer="openark@github.com"
 
 RUN apt-get update -q -y
-RUN apt-get install -y sudo lsb-release rsync libaio1 numactl sqlite3 git jq less vim python-is-python3 2to3 bsdmainutils
+RUN apt-get install -y sudo lsb-release rsync libaio1 numactl sqlite3 git jq less vim python-is-python3 2to3 bsdmainutils make
 
 COPY docker/resources/systemctl.py /usr/bin/systemctl
 
@@ -13,6 +13,6 @@ COPY go.mod go.sum ./
 COPY go/golib/go.mod go/golib/go.sum ./go/golib/
 RUN go mod download
 COPY . .
-RUN (cd /orchestrator && script/build)
+RUN make build
 
 CMD (cd /orchestrator && docker/docker-entry-raft && /bin/bash)

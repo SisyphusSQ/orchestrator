@@ -1,6 +1,0 @@
-#!/bin/bash
-
-set -e
-
-# Make sure the active Go toolchain satisfies go.mod.
-. script/ensure-go-installed

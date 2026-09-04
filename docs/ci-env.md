@@ -45,7 +45,7 @@ Docker will expose these ports:
 
 # Run orchestrator with environment
 
-Assuming `orchestrator` is built into `bin/orchestrator` (`./script/build` if not):
+Assuming `orchestrator` is built into `bin/orchestrator` (`make build` if not):
 ```shell
 $ bin/orchestrator --config=conf/orchestrator-ci-env.conf.json --debug http
 ```
@@ -60,12 +60,12 @@ While `orchestrator` is running (see above), open another terminal in `orchestra
 
 Run:
 ```shell
-$ ./tests/system/test.sh
+$ make test-system
 ```
 for all tests, or
 ```shell
-$ ./tests/system/test.sh <name-or-regex>
+$ make test-system SYSTEM_TEST_ARGS='<name-or-regex>'
 ```
-for a specific test, e.g. `./tests/system/test.sh relocate-single`
+for a specific test, e.g. `make test-system SYSTEM_TEST_ARGS=relocate-single`
 
 Destructive tests (e.g. a failover) require a full rebuild of the replication topology. The system tests CI runs both orchestrator and the ci-env together, and the tests can instruct the ci-env to rebuild replication. However, if you run ci-env on a local docker, your tests cannot instruct a replication rebuild. You will need to manually run `./script/deploy-replication` on your ci-env container at the end of a destructive test.

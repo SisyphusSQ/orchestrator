@@ -1,25 +1,32 @@
 #!/bin/bash
 
+set -u
 
 check_for_cves() {
   local vulncheck_log=vulncheck.log
-  go install golang.org/x/vuln/cmd/govulncheck@latest
+  local govulncheck_binary="${GOVULNCHECK:-govulncheck}"
+  local scan_status
  
   echo "# Verifying if the code is affected by CVEs (vulncheck)"
-  govulncheck -show verbose ./... | tee -a $vulncheck_log 
-  cat $vulncheck_log
+  "$govulncheck_binary" -show verbose ./... | tee "$vulncheck_log"
+  scan_status=${PIPESTATUS[0]}
   
-  content=$(tr '\n' ' ' < $vulncheck_log)
+  content=$(tr '\n' ' ' < "$vulncheck_log")
   
-  affecting_cves_cnt=$(echo "$content" | grep -oP 'Your code is affected by \K\d+' || echo 0)
-  waring_package_cves_cnt=$(echo "$content" | grep -oP 'This scan also found \K\d+' || echo 0)
-  waring_import_cves_cnt=$(echo "$content" | grep -oP 'and \K\d+(?=\s+vulnerability in modules you require)' || echo 0)
+  affecting_cves_cnt=$(echo "$content" | sed -nE 's/.*Your code is affected by ([0-9]+).*/\1/p')
+  waring_package_cves_cnt=$(echo "$content" | sed -nE 's/.*This scan also found ([0-9]+).*/\1/p')
+  waring_import_cves_cnt=$(echo "$content" | sed -nE 's/.*and ([0-9]+) vulnerabilit(y|ies) in modules you require.*/\1/p')
+  affecting_cves_cnt=${affecting_cves_cnt:-0}
+  waring_package_cves_cnt=${waring_package_cves_cnt:-0}
+  waring_import_cves_cnt=${waring_import_cves_cnt:-0}
 
   echo "affecting_cves_cnt:       $affecting_cves_cnt"
   echo "waring_package_cves_cnt:  $waring_package_cves_cnt"
   echo "waring_import_cves_cnt:   $waring_import_cves_cnt"
 
-  if [[ $affecting_cves_cnt -eq 0 && $waring_package_cves_cnt -eq 0 && $waring_import_cves_cnt -eq 0 ]]; then
+  if [[ $scan_status -ne 0 && $affecting_cves_cnt -eq 0 && $waring_package_cves_cnt -eq 0 && $waring_import_cves_cnt -eq 0 ]]; then
+    result=FAILED
+  elif [[ $affecting_cves_cnt -eq 0 && $waring_package_cves_cnt -eq 0 && $waring_import_cves_cnt -eq 0 ]]; then
     result=PASSED
   elif [[ $affecting_cves_cnt -eq 0 && ( $waring_package_cves_cnt -ne 0 || $waring_import_cves_cnt -ne 0) ]]; then
     result=WARNING
@@ -28,6 +35,7 @@ check_for_cves() {
   fi
   
   echo "CVE check result: $result"
+  [[ "$result" != "FAILED" ]]
 }
 
 

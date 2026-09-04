@@ -1,8 +1,5 @@
 #!/bin/bash
 
-system_tests() {
-  echo "# Running system tests"
-  ./tests/system/test.sh || exit 1
-}
+set -e
 
-system_tests
+exec make test-system SYSTEM_TEST_ARGS="$*"

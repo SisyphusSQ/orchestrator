@@ -2,7 +2,7 @@ FROM golang:1.26.5-bookworm
 LABEL maintainer="openark@github.com"
 
 RUN apt-get update
-RUN apt-get install -y lsb-release rsync libaio1 numactl sqlite3 libncurses5 libtinfo5
+RUN apt-get install -y lsb-release rsync libaio1 numactl sqlite3 libncurses5 libtinfo5 make
 RUN rm -rf /var/lib/apt/lists/*
 
 ENV WORKPATH=/orchestrator
@@ -27,4 +27,4 @@ COPY . .
 RUN (cd /dbdeployer && ./dbdeployer defaults update reserved-ports '0')
 
 ENV TARBAL_URL_DEFAULT https://raw.githubusercontent.com/percona/orchestrator-ci-env/master/mysql-tarballs/mysql-5.7.26.tar.xz
-CMD (cd $WORKPATH && "script/download-mysql" && "script/test-all")
+CMD ["make", "test-container"]

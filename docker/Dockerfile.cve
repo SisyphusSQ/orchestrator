@@ -1,6 +1,10 @@
 FROM golang:1.26.5-bookworm
 LABEL maintainer="kamil.holubicki@percona.com"
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV WORKPATH=/orchestrator
 WORKDIR $WORKPATH
 
@@ -9,4 +13,4 @@ COPY go/golib/go.mod go/golib/go.sum ./go/golib/
 RUN go mod download
 COPY . .
 
-CMD (cd $WORKPATH && "script/test-cve")
+CMD ["make", "cve"]

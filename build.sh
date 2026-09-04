@@ -6,7 +6,7 @@
 #
 set -e
 
-basedir=$(dirname $0)
+basedir=$(cd "$(dirname "$0")" && pwd)
 GIT_COMMIT=$(git rev-parse HEAD)
 RELEASE_VERSION=${RELEASE_VERSION:-""}
 RELEASE_SUBVERSION=${RELEASE_SUBVERSION:-""}
@@ -101,26 +101,22 @@ setup_build_path() {
 }
 
 build_binary() {
-  local target arch build_path gobuild prefix
+  local os arch build_path prefix race
   os="$1"
   arch="$2"
   build_path="$3"
   prefix="$4"
-  ldflags="-X main.AppVersion=${RELEASE_VERSION} -X main.GitCommit=${GIT_COMMIT}"
   debug "Building via $(go version)"
-  mkdir -p "$binary_build_path/bin"
-  rm -f $binary_artifact
-  gobuild="go build ${opt_race} -mod=readonly -ldflags \"$ldflags\" -o $binary_artifact go/cmd/orchestrator/main.go"
-
-  case $os in
-    'linux')
-      echo "GOOS=$os GOARCH=$arch $gobuild" | bash
-    ;;
-    'darwin')
-      echo "GOOS=darwin GOARCH=amd64 $gobuild" | bash
-    ;;
-  esac
-  find $binary_artifact -type f || fail "Failed to generate orchestrator binary"
+  race=0
+  [ -n "$opt_race" ] && race=1
+  make -C "$basedir" binary \
+    BINARY="$binary_artifact" \
+    GOOS="$os" \
+    GOARCH="$arch" \
+    VERSION="$RELEASE_VERSION" \
+    GIT_COMMIT="$GIT_COMMIT" \
+    RACE="$race"
+  find "$basedir/$binary_artifact" -type f || fail "Failed to generate orchestrator binary"
 }
 
 copy_binary_artifacts() {
@@ -154,7 +150,6 @@ function copy_resource_artifacts() {
   prefix="$3"
 
   cd  $basedir
-  gofmt -s -w  go/
   rsync -qa ./resources $build_path/orchestrator${prefix}/orchestrator/
   rsync -qa ./conf/orchestrator-sample*.conf.json $build_path/orchestrator${prefix}/orchestrator/
 

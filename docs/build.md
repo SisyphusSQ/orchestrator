@@ -24,10 +24,10 @@ Requirements: a docker installation.
 
 `orchestrator` provides [various docker builds](docker.md). For developers:
 
-- run `script/dock alpine` to build and run `orchestrator` service
-- run `script/dock test` to build `orchestrator`, run unit tests, integration tests, documentation tests
-- run `script/dock pkg` to build `orchestrator` and create distribution packages (`.deb/.rpm/.tgz`)
-- run `script/dock system` to build and launch a full CI environment which includes a MySQL topology, HAProxy, Consul, consul-template and `orchestrator` running as a service.
+- run `make run` to build and run the `orchestrator` service
+- run `make docker-test` to build `orchestrator` and run unit, integration, and documentation tests
+- run `make package` to build `orchestrator` and create distribution packages (`.deb/.rpm/.tgz`)
+- run `make system` to build and launch a full CI environment which includes a MySQL topology, HAProxy, Consul, consul-template and `orchestrator` running as a service.
 
 
 ## Build and test on dev machine
@@ -51,16 +51,19 @@ Run:
 Download and verify the modules declared in `go.mod` and `go.sum`:
 
 ```shell
-./script/test-modules
+make deps
 ```
 
 Build via:
 
 ```shell
-./script/build
+make build
 ```
 
 The build uses Go Modules directly and does not require a repository-local `GOPATH` or `vendor/` tree.
+Run `make help` to list the supported local and containerized workflows. The
+legacy commands under `script/` remain compatibility entrypoints and delegate
+to the same Make targets.
 
 Alternatively, if you like and if your Go environment is setup, you may run:
 

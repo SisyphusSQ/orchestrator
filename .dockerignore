@@ -1,6 +1,9 @@
 .github
 .gopath
 .cache
+bin
+build
+vulncheck.log
 Dockerfile
 README.md
 Vagrantfile

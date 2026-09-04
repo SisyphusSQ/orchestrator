@@ -1,90 +1,24 @@
 #!/bin/bash
 
-# Usage:
-# dock <test|alpine|pkg|hub|system> [arg]
-#   dock test:                build orchestrator & run unit and integration tests
-#   dock alpine:              build and run orchestrator on alpine linux
-#   dock hub:                 build hub.docker.com image with latest tag
-#   dock pkg [target-path]:   build orchestrator release packages and copy to target path (default path: /tmp/orchestrator-release)
-#   dock system:              create and run a system test environment
-#   dock raft:                build and run orchestrator in a 3-node raft setup
+# Compatibility entrypoint. New callers should invoke the matching Make target.
 
-
-if [[ -z ${CI_ENV_REPO} ]] ; then
-  CI_ENV_REPO_ENV=https://github.com/percona/orchestrator-ci-env.git
-else
-  CI_ENV_REPO_ENV=${CI_ENV_REPO}
-fi
-
-if [[ -z ${CI_ENV_BRANCH} ]] ; then
-  CI_ENV_BRANCH_ENV=master
-else
-  CI_ENV_BRANCH_ENV=${CI_ENV_BRANCH}
-fi
-
-if [[ ${MOUNT_TEST_DIR} == "YES" ]] ; then
-  DOCKER_EXTRA_ARGS="--mount type=bind,source=$PWD/tests/,destination=/orchestrator/tests/"
-else
-  DOCKER_EXTRA_ARGS=
-fi
+set -e
 
 command="$1"
 
 case "$command" in
-  "cve")
-    docker_target="orchestrator-cve"
-    docker build . -f docker/Dockerfile.cve -t "${docker_target}" && docker run --rm -it  ${DOCKER_EXTRA_ARGS} "${docker_target}:latest"
-    ;;
-  "cve-no-it")
-    docker_target="orchestrator-cve"
-    docker build . -f docker/Dockerfile.cve -t "${docker_target}" && docker run --rm  ${DOCKER_EXTRA_ARGS} "${docker_target}:latest"
-    ;;
-  "test")
-    docker_target="orchestrator-test"
-    docker build . -f docker/Dockerfile.test -t "${docker_target}" && docker run --rm -it --env TARBALL_URL=${TARBALL_URL} --env RUN_TESTS=${RUN_TESTS} --env ALLOW_TESTS_FAILURES=${ALLOW_TESTS_FAILURES} ${DOCKER_EXTRA_ARGS} "${docker_target}:latest"
-    ;;
-  "test-no-it")
-    docker_target="orchestrator-test"
-    docker build . -f docker/Dockerfile.test -t "${docker_target}" && docker run --rm --env TARBALL_URL=${TARBALL_URL} --env RUN_TESTS=${RUN_TESTS} --env ALLOW_TESTS_FAILURES=${ALLOW_TESTS_FAILURES} ${DOCKER_EXTRA_ARGS} "${docker_target}:latest"
-    ;;
-  "alpine")
-    docker_target="orchestrator-alpine"
-    docker build . -f docker/Dockerfile -t "${docker_target}" && docker run --rm -it -p 3000:3000 "${docker_target}:latest"
-    ;;
-  "hub")
-    tag="$(git describe --tags --abbrev=0)"
-    if [ -z "$tag" ] ; then
-      echo "Cannot find latest tag"
-      exit 1
-    fi
-    docker build . -f docker/Dockerfile -t "openarkcode/orchestrator:${tag}"
-    ;;
-  "pkg")
-    packages_path="${2:-/tmp/orchestrator-release}"
-    docker_target="orchestrator-packaging"
-    docker build . --build-arg RELEASE_VERSION=${RELEASE_VERSION} \
-      --build-arg RELEASE_SUBVERSION=${RELEASE_SUBVERSION} \
-      -f docker/Dockerfile.packaging \
-      -t "${docker_target}" \
-      && docker run --rm -it -v "${packages_path}:/tmp/pkg" "${docker_target}:latest" \
-        bash -c 'find /tmp/orchestrator-release/ -maxdepth 1 -type f \
-      | xargs cp -t /tmp/pkg'
-    echo "packages generated on ${packages_path}:"
-    ls -l "${packages_path}"
-    ;;
-  "system")
-    docker_target="orchestrator-system"
-    docker build . -f docker/Dockerfile.system -t "${docker_target}" --build-arg ci_env_repo=${CI_ENV_REPO_ENV} --build-arg ci_env_branch=${CI_ENV_BRANCH_ENV} && docker run --rm -it -p 3000:3000 --env TARBALL_URL=${TARBALL_URL} --env RUN_TESTS=${RUN_TESTS} --env ALLOW_TESTS_FAILURES=${ALLOW_TESTS_FAILURES} ${DOCKER_EXTRA_ARGS} "${docker_target}:latest"
-    ;;
-  "system-no-it")
-    docker_target="orchestrator-system"
-    docker build . -f docker/Dockerfile.system -t "${docker_target}" --build-arg ci_env_repo=${CI_ENV_REPO_ENV} --build-arg ci_env_branch=${CI_ENV_BRANCH_ENV} && docker run --rm --env TARBALL_URL=${TARBALL_URL} --env RUN_TESTS=${RUN_TESTS} --env ALLOW_TESTS_FAILURES=${ALLOW_TESTS_FAILURES} ${DOCKER_EXTRA_ARGS} "${docker_target}:latest"
-    ;;
-  "raft")
-    docker_target="orchestrator-raft"
-    docker build . -f docker/Dockerfile.raft -t "${docker_target}" && docker run --rm -it -p 3007:3007 -p 3008:3008 -p 3009:3009 "${docker_target}:latest"
-    ;;
+  cve) exec make docker-cve ;;
+  cve-no-it) exec make docker-cve DOCKER_TTY= ;;
+  test) exec make docker-test ;;
+  test-no-it) exec make docker-test DOCKER_TTY= ;;
+  alpine) exec make run ;;
+  hub) exec make hub-image ;;
+  pkg) exec make package PACKAGES_PATH="${2:-/tmp/orchestrator-release}" ;;
+  system) exec make system ;;
+  system-no-it) exec make system DOCKER_TTY= ;;
+  raft) exec make raft ;;
   *)
-    >&2 echo "Usage: dock dock <test|alpine|packages|system|raft> [arg]"
+    >&2 echo "Usage: script/dock <cve|test|alpine|hub|pkg|system|raft> [arg]"
     exit 1
+    ;;
 esac

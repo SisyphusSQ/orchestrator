@@ -11,4 +11,4 @@ export TARBALL_URL=https://downloads.percona.com/downloads/Percona-Server-8.4/Pe
 export RUN_TESTS=YES
 export ALLOW_TESTS_FAILURES=YES
 
-script/dock test
+exec make docker-test
