@@ -17,6 +17,7 @@
 package attributes
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -24,9 +25,16 @@ import (
 	"strings"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/db"
 )
+
+type hostAttributesRow struct {
+	Hostname        string `gorm:"column:hostname"`
+	AttributeName   string `gorm:"column:attribute_name"`
+	AttributeValue  string `gorm:"column:attribute_value"`
+	SubmitTimestamp string `gorm:"column:submit_timestamp"`
+	ExpireTimestamp string `gorm:"column:expire_timestamp"`
+}
 
 func readResponse(res *http.Response, err error) ([]byte, error) {
 	if err != nil {
@@ -83,17 +91,16 @@ func getHostAttributesByClause(whereClause string, args []interface{}) ([]HostAt
 			hostname, attribute_name
 		`, whereClause)
 
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		hostAttributes := HostAttributes{}
-		hostAttributes.Hostname = m.GetString("hostname")
-		hostAttributes.AttributeName = m.GetString("attribute_name")
-		hostAttributes.AttributeValue = m.GetString("attribute_value")
-		hostAttributes.SubmitTimestamp = m.GetString("submit_timestamp")
-		hostAttributes.ExpireTimestamp = m.GetString("expire_timestamp")
-
-		res = append(res, hostAttributes)
-		return nil
-	})
+	rows, err := db.QueryOrchestratorRows[hostAttributesRow](context.Background(), query, args...)
+	for _, row := range rows {
+		res = append(res, HostAttributes{
+			Hostname:        row.Hostname,
+			AttributeName:   row.AttributeName,
+			AttributeValue:  row.AttributeValue,
+			SubmitTimestamp: row.SubmitTimestamp,
+			ExpireTimestamp: row.ExpireTimestamp,
+		})
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -104,7 +111,7 @@ func getHostAttributesByClause(whereClause string, args []interface{}) ([]HostAt
 // GetHostAttributesByMatch
 func GetHostAttributesByMatch(hostnameMatch string, attributeNameMatch string, attributeValueMatch string) ([]HostAttributes, error) {
 	terms := []string{}
-	args := sqlutils.Args()
+	args := []interface{}{}
 	if hostnameMatch != "" {
 		terms = append(terms, ` hostname rlike ? `)
 		args = append(args, hostnameMatch)
@@ -130,11 +137,15 @@ func GetHostAttributesByMatch(hostnameMatch string, attributeNameMatch string, a
 // or error on empty result
 func GetHostAttribute(hostname string, attributeName string) (string, error) {
 	whereClause := `where hostname=? and attribute_name=?`
-	attributes, err := getHostAttributesByClause(whereClause, sqlutils.Args(hostname, attributeName))
+	attributes, err := getHostAttributesByClause(whereClause, []interface{}{hostname, attributeName})
 	if err != nil {
 		return "", err
 	}
-	if len(attributeName) == 0 {
+	return hostAttributeValue(attributes, hostname, attributeName)
+}
+
+func hostAttributeValue(attributes []HostAttributes, hostname string, attributeName string) (string, error) {
+	if len(attributes) == 0 {
 		return "", log.Errorf("No attribute found for %+v, %+v", hostname, attributeName)
 	}
 	return attributes[0].AttributeValue, nil
@@ -160,5 +171,5 @@ func GetHostAttributesByAttribute(attributeName string, valueMatch string) ([]Ho
 	}
 	whereClause := ` where attribute_name = ? and attribute_value rlike ?`
 
-	return getHostAttributesByClause(whereClause, sqlutils.Args(attributeName, valueMatch))
+	return getHostAttributesByClause(whereClause, []interface{}{attributeName, valueMatch})
 }

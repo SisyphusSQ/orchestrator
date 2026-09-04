@@ -24,9 +24,8 @@ import (
 
 	"github.com/openark/golib/log"
 	"github.com/openark/golib/math"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
-	"github.com/openark/orchestrator/go/db"
+	orchestratordb "github.com/openark/orchestrator/go/db"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -76,7 +75,7 @@ func getLastPseudoGTIDEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey
 		return nil, "", log.Errorf("getLastPseudoGTIDEntryInBinlog: empty binlog file name for %+v. maxCoordinates = %+v", *instanceKey, maxCoordinates)
 	}
 	binlogCoordinates := BinlogCoordinates{LogFile: binlog, LogPos: 0, Type: binlogType}
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, "", err
 	}
@@ -102,7 +101,7 @@ func getLastPseudoGTIDEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey
 
 		moreRowsExpected = false
 
-		err = sqlutils.QueryRowsMapBuffered(db, query, func(m sqlutils.RowMap) error {
+		err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 			moreRowsExpected = true
 			nextPos = m.GetInt64("End_log_pos")
 			binlogEntryInfo := m.GetString("Info")
@@ -214,7 +213,7 @@ func getLastPseudoGTIDEntryInRelayLogs(instance *Instance, minBinlogCoordinates 
 	return nil, "", log.Errorf("Cannot find pseudo GTID entry in relay logs of %+v", instance.Key)
 }
 
-func readBinlogEvent(binlogEvent *BinlogEvent, m sqlutils.RowMap) error {
+func readBinlogEvent(binlogEvent *BinlogEvent, m orchestratordb.DynamicRow) error {
 	binlogEvent.NextEventPos = m.GetInt64("End_log_pos")
 	binlogEvent.Coordinates.LogPos = m.GetInt64("Pos")
 	binlogEvent.EventType = m.GetString("Event_type")
@@ -223,7 +222,7 @@ func readBinlogEvent(binlogEvent *BinlogEvent, m sqlutils.RowMap) error {
 }
 
 func ReadBinlogEventAtRelayLogCoordinates(instanceKey *InstanceKey, relaylogCoordinates *BinlogCoordinates) (binlogEvent *BinlogEvent, err error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +231,7 @@ func ReadBinlogEventAtRelayLogCoordinates(instanceKey *InstanceKey, relaylogCoor
 	binlogEvent = &BinlogEvent{
 		Coordinates: *relaylogCoordinates,
 	}
-	err = sqlutils.QueryRowsMapBuffered(db, query, func(m sqlutils.RowMap) error {
+	err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 		return readBinlogEvent(binlogEvent, m)
 	})
 	return binlogEvent, err
@@ -247,7 +246,7 @@ func getLastExecutedEntryInRelaylog(instanceKey *InstanceKey, binlog string, min
 	if binlog == "" {
 		return nil, log.Errorf("getLastExecutedEntryInRelaylog: empty binlog file name for %+v. maxCoordinates = %+v", *instanceKey, maxCoordinates)
 	}
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +266,7 @@ func getLastExecutedEntryInRelaylog(instanceKey *InstanceKey, binlog string, min
 		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.BinlogEventsChunkSize), config.Config.BinlogEventsChunkSize)
 
 		moreRowsExpected = false
-		err = sqlutils.QueryRowsMapBuffered(db, query, func(m sqlutils.RowMap) error {
+		err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 			moreRowsExpected = true
 			return readBinlogEvent(binlogEvent, m)
 		})
@@ -319,7 +318,7 @@ func searchEventInRelaylog(instanceKey *InstanceKey, binlog string, searchEvent 
 		return binlogCoordinates, nextCoordinates, false, log.Errorf("SearchEventInRelaylog: empty relaylog file name for %+v", *instanceKey)
 	}
 
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return binlogCoordinates, nextCoordinates, false, err
 	}
@@ -343,7 +342,7 @@ func searchEventInRelaylog(instanceKey *InstanceKey, binlog string, searchEvent 
 		// We don't know in advance when we will hit the end of the binlog. We will implicitly understand it when our
 		// `show binlog events` query does not return any row.
 		moreRowsExpected = false
-		err = sqlutils.QueryRowsMapBuffered(db, query, func(m sqlutils.RowMap) error {
+		err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 			if binlogCoordinates.LogPos != 0 && nextCoordinates.LogPos != 0 {
 				// Entry found!
 				skipRestOfBinlog = true
@@ -413,7 +412,7 @@ func SearchEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey *InstanceK
 		return binlogCoordinates, false, log.Errorf("SearchEntryInBinlog: empty binlog file name for %+v", *instanceKey)
 	}
 
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return binlogCoordinates, false, err
 	}
@@ -434,7 +433,7 @@ func SearchEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey *InstanceK
 		// `show binlog events` query does not return any row.
 		moreRowsExpected = false
 
-		err = sqlutils.QueryRowsMapBuffered(db, query, func(m sqlutils.RowMap) error {
+		err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 			if binlogCoordinates.LogPos != 0 {
 				// Entry found!
 				skipRestOfBinlog = true
@@ -550,7 +549,7 @@ func SearchEntryInInstanceBinlogs(instance *Instance, entryText string, monotoni
 // Read (as much as possible of) a chunk of binary log events starting the given startingCoordinates
 func readBinlogEventsChunk(instanceKey *InstanceKey, startingCoordinates BinlogCoordinates) ([]BinlogEvent, error) {
 	events := []BinlogEvent{}
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return events, err
 	}
@@ -559,7 +558,7 @@ func readBinlogEventsChunk(instanceKey *InstanceKey, startingCoordinates BinlogC
 		return events, log.Errorf("readBinlogEventsChunk: empty binlog file name for %+v.", *instanceKey)
 	}
 	query := fmt.Sprintf("show %s events in '%s' FROM %d LIMIT %d", commandToken, startingCoordinates.LogFile, startingCoordinates.LogPos, config.Config.BinlogEventsChunkSize)
-	err = sqlutils.QueryRowsMap(db, query, func(m sqlutils.RowMap) error {
+	err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 		binlogEvent := BinlogEvent{}
 		binlogEvent.Coordinates.LogFile = m.GetString("Log_name")
 		binlogEvent.Coordinates.LogPos = m.GetInt64("Pos")
@@ -843,14 +842,14 @@ func GetPreviousGTIDs(instanceKey *InstanceKey, binlog string) (previousGTIDs *O
 	if binlog == "" {
 		return nil, log.Errorf("GetPreviousGTIDs: empty binlog file name for %+v", *instanceKey)
 	}
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
 	}
 
 	query := fmt.Sprintf("show binlog events in '%s' LIMIT 5", binlog)
 
-	err = sqlutils.QueryRowsMapBuffered(db, query, func(m sqlutils.RowMap) error {
+	err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 		eventType := m.GetString("Event_type")
 		if eventType == "Previous_gtids" {
 			var e error

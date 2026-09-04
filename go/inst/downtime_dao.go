@@ -17,11 +17,11 @@
 package inst
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 )
@@ -218,23 +218,27 @@ func ReadDowntime() (result []Downtime, err error) {
 		where
 			end_timestamp > now()
 		`
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	type downtimeRow struct {
+		Hostname       string `gorm:"column:hostname"`
+		Port           int    `gorm:"column:port"`
+		BeginTimestamp string `gorm:"column:begin_timestamp"`
+		EndTimestamp   string `gorm:"column:end_timestamp"`
+		Owner          string `gorm:"column:owner"`
+		Reason         string `gorm:"column:reason"`
+	}
+	rows, err := db.QueryOrchestratorRows[downtimeRow](context.Background(), query)
+	for _, row := range rows {
 		downtime := Downtime{
-			Key: &InstanceKey{},
+			Key:            &InstanceKey{Hostname: row.Hostname, Port: row.Port},
+			BeginsAtString: row.BeginTimestamp,
+			EndsAtString:   row.EndTimestamp,
+			Owner:          row.Owner,
+			Reason:         row.Reason,
 		}
-		downtime.Key.Hostname = m.GetString("hostname")
-		downtime.Key.Port = m.GetInt("port")
-		downtime.BeginsAt = m.GetTime("begin_timestamp")
-		downtime.EndsAt = m.GetTime("end_timestamp")
-		downtime.BeginsAtString = m.GetString("begin_timestamp")
-		downtime.EndsAtString = m.GetString("end_timestamp")
-		downtime.Owner = m.GetString("owner")
-		downtime.Reason = m.GetString("reason")
-
+		downtime.BeginsAt, _ = time.Parse(db.DateTimeFormat, row.BeginTimestamp)
+		downtime.EndsAt, _ = time.Parse(db.DateTimeFormat, row.EndTimestamp)
 		downtime.Duration = downtime.EndsAt.Sub(downtime.BeginsAt)
-
 		result = append(result, downtime)
-		return nil
-	})
+	}
 	return result, log.Errore(err)
 }

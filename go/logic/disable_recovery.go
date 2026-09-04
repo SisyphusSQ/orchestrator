@@ -30,8 +30,9 @@ package logic
 // go to the database each time.
 
 import (
+	"context"
+
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/db"
 )
 
@@ -45,11 +46,13 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 		WHERE
 			disable_recovery=?
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(1), func(m sqlutils.RowMap) error {
-		mycount := m.GetInt("mycount")
-		disabled = (mycount > 0)
-		return nil
-	})
+	type recoveryDisabledRow struct {
+		Count int `gorm:"column:mycount"`
+	}
+	rows, err := db.QueryOrchestratorRows[recoveryDisabledRow](context.Background(), query, 1)
+	if err == nil && len(rows) > 0 {
+		disabled = rows[0].Count > 0
+	}
 	if err != nil {
 		err = log.Errorf("recovery.IsRecoveryDisabled(): %v", err)
 	}

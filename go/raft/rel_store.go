@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 
 	"github.com/hashicorp/raft"
 )
@@ -75,14 +75,15 @@ func (relStore *RelationalStore) openDB() (*sql.DB, error) {
 
 	if relStore.backend == nil {
 		relStoreFile := filepath.Join(relStore.dataDir, raftStoreFile)
-		sqliteDB, _, err := sqlutils.GetSQLiteDB(relStoreFile, nil)
+		sqliteDB, err := sql.Open("sqlite3", relStoreFile)
 		if err != nil {
 			return nil, err
 		}
 		sqliteDB.SetMaxOpenConns(1)
 		sqliteDB.SetMaxIdleConns(1)
 		for _, query := range createQueries {
-			if _, err := sqliteDB.Exec(sqlutils.ToSqlite3Dialect(query)); err != nil {
+			if _, err := sqliteDB.Exec(query); err != nil {
+				_ = sqliteDB.Close()
 				return nil, err
 			}
 		}

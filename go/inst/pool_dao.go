@@ -17,43 +17,42 @@
 package inst
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
+	"gorm.io/gorm"
 )
 
 // writePoolInstances will write (and override) a single cluster name mapping
 func writePoolInstances(pool string, instanceKeys [](*InstanceKey)) error {
 	writeFunc := func() error {
-		dbh, err := db.OpenOrchestrator()
+		dbh, err := db.OpenOrchestratorGORMContext(context.Background())
 		if err != nil {
 			return log.Errore(err)
 		}
-		tx, err := dbh.Begin()
-		if _, err := tx.Exec(`delete from database_instance_pool where pool = ?`, pool); err != nil {
-			tx.Rollback()
-			return log.Errore(err)
-		}
-		query := `insert into database_instance_pool (hostname, port, pool, registered_at) values (?, ?, ?, now())`
-		for _, instanceKey := range instanceKeys {
-			if _, err := tx.Exec(query, instanceKey.Hostname, instanceKey.Port, pool); err != nil {
-				tx.Rollback()
+		return dbh.Transaction(func(tx *gorm.DB) error {
+			if _, err := db.ExecOrchestratorGORM(tx, `delete from database_instance_pool where pool = ?`, pool); err != nil {
 				return log.Errore(err)
 			}
-		}
-		tx.Commit()
-
-		return nil
+			query := `insert into database_instance_pool (hostname, port, pool, registered_at) values (?, ?, ?, now())`
+			for _, instanceKey := range instanceKeys {
+				if _, err := db.ExecOrchestratorGORM(tx, query, instanceKey.Hostname, instanceKey.Port, pool); err != nil {
+					return log.Errore(err)
+				}
+			}
+			return nil
+		})
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
 
 // ReadClusterPoolInstances reads cluster-pool-instance associationsfor given cluster and pool
 func ReadClusterPoolInstances(clusterName string, pool string) (result [](*ClusterPoolInstance), err error) {
-	args := sqlutils.Args()
+	args := []interface{}{}
 	whereClause := ``
 	if clusterName != "" {
 		whereClause = `
@@ -74,17 +73,24 @@ func ReadClusterPoolInstances(clusterName string, pool string) (result [](*Clust
 			left join cluster_alias using (cluster_name)
 		%s
 		`, whereClause)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	type clusterPoolRow struct {
+		ClusterName  string `gorm:"column:cluster_name"`
+		ClusterAlias string `gorm:"column:alias"`
+		Pool         string `gorm:"column:pool"`
+		Hostname     string `gorm:"column:hostname"`
+		Port         int    `gorm:"column:port"`
+	}
+	rows, err := db.QueryOrchestratorRows[clusterPoolRow](context.Background(), query, args...)
+	for _, row := range rows {
 		clusterPoolInstance := ClusterPoolInstance{
-			ClusterName:  m.GetString("cluster_name"),
-			ClusterAlias: m.GetString("alias"),
-			Pool:         m.GetString("pool"),
-			Hostname:     m.GetString("hostname"),
-			Port:         m.GetInt("port"),
+			ClusterName:  row.ClusterName,
+			ClusterAlias: row.ClusterAlias,
+			Pool:         row.Pool,
+			Hostname:     row.Hostname,
+			Port:         row.Port,
 		}
 		result = append(result, &clusterPoolInstance)
-		return nil
-	})
+	}
 
 	if err != nil {
 		return nil, err
@@ -129,15 +135,20 @@ func ReadAllPoolInstancesSubmissions() ([]PoolInstancesSubmission, error) {
 		group by
 			pool
 	`
-	err := db.QueryOrchestrator(query, sqlutils.Args(), func(m sqlutils.RowMap) error {
+	type poolSubmissionRow struct {
+		Pool         string `gorm:"column:pool"`
+		RegisteredAt string `gorm:"column:registered_at"`
+		Hosts        string `gorm:"column:hosts"`
+	}
+	rows, err := db.QueryOrchestratorRows[poolSubmissionRow](context.Background(), query)
+	for _, row := range rows {
 		submission := PoolInstancesSubmission{}
-		submission.Pool = m.GetString("pool")
-		submission.CreatedAt = m.GetTime("registered_at")
-		submission.RegisteredAt = m.GetString("registered_at")
-		submission.DelimitedInstances = m.GetString("hosts")
+		submission.Pool = row.Pool
+		submission.CreatedAt, _ = time.Parse(db.DateTimeFormat, row.RegisteredAt)
+		submission.RegisteredAt = row.RegisteredAt
+		submission.DelimitedInstances = row.Hosts
 		result = append(result, submission)
-		return nil
-	})
+	}
 
 	return result, log.Errore(err)
 }

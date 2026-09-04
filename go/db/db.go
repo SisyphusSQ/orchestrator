@@ -24,22 +24,8 @@ import (
 	"time"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 )
-
-var EmptyArgs []interface{}
-
-type DummySqlResult struct {
-}
-
-func (this DummySqlResult) LastInsertId() (int64, error) {
-	return 0, nil
-}
-
-func (this DummySqlResult) RowsAffected() (int64, error) {
-	return 1, nil
-}
 
 // OpenDiscovery returns a DB instance to access a topology instance.
 // It has lower read timeout than OpenTopology and is intended to
@@ -98,8 +84,7 @@ func openTopologyContext(
 			}
 		}
 	}
-	logger := SqlUtilsLogger{client_context: cfg.Addr, backend_connection: false}
-	return processDatabaseRuntime.openTopologyPool(ctx, role, cfg, logger)
+	return processDatabaseRuntime.openTopologyPool(ctx, role, cfg)
 }
 
 func IsSQLite() bool {
@@ -118,7 +103,7 @@ func OpenOrchestrator() (*sql.DB, error) {
 
 func translateStatement(statement string) (string, error) {
 	if IsSQLite() {
-		statement = sqlutils.ToSqlite3Dialect(statement)
+		statement = ToSQLiteDialect(statement)
 	}
 	return statement, nil
 }
@@ -210,7 +195,7 @@ func deployStatementsContext(ctx context.Context, db *sql.DB, queries []string) 
 			if strings.Contains(err.Error(), "syntax error") {
 				return fmt.Errorf("execute orchestrator deployment query %q: %w", query, err)
 			}
-			if !sqlutils.IsAlterTable(query) && !sqlutils.IsCreateIndex(query) && !sqlutils.IsDropIndex(query) {
+			if !IsAlterTable(query) && !IsCreateIndex(query) && !IsDropIndex(query) {
 				return fmt.Errorf("execute orchestrator deployment query %q: %w", query, err)
 			}
 			if !strings.Contains(err.Error(), "duplicate column name") &&
@@ -283,7 +268,7 @@ func execInternalContext(ctx context.Context, db *sql.DB, query string, args ...
 	if err != nil {
 		return nil, err
 	}
-	return sqlutils.ExecNoPrepareContext(ctx, db, translated, args...)
+	return db.ExecContext(ctx, translated, args...)
 }
 
 // ExecOrchestrator will execute given query on the orchestrator backend database.
@@ -294,74 +279,15 @@ func ExecOrchestrator(query string, args ...interface{}) (sql.Result, error) {
 // ExecOrchestratorContext executes a backend statement with caller-provided
 // cancellation and deadline semantics.
 func ExecOrchestratorContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	translated, err := translateStatement(query)
+	handle, err := OpenOrchestratorGORMContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	database, err := OpenOrchestratorContext(ctx)
+	rowsAffected, err := ExecOrchestratorGORM(handle, query, args...)
 	if err != nil {
 		return nil, err
 	}
-	return sqlutils.ExecNoPrepareContext(ctx, database, translated, args...)
-}
-
-// QueryRowsMapOrchestrator
-func QueryOrchestratorRowsMap(query string, on_row func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		return fmt.Errorf("translate orchestrator query %q: %w", query, err)
-	}
-	db, err := OpenOrchestrator()
-	if err != nil {
-		return err
-	}
-
-	return sqlutils.QueryRowsMap(db, query, on_row)
-}
-
-// QueryOrchestrator
-func QueryOrchestrator(query string, argsArray []interface{}, on_row func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		return fmt.Errorf("translate orchestrator query %q: %w", query, err)
-	}
-	db, err := OpenOrchestrator()
-	if err != nil {
-		return err
-	}
-
-	return log.Criticale(sqlutils.QueryRowsMap(db, query, on_row, argsArray...))
-}
-
-// QueryOrchestratorRowsMapBuffered
-func QueryOrchestratorRowsMapBuffered(query string, on_row func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		return fmt.Errorf("translate orchestrator query %q: %w", query, err)
-	}
-	db, err := OpenOrchestrator()
-	if err != nil {
-		return err
-	}
-
-	return sqlutils.QueryRowsMapBuffered(db, query, on_row)
-}
-
-// QueryOrchestratorBuffered
-func QueryOrchestratorBuffered(query string, argsArray []interface{}, on_row func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		return fmt.Errorf("translate orchestrator query %q: %w", query, err)
-	}
-	db, err := OpenOrchestrator()
-	if err != nil {
-		return err
-	}
-
-	if argsArray == nil {
-		argsArray = EmptyArgs
-	}
-	return log.Criticale(sqlutils.QueryRowsMapBuffered(db, query, on_row, argsArray...))
+	return backendResult{rowsAffected: rowsAffected}, nil
 }
 
 // ReadTimeNow reads and returns the current timestamp as string. This is an unfortunate workaround
@@ -369,9 +295,12 @@ func QueryOrchestratorBuffered(query string, argsArray []interface{}, on_row fun
 // timezone support. By reading the time as string we get the database's de-facto notion of the time,
 // which we can then feed back to it.
 func ReadTimeNow() (timeNow string, err error) {
-	err = QueryOrchestrator(`select now() as time_now`, nil, func(m sqlutils.RowMap) error {
-		timeNow = m.GetString("time_now")
-		return nil
-	})
-	return timeNow, err
+	type timeRow struct {
+		TimeNow string `gorm:"column:time_now"`
+	}
+	rows, err := QueryOrchestratorRows[timeRow](context.Background(), `select now() as time_now`)
+	if err != nil || len(rows) == 0 {
+		return "", err
+	}
+	return rows[0].TimeNow, nil
 }

@@ -17,10 +17,10 @@
 package inst
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/process"
@@ -47,20 +47,29 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 		order by
 			database_instance_maintenance_id
 		`
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	type maintenanceRow struct {
+		ID             uint   `gorm:"column:database_instance_maintenance_id"`
+		Hostname       string `gorm:"column:hostname"`
+		Port           int    `gorm:"column:port"`
+		BeginTimestamp string `gorm:"column:begin_timestamp"`
+		SecondsElapsed uint   `gorm:"column:seconds_elapsed"`
+		Active         bool   `gorm:"column:maintenance_active"`
+		Owner          string `gorm:"column:owner"`
+		Reason         string `gorm:"column:reason"`
+	}
+	rows, err := db.QueryOrchestratorRows[maintenanceRow](context.Background(), query)
+	for _, row := range rows {
 		maintenance := Maintenance{}
-		maintenance.MaintenanceId = m.GetUint("database_instance_maintenance_id")
-		maintenance.Key.Hostname = m.GetString("hostname")
-		maintenance.Key.Port = m.GetInt("port")
-		maintenance.BeginTimestamp = m.GetString("begin_timestamp")
-		maintenance.SecondsElapsed = m.GetUint("seconds_elapsed")
-		maintenance.IsActive = m.GetBool("maintenance_active")
-		maintenance.Owner = m.GetString("owner")
-		maintenance.Reason = m.GetString("reason")
-
+		maintenance.MaintenanceId = row.ID
+		maintenance.Key.Hostname = row.Hostname
+		maintenance.Key.Port = row.Port
+		maintenance.BeginTimestamp = row.BeginTimestamp
+		maintenance.SecondsElapsed = row.SecondsElapsed
+		maintenance.IsActive = row.Active
+		maintenance.Owner = row.Owner
+		maintenance.Reason = row.Reason
 		res = append(res, maintenance)
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -75,7 +84,7 @@ func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason stri
 	if durationSeconds == 0 {
 		durationSeconds = config.MaintenanceExpireMinutes * 60
 	}
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecOrchestratorSQLContext(context.Background(), `
 			insert ignore
 				into database_instance_maintenance (
 					hostname, port, maintenance_active, begin_timestamp, end_timestamp, owner, reason,
@@ -154,11 +163,13 @@ func InMaintenance(instanceKey *InstanceKey) (inMaintenance bool, err error) {
 			and maintenance_active = 1
 			and end_timestamp > NOW()
 			`
-	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		inMaintenance = m.GetBool("in_maintenance")
-		return nil
-	})
+	type maintenanceStateRow struct {
+		Active bool `gorm:"column:in_maintenance"`
+	}
+	rows, err := db.QueryOrchestratorRows[maintenanceStateRow](context.Background(), query, instanceKey.Hostname, instanceKey.Port)
+	if err == nil && len(rows) > 0 {
+		inMaintenance = rows[0].Active
+	}
 
 	return inMaintenance, log.Errore(err)
 }
@@ -175,15 +186,18 @@ func ReadMaintenanceInstanceKey(maintenanceToken int64) (*InstanceKey, error) {
 			database_instance_maintenance_id = ?
 			`
 
-	err := db.QueryOrchestrator(query, sqlutils.Args(maintenanceToken), func(m sqlutils.RowMap) error {
-		instanceKey, merr := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
+	type maintenanceInstanceRow struct {
+		Hostname string `gorm:"column:hostname"`
+		Port     int    `gorm:"column:port"`
+	}
+	rows, err := db.QueryOrchestratorRows[maintenanceInstanceRow](context.Background(), query, maintenanceToken)
+	if err == nil && len(rows) > 0 {
+		instanceKey, merr := NewResolveInstanceKey(rows[0].Hostname, rows[0].Port)
 		if merr != nil {
-			return merr
+			return nil, log.Errore(merr)
 		}
-
 		res = instanceKey
-		return nil
-	})
+	}
 
 	return res, log.Errore(err)
 }

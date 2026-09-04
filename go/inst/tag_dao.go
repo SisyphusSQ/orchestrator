@@ -17,12 +17,17 @@
 package inst
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/db"
 )
+
+type taggedInstanceRow struct {
+	Hostname string `gorm:"column:hostname"`
+	Port     int    `gorm:"column:port"`
+}
 
 func PutInstanceTag(instanceKey *InstanceKey, tag *Tag) (err error) {
 	_, err = db.ExecOrchestrator(`
@@ -55,7 +60,7 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 		return nil, log.Errorf("Untag: either indicate an instance or a tag value. Will not delete on-valued tag across instances")
 	}
 	clause := ``
-	args := sqlutils.Args()
+	args := []interface{}{}
 	if tag.HasValue {
 		clause = `tag_name=? and tag_value=?`
 		args = append(args, tag.TagName, tag.TagValue)
@@ -79,11 +84,11 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 		order by hostname, port
 		`, clause,
 	)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		key, _ := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
+	rows, err := db.QueryOrchestratorRows[taggedInstanceRow](context.Background(), query, args...)
+	for _, row := range rows {
+		key, _ := NewResolveInstanceKey(row.Hostname, row.Port)
 		tagged.AddKey(*key)
-		return nil
-	})
+	}
 
 	query = fmt.Sprintf(`
 			delete from
@@ -110,12 +115,15 @@ func ReadInstanceTag(instanceKey *InstanceKey, tag *Tag) (tagExists bool, err er
 			and port = ?
 			and tag_name = ?
 			`
-	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port, tag.TagName)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		tag.TagValue = m.GetString("tag_value")
+	args := []interface{}{instanceKey.Hostname, instanceKey.Port, tag.TagName}
+	type tagValueRow struct {
+		Value string `gorm:"column:tag_value"`
+	}
+	rows, err := db.QueryOrchestratorRows[tagValueRow](context.Background(), query, args...)
+	if err == nil && len(rows) > 0 {
+		tag.TagValue = rows[0].Value
 		tagExists = true
-		return nil
-	})
+	}
 
 	return tagExists, log.Errore(err)
 }
@@ -136,15 +144,19 @@ func ReadInstanceTags(instanceKey *InstanceKey) (tags [](*Tag), err error) {
 			and port = ?
 		order by tag_name
 			`
-	args := sqlutils.Args(instanceKey.Hostname, instanceKey.Port)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	args := []interface{}{instanceKey.Hostname, instanceKey.Port}
+	type tagRow struct {
+		Name  string `gorm:"column:tag_name"`
+		Value string `gorm:"column:tag_value"`
+	}
+	rows, err := db.QueryOrchestratorRows[tagRow](context.Background(), query, args...)
+	for _, row := range rows {
 		tag := &Tag{
-			TagName:  m.GetString("tag_name"),
-			TagValue: m.GetString("tag_value"),
+			TagName:  row.Name,
+			TagValue: row.Value,
 		}
 		tags = append(tags, tag)
-		return nil
-	})
+	}
 
 	return tags, log.Errore(err)
 }
@@ -154,7 +166,7 @@ func GetInstanceKeysByTag(tag *Tag) (tagged *InstanceKeyMap, err error) {
 		return nil, log.Errorf("GetInstanceKeysByTag: tag is nil")
 	}
 	clause := ``
-	args := sqlutils.Args()
+	args := []interface{}{}
 	if tag.HasValue && !tag.Negate {
 		// exists and equals
 		clause = `tag_name=? and tag_value=?`
@@ -183,10 +195,10 @@ func GetInstanceKeysByTag(tag *Tag) (tagged *InstanceKeyMap, err error) {
 			%s
 		order by hostname, port
 		`, clause)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		key, _ := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
+	rows, err := db.QueryOrchestratorRows[taggedInstanceRow](context.Background(), query, args...)
+	for _, row := range rows {
+		key, _ := NewResolveInstanceKey(row.Hostname, row.Port)
 		tagged.AddKey(*key)
-		return nil
-	})
+	}
 	return tagged, log.Errore(err)
 }

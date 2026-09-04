@@ -19,6 +19,7 @@ package logic
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/openark/orchestrator/go/inst"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	orcraft "github.com/openark/orchestrator/go/raft"
 )
 
@@ -50,7 +50,7 @@ type SnapshotData struct {
 	Detections,
 	KVStore,
 	Recovery,
-	RecoverySteps sqlutils.NamedResultData
+	RecoverySteps db.NamedResultData
 
 	LeaderURI string
 }
@@ -59,21 +59,21 @@ func NewSnapshotData() *SnapshotData {
 	return &SnapshotData{}
 }
 
-func readTableData(tableName string, data *sqlutils.NamedResultData) error {
+func readTableData(tableName string, data *db.NamedResultData) error {
 	orcdb, err := db.OpenOrchestrator()
 	if err != nil {
 		return log.Errore(err)
 	}
-	*data, err = sqlutils.ScanTable(orcdb, tableName)
+	*data, err = db.ScanTableContext(context.Background(), orcdb, tableName)
 	return log.Errore(err)
 }
 
-func writeTableData(tableName string, data *sqlutils.NamedResultData) error {
+func writeTableData(tableName string, data *db.NamedResultData) error {
 	orcdb, err := db.OpenOrchestrator()
 	if err != nil {
 		return log.Errore(err)
 	}
-	err = sqlutils.WriteTable(orcdb, tableName, *data)
+	err = db.WriteTableContext(context.Background(), orcdb, tableName, *data)
 	return log.Errore(err)
 }
 

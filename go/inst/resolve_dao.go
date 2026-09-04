@@ -17,8 +17,9 @@
 package inst
 
 import (
+	"context"
+
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/rcrowley/go-metrics"
@@ -88,10 +89,13 @@ func ReadResolvedHostname(hostname string) (string, error) {
 			hostname = ?
 		`
 
-	err := db.QueryOrchestrator(query, sqlutils.Args(hostname), func(m sqlutils.RowMap) error {
-		resolvedHostname = m.GetString("resolved_hostname")
-		return nil
-	})
+	type resolvedHostnameRow struct {
+		ResolvedHostname string `gorm:"column:resolved_hostname"`
+	}
+	rows, err := db.QueryOrchestratorRows[resolvedHostnameRow](context.Background(), query, hostname)
+	if err == nil && len(rows) > 0 {
+		resolvedHostname = rows[0].ResolvedHostname
+	}
 	readResolvedHostnameCounter.Inc(1)
 
 	if err != nil {
@@ -109,12 +113,14 @@ func ReadAllHostnameResolves() ([]HostnameResolve, error) {
 		from
 			hostname_resolve
 		`
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		hostnameResolve := HostnameResolve{hostname: m.GetString("hostname"), resolvedHostname: m.GetString("resolved_hostname")}
-
-		res = append(res, hostnameResolve)
-		return nil
-	})
+	type hostnameResolveRow struct {
+		Hostname         string `gorm:"column:hostname"`
+		ResolvedHostname string `gorm:"column:resolved_hostname"`
+	}
+	rows, err := db.QueryOrchestratorRows[hostnameResolveRow](context.Background(), query)
+	for _, row := range rows {
+		res = append(res, HostnameResolve{hostname: row.Hostname, resolvedHostname: row.ResolvedHostname})
+	}
 	readAllResolvedHostnamesCounter.Inc(1)
 
 	if err != nil {
@@ -133,12 +139,14 @@ func ReadAllHostnameUnresolves() ([]HostnameUnresolve, error) {
 		from
 			hostname_unresolve
 		`
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		hostnameUnresolve := HostnameUnresolve{hostname: m.GetString("hostname"), unresolvedHostname: m.GetString("unresolved_hostname")}
-
-		unres = append(unres, hostnameUnresolve)
-		return nil
-	})
+	type hostnameUnresolveRow struct {
+		Hostname           string `gorm:"column:hostname"`
+		UnresolvedHostname string `gorm:"column:unresolved_hostname"`
+	}
+	rows, err := db.QueryOrchestratorRows[hostnameUnresolveRow](context.Background(), query)
+	for _, row := range rows {
+		unres = append(unres, HostnameUnresolve{hostname: row.Hostname, unresolvedHostname: row.UnresolvedHostname})
+	}
 
 	return unres, log.Errore(err)
 }
@@ -159,6 +167,9 @@ func ReadAllHostnameUnresolvesRegistrations() (registrations []HostnameRegistrat
 // readUnresolvedHostname reverse-reads hostname resolve. It returns a hostname which matches given pattern and resovles to resolvedHostname,
 // or, in the event no such hostname is found, the given resolvedHostname, unchanged.
 func readUnresolvedHostname(hostname string) (string, error) {
+	type hostnameUnresolveRow struct {
+		UnresolvedHostname string `gorm:"column:unresolved_hostname"`
+	}
 	unresolvedHostname := hostname
 
 	query := `
@@ -170,10 +181,10 @@ func readUnresolvedHostname(hostname string) (string, error) {
 	   			hostname = ?
 	   		`
 
-	err := db.QueryOrchestrator(query, sqlutils.Args(hostname), func(m sqlutils.RowMap) error {
-		unresolvedHostname = m.GetString("unresolved_hostname")
-		return nil
-	})
+	rows, err := db.QueryOrchestratorRows[hostnameUnresolveRow](context.Background(), query, hostname)
+	if err == nil && len(rows) > 0 {
+		unresolvedHostname = rows[0].UnresolvedHostname
+	}
 	readUnresolvedHostnameCounter.Inc(1)
 
 	if err != nil {
@@ -197,11 +208,15 @@ func readMissingKeysToResolve() (result InstanceKeyMap, err error) {
    				hostname_resolve.hostname is null
 	   		`
 
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		instanceKey := InstanceKey{Hostname: m.GetString("unresolved_hostname"), Port: m.GetInt("port")}
+	type missingResolveRow struct {
+		UnresolvedHostname string `gorm:"column:unresolved_hostname"`
+		Port               int    `gorm:"column:port"`
+	}
+	rows, err := db.QueryOrchestratorRows[missingResolveRow](context.Background(), query)
+	for _, row := range rows {
+		instanceKey := InstanceKey{Hostname: row.UnresolvedHostname, Port: row.Port}
 		result.AddKey(instanceKey)
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -294,10 +309,13 @@ func DeleteInvalidHostnameResolves() error {
 		    and latest.resolved_timestamp > early.resolved_timestamp
 	   	`
 
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		invalidHostnames = append(invalidHostnames, m.GetString("hostname"))
-		return nil
-	})
+	type invalidHostnameRow struct {
+		Hostname string `gorm:"column:hostname"`
+	}
+	rows, err := db.QueryOrchestratorRows[invalidHostnameRow](context.Background(), query)
+	for _, row := range rows {
+		invalidHostnames = append(invalidHostnames, row.Hostname)
+	}
 	if err != nil {
 		return err
 	}
@@ -357,10 +375,14 @@ func readHostnameIPs(hostname string) (ipv4 string, ipv6 string, err error) {
 		where
 			hostname = ?
 	`
-	err = db.QueryOrchestrator(query, sqlutils.Args(hostname), func(m sqlutils.RowMap) error {
-		ipv4 = m.GetString("ipv4")
-		ipv6 = m.GetString("ipv6")
-		return nil
-	})
+	type hostnameIPRow struct {
+		IPv4 string `gorm:"column:ipv4"`
+		IPv6 string `gorm:"column:ipv6"`
+	}
+	rows, err := db.QueryOrchestratorRows[hostnameIPRow](context.Background(), query, hostname)
+	if err == nil && len(rows) > 0 {
+		ipv4 = rows[0].IPv4
+		ipv6 = rows[0].IPv6
+	}
 	return ipv4, ipv6, log.Errore(err)
 }

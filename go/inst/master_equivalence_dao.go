@@ -17,8 +17,9 @@
 package inst
 
 import (
+	"context"
+
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 )
@@ -74,7 +75,7 @@ func GetEquivalentMasterCoordinates(instanceCoordinates *InstanceBinlogCoordinat
 				and master1_binary_log_file = ?
 				and master1_binary_log_pos = ?
 		`
-	args := sqlutils.Args(
+	args := []interface{}{
 		instanceCoordinates.Key.Hostname,
 		instanceCoordinates.Key.Port,
 		instanceCoordinates.Coordinates.LogFile,
@@ -83,18 +84,23 @@ func GetEquivalentMasterCoordinates(instanceCoordinates *InstanceBinlogCoordinat
 		instanceCoordinates.Key.Port,
 		instanceCoordinates.Coordinates.LogFile,
 		instanceCoordinates.Coordinates.LogPos,
-	)
+	}
 
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	type equivalentCoordinatesRow struct {
+		Hostname   string `gorm:"column:hostname"`
+		Port       int    `gorm:"column:port"`
+		BinlogFile string `gorm:"column:binlog_file"`
+		BinlogPos  int64  `gorm:"column:binlog_pos"`
+	}
+	rows, err := db.QueryOrchestratorRows[equivalentCoordinatesRow](context.Background(), query, args...)
+	for _, row := range rows {
 		equivalentCoordinates := InstanceBinlogCoordinates{}
-		equivalentCoordinates.Key.Hostname = m.GetString("hostname")
-		equivalentCoordinates.Key.Port = m.GetInt("port")
-		equivalentCoordinates.Coordinates.LogFile = m.GetString("binlog_file")
-		equivalentCoordinates.Coordinates.LogPos = m.GetInt64("binlog_pos")
-
+		equivalentCoordinates.Key.Hostname = row.Hostname
+		equivalentCoordinates.Key.Port = row.Port
+		equivalentCoordinates.Coordinates.LogFile = row.BinlogFile
+		equivalentCoordinates.Coordinates.LogPos = row.BinlogPos
 		result = append(result, &equivalentCoordinates)
-		return nil
-	})
+	}
 
 	if err != nil {
 		return nil, err

@@ -4,6 +4,21 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### Backend DAO now uses GORM without schema ownership
+
+Backend DAO queries now use GORM for both MySQL and SQLite, while reusing the
+single process-owned backend connection pool. The configured backend, schema,
+configuration keys, and on-disk SQLite format are unchanged. Ordered SQL
+bootstrap and patch statements remain the only schema migration mechanism;
+GORM does not run `AutoMigrate` or other implicit DDL.
+
+Before rollout, validate startup and representative backend reads and writes
+against the deployment's configured backend. Pay particular attention to
+recovery registration, maintenance registration, and agent seed operations,
+whose generated identifiers continue to come from an explicit `database/sql`
+adapter. A rollback requires only the prior binary and matching configuration;
+this migration adds no database patch of its own.
+
 ### Database connections now have an explicit process lifecycle
 
 Backend and topology connections are now created from typed MySQL driver

@@ -104,3 +104,21 @@ If the file indicated by `SQLite3DataFile` does not exist, `orchestrator` will c
 
 The SQLite backend also uses one process-owned pool, limited to one open and
 idle connection, and is closed through the same shutdown lifecycle as MySQL.
+
+## Backend data-access boundary
+
+Runtime reads and writes against the orchestrator backend use GORM with the
+configured MySQL or SQLite dialect. GORM is bound to the same process-owned
+`database/sql` pool described above; it does not create or close a second pool.
+Statements that require a driver-provided `LastInsertId` use a small explicit
+`database/sql` adapter over that same pool.
+
+Schema creation and upgrades remain driven by the existing ordered SQL lists.
+The runtime does not call GORM `AutoMigrate` or `Migrator`, so this change does
+not introduce implicit DDL or a new schema source of truth. Connections to
+managed topology instances, Raft storage, dynamic topology result sets, and
+snapshot table transfer also remain outside the backend GORM DAO boundary.
+
+The GORM statement logger records duration and errors without rendering SQL or
+bound values. Existing database credentials and query parameters are therefore
+not added to application logs by this data-access layer.

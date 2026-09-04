@@ -17,8 +17,9 @@
 package process
 
 import (
+	"context"
+
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/raft"
@@ -141,14 +142,19 @@ func ElectedNode() (node NodeHealth, isElected bool, err error) {
 		where
 			anchor = 1
 		`
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		node.Hostname = m.GetString("hostname")
-		node.Token = m.GetString("token")
-		node.FirstSeenActive = m.GetString("first_seen_active")
-		node.LastSeenActive = m.GetString("last_seen_active")
-
-		return nil
-	})
+	type electedNodeRow struct {
+		Hostname        string `gorm:"column:hostname"`
+		Token           string `gorm:"column:token"`
+		FirstSeenActive string `gorm:"column:first_seen_active"`
+		LastSeenActive  string `gorm:"column:last_seen_active"`
+	}
+	rows, err := db.QueryOrchestratorRows[electedNodeRow](context.Background(), query)
+	if err == nil && len(rows) > 0 {
+		node.Hostname = rows[0].Hostname
+		node.Token = rows[0].Token
+		node.FirstSeenActive = rows[0].FirstSeenActive
+		node.LastSeenActive = rows[0].LastSeenActive
+	}
 
 	isElected = (node.Hostname == ThisHostname && node.Token == util.ProcessToken.Hash)
 	return node, isElected, log.Errore(err)

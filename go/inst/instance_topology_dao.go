@@ -25,9 +25,8 @@ import (
 	"time"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
-	"github.com/openark/orchestrator/go/db"
+	orchestratordb "github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/util"
 	"github.com/patrickmn/go-cache"
 )
@@ -60,11 +59,11 @@ type ReplicationCredentials struct {
 
 // ExecInstance executes a given query on the given MySQL topology instance
 func ExecInstance(instanceKey *InstanceKey, query string, args ...interface{}) (sql.Result, error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
 	}
-	return sqlutils.ExecNoPrepare(db, query, args...)
+	return db.Exec(query, args...)
 }
 
 // ExecuteOnTopology will execute given function while maintaining concurrency limit
@@ -77,7 +76,7 @@ func ExecuteOnTopology(f func()) {
 
 // ScanInstanceRow executes a read-a-single-row query on a given MySQL topology instance
 func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...interface{}) error {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
 	}
@@ -87,7 +86,7 @@ func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...interface{}
 
 // EmptyCommitInstance issues an empty COMMIT on a given instance
 func EmptyCommitInstance(instanceKey *InstanceKey) error {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
 	}
@@ -1243,7 +1242,7 @@ func setGTIDPurged(instance *Instance, gtidPurged string) error {
 
 // injectEmptyGTIDTransaction
 func injectEmptyGTIDTransaction(instanceKey *InstanceKey, gtidEntry *OracleGtidSetEntry) error {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
 	}
@@ -1354,12 +1353,12 @@ func MasterPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinate
 func ReadReplicationCredentials(instanceKey *InstanceKey) (creds *ReplicationCredentials, err error) {
 	creds = &ReplicationCredentials{}
 	if config.Config.ReplicationCredentialsQuery != "" {
-		db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+		db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 		if err != nil {
 			return creds, log.Errore(err)
 		}
 		{
-			resultData, err := sqlutils.QueryResultData(db, config.Config.ReplicationCredentialsQuery)
+			resultData, err := orchestratordb.QueryResultData(db, config.Config.ReplicationCredentialsQuery)
 			if err != nil {
 				return creds, log.Errore(err)
 			}
@@ -1507,7 +1506,7 @@ func canInjectPseudoGTID(instanceKey *InstanceKey) (canInject bool, err error) {
 	if canInject, found := supportedAutoPseudoGTIDWriters.Get(instanceKey.StringCode()); found {
 		return canInject.(bool), nil
 	}
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return canInject, err
 	}
@@ -1517,7 +1516,7 @@ func canInjectPseudoGTID(instanceKey *InstanceKey) (canInject bool, err error) {
 	foundAllOnSchema := false
 	foundDropOnSchema := false
 
-	err = sqlutils.QueryRowsMap(db, `show grants for current_user()`, func(m sqlutils.RowMap) error {
+	err = orchestratordb.QueryDynamicRows(db, `show grants for current_user()`, func(m orchestratordb.DynamicRow) error {
 		for _, grantData := range m {
 			grant := grantData.String
 			if strings.Contains(grant, `GRANT ALL PRIVILEGES ON *.*`) {
@@ -1585,7 +1584,7 @@ func CheckAndInjectPseudoGTIDOnWriter(instance *Instance) (injected bool, err er
 }
 
 func GTIDSubtract(instanceKey *InstanceKey, gtidSet string, gtidSubset string) (gtidSubtract string, err error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return gtidSubtract, err
 	}
@@ -1594,11 +1593,11 @@ func GTIDSubtract(instanceKey *InstanceKey, gtidSet string, gtidSubset string) (
 }
 
 func ShowMasterStatus(instance *Instance, instanceKey *InstanceKey) (masterStatusFound bool, executedGtidSet string, err error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return masterStatusFound, executedGtidSet, err
 	}
-	err = sqlutils.QueryRowsMap(db, instance.QSP.show_master_status(), func(m sqlutils.RowMap) error {
+	err = orchestratordb.QueryDynamicRows(db, instance.QSP.show_master_status(), func(m orchestratordb.DynamicRow) error {
 		masterStatusFound = true
 		executedGtidSet = m.GetStringD("Executed_Gtid_Set", "")
 		return nil
@@ -1607,11 +1606,11 @@ func ShowMasterStatus(instance *Instance, instanceKey *InstanceKey) (masterStatu
 }
 
 func ShowBinaryLogs(instanceKey *InstanceKey) (binlogs []string, err error) {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
+	db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return binlogs, err
 	}
-	err = sqlutils.QueryRowsMap(db, "show binary logs", func(m sqlutils.RowMap) error {
+	err = orchestratordb.QueryDynamicRows(db, "show binary logs", func(m orchestratordb.DynamicRow) error {
 		binlogs = append(binlogs, m.GetString("Log_name"))
 		return nil
 	})

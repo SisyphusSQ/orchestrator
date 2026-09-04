@@ -14,8 +14,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
+	"gorm.io/gorm"
 )
 
 // ErrDatabaseRuntimeClosed indicates that process shutdown has already closed
@@ -233,16 +233,14 @@ type databaseRuntime struct {
 	topology   *poolRegistry[topologyPoolKey]
 	openMySQL  mysqlPoolOpener
 	openSQLite sqlitePoolOpener
+	gormMu     sync.Mutex
+	gorm       *gorm.DB
 }
 
 func newDatabaseRuntime() *databaseRuntime {
-	closePool := func(database *sql.DB) error {
-		sqlutils.UnregisterLogger(database)
-		return database.Close()
-	}
 	return &databaseRuntime{
-		backend:   newPoolRegistryWithCloser[string](closePool),
-		topology:  newPoolRegistryWithCloser[topologyPoolKey](closePool),
+		backend:   newPoolRegistry[string](),
+		topology:  newPoolRegistry[topologyPoolKey](),
 		openMySQL: openMySQLConnectorPool,
 		openSQLite: func(dataSourceName string) (*sql.DB, error) {
 			return sql.Open("sqlite3", dataSourceName)
@@ -285,10 +283,6 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 			if err != nil {
 				return nil, err
 			}
-			sqlutils.RegisterLogger(database, SqlUtilsLogger{
-				client_context:     cfg.Addr,
-				backend_connection: true,
-			})
 			configureBackendPool(database)
 			return database, nil
 		},
@@ -330,6 +324,22 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 	return database, nil
 }
 
+func (runtime *databaseRuntime) openBackendGORM(ctx context.Context) (*gorm.DB, error) {
+	runtime.gormMu.Lock()
+	defer runtime.gormMu.Unlock()
+	database, err := runtime.openBackend(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if runtime.gorm == nil {
+		runtime.gorm, err = newBackendGORM(database, IsSQLite())
+		if err != nil {
+			return nil, err
+		}
+	}
+	return runtime.gorm.WithContext(ctx), nil
+}
+
 func (runtime *databaseRuntime) ensureMySQLBackendDatabase(ctx context.Context) (returnErr error) {
 	cfg := newOrchestratorMySQLConfig("")
 	if err := configureOrchestratorTLS(cfg); err != nil {
@@ -339,12 +349,7 @@ func (runtime *databaseRuntime) ensureMySQLBackendDatabase(ctx context.Context) 
 	if err != nil {
 		return err
 	}
-	sqlutils.RegisterLogger(database, SqlUtilsLogger{
-		client_context:     cfg.Addr,
-		backend_connection: true,
-	})
 	defer func() {
-		sqlutils.UnregisterLogger(database)
 		if err := database.Close(); err != nil {
 			returnErr = errors.Join(returnErr, fmt.Errorf("close orchestrator bootstrap pool: %w", err))
 		}
@@ -377,7 +382,6 @@ func (runtime *databaseRuntime) openTopologyPool(
 	ctx context.Context,
 	role topologyConnectionRole,
 	cfg *mysql.Config,
-	logger sqlutils.Logger,
 ) (*sql.DB, error) {
 	key := newTopologyPoolKey(role, cfg)
 	database, _, err := runtime.topology.GetOrCreate(ctx, key, func() (*sql.DB, error) {
@@ -385,7 +389,6 @@ func (runtime *databaseRuntime) openTopologyPool(
 		if err != nil {
 			return nil, err
 		}
-		sqlutils.RegisterLogger(database, logger)
 		if config.Config.MySQLConnectionLifetimeSeconds > 0 {
 			database.SetConnMaxLifetime(time.Duration(config.Config.MySQLConnectionLifetimeSeconds) * time.Second)
 		}
@@ -412,6 +415,9 @@ func Close() error {
 }
 
 func (runtime *databaseRuntime) Close() error {
+	runtime.gormMu.Lock()
+	defer runtime.gormMu.Unlock()
+	runtime.gorm = nil
 	var errs []error
 	if err := runtime.topology.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("close topology pools: %w", err))
