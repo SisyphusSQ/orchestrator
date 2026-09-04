@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- raft
+  - Replace the 2017 openark Raft fork with official `github.com/hashicorp/raft` v1.7.3 and `github.com/hashicorp/raft-boltdb/v2` v2.3.1 for newly created clusters.
+  - Require a durable `RaftNodeID` independent of bind/advertise/DNS, bootstrap a single seed voter, and manage membership through ID-aware HTTP APIs (`/api/raft/configuration`, `/bootstrap`, `/members`, `/leadership/transfer`, `/snapshot`).
+  - Use official FileSnapshotStore plus one Bolt store for logs and stable state, remove Yield/peer/health-report control paths, and report readiness from VerifyLeader, configuration suffrage, and last-contact.
 - optimization
   - Replace Martini and its auth, gzip, and render extensions with Gin v1.12.0 behind a project-owned HTTP transport adapter, preserving 306 API, Web, debug, and agent route contracts plus authentication, templates, static assets, Raft proxy termination, URL prefixes, and HTTP/HTTPS/Unix listener behavior.
   - Migrate stable orchestrator backend DAO reads and writes to GORM v1.31.2 with MySQL and SQLite drivers, while reusing the process-owned pool, retaining ordered SQL schema migrations, and keeping topology, snapshot, Raft, and `LastInsertId` paths explicitly scoped.

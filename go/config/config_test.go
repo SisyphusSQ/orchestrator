@@ -279,13 +279,57 @@ func TestRaft(t *testing.T) {
 		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
 		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
+		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
 		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
+		c.RaftNodeID = "node-1"
+		err := c.postReadAdjustments()
+		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(c.RaftAdvertise, c.RaftBind)
+		test.S(t).ExpectEquals(c.RaftNodeID, "node-1")
+	}
+	{
+		c := newConfiguration()
+		c.RaftEnabled = true
+		c.RaftDataDir = "/path/to/somewhere"
+		c.RaftNodeID = "node-1"
 		c.RaftBind = ""
+		err := c.postReadAdjustments()
+		test.S(t).ExpectNotNil(err)
+	}
+	{
+		c := newConfiguration()
+		c.RaftEnabled = true
+		c.RaftDataDir = "/path/to/somewhere"
+		c.RaftNodeID = "node-1"
+		c.RaftBind = "127.0.0.1"
+		c.DefaultRaftPort = 10008
+		err := c.postReadAdjustments()
+		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(c.RaftBind, "127.0.0.1:10008")
+		test.S(t).ExpectEquals(c.RaftAdvertise, "127.0.0.1:10008")
+	}
+	{
+		c := newConfiguration()
+		c.RaftEnabled = true
+		c.RaftDataDir = "/path/to/somewhere"
+		c.RaftNodeID = "node-1"
+		c.RaftBind = "127.0.0.1:10008"
+		c.RaftAdvertise = "10.0.0.1"
+		c.DefaultRaftPort = 10008
+		err := c.postReadAdjustments()
+		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(c.RaftAdvertise, "10.0.0.1:10008")
+		test.S(t).ExpectEquals(c.RaftNodeID, "node-1")
+	}
+	{
+		c := newConfiguration()
+		c.RaftEnabled = true
+		c.RaftDataDir = "/path/to/somewhere"
+		c.RaftNodeID = "node 1"
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNotNil(err)
 	}

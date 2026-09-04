@@ -20,19 +20,18 @@ See also: [orchestrator/raft vs. synchronous replication setup](raft-vs-sync-rep
 
 You will set up `3` or `5` (recommended raft node count) `orchestrator` nodes. Other numbers are also legitimate but you will want at least `3`.
 
-At this time `orchestrator` nodes to not join dynamically into the cluster. The list of nodes is preconfigured as in:
+New clusters are formed by bootstrapping one seed node, then adding voters through the leader membership API. Each node has a durable `RaftNodeID` that is independent of bind/advertise addresses:
 
 ```json
   "RaftEnabled": true,
+  "RaftNodeID": "<stable-id-of-this-node>",
   "RaftDataDir": "/var/lib/orchestrator",
-  "RaftBind": "<ip.or.fqdn.of.this.orchestrator.node>",
-  "DefaultRaftPort": 10008,
-  "RaftNodes": [
-    "<ip.or.fqdn.of.orchestrator.node1>",
-    "<ip.or.fqdn.of.orchestrator.node2>",
-    "<ip.or.fqdn.of.orchestrator.node3>"
-  ],
+  "RaftBind": "<local.listen.host:port>",
+  "RaftAdvertise": "<address.other.nodes.use:port>",
+  "DefaultRaftPort": 10008
 ```
+
+On the seed node only: `POST /api/raft/bootstrap`. Then on the leader: `POST /api/raft/members` with each additional node's `id`, advertise `address`, and `suffrage`. See [raft configuration](configuration-raft.md) for the full API.
 
 #### Backend DB
 
@@ -156,7 +155,7 @@ export ORCHESTRATOR_API="https://orchestrator.proxy:80/api"
 
 - An `orchestrator` node may be down, then come back. It will rejoin the `raft` group, and receive whatever events it missed while out. It does not matter how long the node has been away. If it does not have relevant local `raft` log/snapshots, another node will automatically feed it with a recent snapshot.
 
-- The `orchestrator` service will bail out if it can't join the `raft` group.
+- A fresh node without Raft state stays unbootstrapped until the leader adds its stable ID and advertise address. It does not discover or join a cluster automatically.
 
 See also [Master discovery with Key Value stores](kv.md#kv-and-orchestratorraft) via `orchestrator/raft`.
 

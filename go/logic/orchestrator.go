@@ -43,9 +43,9 @@ import (
 )
 
 const (
-	discoveryMetricsName        = "DISCOVERY_METRICS"
-	yieldAfterUnhealthyDuration = 5 * config.HealthPollSeconds * time.Second
-	fatalAfterUnhealthyDuration = 30 * config.HealthPollSeconds * time.Second
+	discoveryMetricsName           = "DISCOVERY_METRICS"
+	transferAfterUnhealthyDuration = 5 * config.HealthPollSeconds * time.Second
+	fatalAfterUnhealthyDuration    = 30 * config.HealthPollSeconds * time.Second
 )
 
 // discoveryQueue is a channel of deduplicated instanceKey-s
@@ -117,14 +117,14 @@ func init() {
 
 func IsLeader() bool {
 	if orcraft.IsRaftEnabled() {
-		return orcraft.IsLeader()
+		return orcraft.IsLeaderReady()
 	}
 	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
 func IsLeaderOrActive() bool {
 	if orcraft.IsRaftEnabled() {
-		return orcraft.IsPartOfQuorum()
+		return orcraft.IsReady()
 	}
 	return atomic.LoadInt64(&isElectedNode) == 1
 }
@@ -379,9 +379,11 @@ func onHealthTick() {
 		} else {
 			atomic.StoreInt64(&isElectedNode, 0)
 		}
-		if process.SinceLastGoodHealthCheck() > yieldAfterUnhealthyDuration {
-			log.Errorf("Health test is failing for over %+v seconds. raft yielding", yieldAfterUnhealthyDuration.Seconds())
-			orcraft.Yield()
+		if orcraft.IsLeader() && process.SinceLastGoodHealthCheck() > transferAfterUnhealthyDuration {
+			log.Errorf("Health test is failing for over %+v seconds. transferring raft leadership", transferAfterUnhealthyDuration.Seconds())
+			if err := orcraft.TransferLeadership("", ""); err != nil {
+				log.Errore(err)
+			}
 		}
 		if process.SinceLastGoodHealthCheck() > fatalAfterUnhealthyDuration {
 			orcraft.FatalRaftError(fmt.Errorf("Node is unable to register health. Please check database connnectivity and/or time synchronisation."))
@@ -687,7 +689,7 @@ func ContinuousDiscovery() error {
 				}
 			}()
 		case <-raftCaretakingTicker.C:
-			if orcraft.IsRaftEnabled() && orcraft.IsLeader() {
+			if orcraft.IsRaftEnabled() && IsLeader() {
 				go publishDiscoverMasters()
 			}
 		case <-recoveryTicker.C:

@@ -1828,7 +1828,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	if orcraft.IsRaftEnabled() {
 		// with raft, all nodes can (and should) run analysis,
 		// but only the leader proceeds to execute detection hooks and then to failover.
-		if !orcraft.IsLeader() {
+		if !IsLeader() {
 			log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 				"skipProcesses: %v: NOT detecting/recovering host (raft non-leader)",
 				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses)

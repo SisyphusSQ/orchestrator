@@ -82,11 +82,9 @@
   "MasterFailoverLostInstancesDowntimeMinutes": 0,
   "PostponeReplicaRecoveryOnLagMinutes": 0,
   "RaftEnabled": true,
+  "RaftNodeID": "node-NODE_ID_PLACEHOLDER",
   "RaftDataDir": "/tmp/orchestrator-NODE_ID_PLACEHOLDER",
   "RaftBind": "127.0.0.1:1000NODE_ID_PLACEHOLDER",
-  "RaftNodes": [
-    "127.0.0.1:10007",
-    "127.0.0.1:10008",
-    "127.0.0.1:10009"
-  ]
+  "RaftAdvertise": "127.0.0.1:1000NODE_ID_PLACEHOLDER",
+  "DefaultRaftPort": 10008
 }

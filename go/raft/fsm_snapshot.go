@@ -17,6 +17,9 @@
 package orcraft
 
 import (
+	"errors"
+	"io"
+
 	"github.com/hashicorp/raft"
 )
 
@@ -35,10 +38,14 @@ func newFsmSnapshot(snapshotCreatorApplier SnapshotCreatorApplier) *fsmSnapshot 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	data, err := f.snapshotCreatorApplier.GetData()
 	if err != nil {
-		return err
+		return errors.Join(err, sink.Cancel())
 	}
-	if _, err := sink.Write(data); err != nil {
-		return err
+	written, err := sink.Write(data)
+	if err == nil && written != len(data) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		return errors.Join(err, sink.Cancel())
 	}
 	return sink.Close()
 }

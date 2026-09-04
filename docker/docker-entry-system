@@ -15,6 +15,46 @@ echo "starting orchestrator service..."
 sudo systemctl daemon-reload
 sudo systemctl start orchestrator
 sudo systemctl status orchestrator
+
+echo "waiting for the local raft API..."
+raft_api_ready=
+for attempt in $(seq 1 50); do
+  if curl -sS "http://127.0.0.1:3000/api/raft/configuration" | jq -e '.Code == "OK"' >/dev/null; then
+    raft_api_ready=1
+    break
+  fi
+  sleep 0.2
+done
+if [ -z "$raft_api_ready" ]; then
+  echo "raft API did not become ready"
+  exit 1
+fi
+
+# This environment is a new single-node cluster. Send bootstrap exactly once;
+# if the response is lost, configuration readback below determines the result.
+echo "bootstrapping the local raft node..."
+bootstrap_response=$(curl -sS -X POST "http://127.0.0.1:3000/api/raft/bootstrap")
+echo "$bootstrap_response" | jq .
+
+raft_configuration_confirmed=
+for attempt in $(seq 1 50); do
+  configuration_response=$(curl -sS "http://127.0.0.1:3000/api/raft/configuration")
+  if echo "$configuration_response" | jq -e '
+    .Code == "OK" and
+    .Details.committed == true and
+    (.Details.servers | any(.id == "ci-node-1" and .suffrage == "voter"))
+  ' >/dev/null; then
+    raft_configuration_confirmed=1
+    break
+  fi
+  sleep 0.2
+done
+if [ -z "$raft_configuration_confirmed" ]; then
+  echo "raft bootstrap was not confirmed by configuration readback"
+  echo "$configuration_response" | jq .
+  exit 1
+fi
+
 echo "checking if service is healthy..."
 orchestrator-client -c api -path status | jq .Details.Healthy
 

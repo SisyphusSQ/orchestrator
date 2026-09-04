@@ -34,8 +34,86 @@ done
 echo "export PS1=\"\\[\\e[0;33m\\]\\h \\[\\e[0;97m\\]\\w\\[\\e[0;37m\\]\\\$ \"" >> /etc/bash.bashrc
 echo 'export ORCHESTRATOR_API="http://127.0.0.1:3007/api http://127.0.0.1:3008/api http://127.0.0.1:3009/api"' | sudo tee /etc/profile.d/orchestrator-client.sh
 
-# wait for registration and election
+# wait for processes to listen, then form a new three-node cluster
 sleep 10
+echo "bootstrapping raft seed node-7 and adding voters..."
+bootstrap_response=$(curl -sS -X POST "http://127.0.0.1:3007/api/raft/bootstrap")
+echo "$bootstrap_response" | jq .
+
+raft_leader_ready=
+for attempt in $(seq 1 50); do
+  seed_configuration=$(curl -sS "http://127.0.0.1:3007/api/raft/configuration")
+  if echo "$seed_configuration" | jq -e '
+    .Code == "OK" and
+    .Details.committed == true and
+    (.Details.servers | any(.id == "node-7" and .suffrage == "voter"))
+  ' >/dev/null &&
+    [ "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:3007/api/leader-check")" = "200" ]; then
+    raft_leader_ready=1
+    break
+  fi
+  sleep 0.2
+done
+if [ -z "$raft_leader_ready" ]; then
+  echo "raft seed bootstrap was not confirmed or the seed did not become leader"
+  echo "$seed_configuration" | jq .
+  exit 1
+fi
+
+node8_response=$(curl -sS -X POST "http://127.0.0.1:3007/api/raft/members" -H "Content-Type: application/json" \
+  -d '{"id":"node-8","address":"127.0.0.1:10008","suffrage":"voter"}')
+echo "$node8_response" | jq .
+node8_confirmed=
+for attempt in $(seq 1 50); do
+  configuration_response=$(curl -sS "http://127.0.0.1:3007/api/raft/configuration")
+  if echo "$configuration_response" | jq -e '
+    .Code == "OK" and
+    .Details.committed == true and
+    (.Details.servers | any(.id == "node-8" and .address == "127.0.0.1:10008" and .suffrage == "voter"))
+  ' >/dev/null; then
+    node8_confirmed=1
+    break
+  fi
+  sleep 0.2
+done
+if [ -z "$node8_confirmed" ]; then
+  echo "adding node-8 was not confirmed by configuration readback"
+  echo "$configuration_response" | jq .
+  exit 1
+fi
+
+node9_response=$(curl -sS -X POST "http://127.0.0.1:3007/api/raft/members" -H "Content-Type: application/json" \
+  -d '{"id":"node-9","address":"127.0.0.1:10009","suffrage":"voter"}')
+echo "$node9_response" | jq .
+node9_confirmed=
+for attempt in $(seq 1 50); do
+  configuration_response=$(curl -sS "http://127.0.0.1:3007/api/raft/configuration")
+  if echo "$configuration_response" | jq -e '
+    .Code == "OK" and
+    .Details.committed == true and
+    (.Details.servers | any(.id == "node-9" and .address == "127.0.0.1:10009" and .suffrage == "voter"))
+  ' >/dev/null; then
+    node9_confirmed=1
+    break
+  fi
+  sleep 0.2
+done
+if [ -z "$node9_confirmed" ]; then
+  echo "adding node-9 was not confirmed by configuration readback"
+  echo "$configuration_response" | jq .
+  exit 1
+fi
+
+configuration_response=$(curl -sS "http://127.0.0.1:3007/api/raft/configuration")
+echo "$configuration_response" | jq .
+if ! echo "$configuration_response" | jq -e '
+  .Code == "OK" and
+  .Details.committed == true and
+  ([.Details.servers[] | select(.suffrage == "voter")] | length == 3)
+' >/dev/null; then
+  echo "three-voter raft configuration was not confirmed"
+  exit 1
+fi
 
 echo ""
 echo "Here's how to invoke orchestrator-client:"

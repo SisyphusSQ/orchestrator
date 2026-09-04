@@ -96,7 +96,7 @@ $(document).ready(function () {
 			if (health.Details.RaftLeader != "") {
 				$(".status-table-raft").append(
             '<tr><td></td>' +
-            '<td><b>Advertised</b></td>' +
+            '<td><b>ID / address</b></td>' +
             '<td><b>URI</b></td>'
         );
 				var message = '';
@@ -104,24 +104,30 @@ $(document).ready(function () {
 				message += escapeHtml(health.Details.RaftLeader);
 				message += '</strong></code>';
 				message += '</br>';
+				if (health.Details.RaftLeaderAddress) {
+					message += '<code class="text-info">';
+					message += escapeHtml(health.Details.RaftLeaderAddress);
+					message += '</code>';
+					message += '</br>';
+				}
 				if (health.Details.IsRaftLeader) {
 					message += '<code class="text-info"><span class="text-primary">[This node]</span></code>';
 				}
 				var raftLeaderUri = health.Details.RaftLeaderURI;
 				addRaftTableData("Raft leader", message, raftLeaderUriCellHtml(raftLeaderUri));
 			}
-			health.Details.RaftHealthyMembers = health.Details.RaftHealthyMembers || []
-			if (health.Details.RaftHealthyMembers) {
-				health.Details.RaftHealthyMembers.sort().forEach(function(node) {
+			health.Details.RaftMembers = health.Details.RaftMembers || []
+			if (health.Details.RaftMembers) {
+				health.Details.RaftMembers.sort().forEach(function(node) {
 					var message = '';
 					message += '<code class="text-info"><strong>';
 					message += escapeHtml(node);
 					message += '</strong></code>';
 					message += '</br>';
-					if (node == health.Details.RaftAdvertise) {
+					if (node == health.Details.RaftNodeID) {
 						message += '<code class="text-info"><span class="text-primary">[This node]</span></code>';
 					}
-					addRaftTableData("Healthy raft member", message, "");
+					addRaftTableData("Raft member", message, "");
 				})
 			}
 

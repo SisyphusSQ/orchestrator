@@ -50,6 +50,17 @@ Assuming `orchestrator` is built into `bin/orchestrator` (`make build` if not):
 $ bin/orchestrator --config=conf/orchestrator-ci-env.conf.json --debug http
 ```
 
+This configuration enables a new single-node Raft cluster. After the HTTP
+process is listening, bootstrap it exactly once from another terminal:
+
+```shell
+$ curl -sS -X POST http://127.0.0.1:3000/api/raft/bootstrap | jq .
+```
+
+Confirm `.Details.committed` and the `ci-node-1` voter with
+`GET /api/raft/configuration` before running topology commands. Do not replay
+the bootstrap request when its result is uncertain; use configuration readback.
+
 [`conf/orchestrator-ci-env.conf.json`](https://github.com/openark/orchestrator/blob/master/conf/orchestrator-ci-env.conf.json) is designed to work with `orchestrator-ci-env`.
 
 You may choose to change the value of `SQLite3DataFile`, which is by default on `/tmp`.
