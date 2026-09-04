@@ -34,7 +34,7 @@ Requirements: a docker installation.
 
 Requirements:
 
-- `go` development setup (at this time `go1.12` or above required)
+- `go` development setup matching the version declared in `go.mod`
 - `git`
 - `gcc` (required to build `SQLite` as part of the `orchestrator` binary)
 - Linux, BSD or MacOS
@@ -48,15 +48,24 @@ Run:
 
 ### Build
 
+Download and verify the modules declared in `go.mod` and `go.sum`:
+
+```shell
+./script/test-modules
+```
+
 Build via:
+
+```shell
+./script/build
 ```
-    ./script/build
-```
-This takes care of `GOPATH` and various other considerations.
+
+The build uses Go Modules directly and does not require a repository-local `GOPATH` or `vendor/` tree.
 
 Alternatively, if you like and if your Go environment is setup, you may run:
-```
-    go build -o bin/orchestrator -i go/cmd/orchestrator/main.go
+
+```shell
+go build -mod=readonly -o bin/orchestrator ./go/cmd/orchestrator
 ```
 
 ### Run

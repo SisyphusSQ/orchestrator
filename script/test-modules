@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e
+
+echo "# Verifying Go modules"
+
+if [[ -d vendor ]]; then
+  echo "vendor directory must not be committed; use go.mod and go.sum"
+  exit 1
+fi
+
+go mod download
+go mod verify
+go mod tidy -diff
+go -C go/golib mod download
+go -C go/golib mod verify
+go -C go/golib mod tidy -diff

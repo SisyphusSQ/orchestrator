@@ -23,9 +23,8 @@ if [[ -e /etc/redhat-release ]]; then
 
   # Build Orchestrator
   export GOPATH=/home/vagrant/go
-  export GO15VENDOREXPERIMENT=1
   cd ${GOPATH}/src/github.com/openark/orchestrator
-  /usr/bin/go get ./...
+  /usr/bin/go mod download
   ${GOPATH}/src/github.com/openark/orchestrator/build.sh
   chown -R vagrant.vagrant /home/vagrant /tmp/orchestrator-release
 
@@ -93,9 +92,8 @@ elif [[ -e /etc/debian_version ]]; then
 
   # Build Orchestrator
   export GOPATH=/home/vagrant/go
-  export GO15VENDOREXPERIMENT=1
   cd ${GOPATH}/src/github.com/openark/orchestrator
-  /usr/local/go/bin/go get ./...
+  /usr/local/go/bin/go mod download
   ${GOPATH}/src/github.com/openark/orchestrator/build.sh
   chown -R vagrant.vagrant /home/vagrant /tmp/orchestrator-release
 

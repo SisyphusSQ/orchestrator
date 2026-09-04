@@ -19,12 +19,13 @@ FROM golang:1.26.5-bookworm
 RUN apt-get update
 RUN apt-get install -y ruby ruby-dev rubygems build-essential
 RUN gem install --no-document fpm
-ENV GOPATH=/tmp/go
 
 RUN apt-get install -y curl rsync gcc g++ bash git tar rpm
 
-RUN mkdir -p $GOPATH/src/github.com/openark/orchestrator
-WORKDIR $GOPATH/src/github.com/openark/orchestrator
+WORKDIR /orchestrator
+COPY go.mod go.sum ./
+COPY go/golib/go.mod go/golib/go.sum ./go/golib/
+RUN go mod download
 COPY . .
 ARG RELEASE_VERSION=
 ARG RELEASE_SUBVERSION=

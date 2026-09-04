@@ -1,9 +1,12 @@
 FROM golang:1.26.5-bookworm
 LABEL maintainer="kamil.holubicki@percona.com"
 
-ENV WORKPATH /go/src/github.com/openark/orchestrator
+ENV WORKPATH=/orchestrator
 WORKDIR $WORKPATH
 
+COPY go.mod go.sum ./
+COPY go/golib/go.mod go/golib/go.sum ./go/golib/
+RUN go mod download
 COPY . .
 
 CMD (cd $WORKPATH && "script/test-cve")
