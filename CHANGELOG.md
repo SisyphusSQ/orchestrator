@@ -3,6 +3,7 @@
 ## Unreleased
 
 - optimization
+  - Replace Martini and its auth, gzip, and render extensions with Gin v1.12.0 behind a project-owned HTTP transport adapter, preserving 306 API, Web, debug, and agent route contracts plus authentication, templates, static assets, Raft proxy termination, URL prefixes, and HTTP/HTTPS/Unix listener behavior.
   - Migrate stable orchestrator backend DAO reads and writes to GORM v1.31.2 with MySQL and SQLite drivers, while reusing the process-owned pool, retaining ordered SQL schema migrations, and keeping topology, snapshot, Raft, and `LastInsertId` paths explicitly scoped.
   - Remove the local `sqlutils` package and replace its remaining dynamic topology and snapshot helpers with context-aware, null-preserving adapters.
   - Build MySQL backend and topology connections from typed driver configuration, move pool ownership and shutdown into the process database runtime, separate discovery and topology-operation pools, and apply `MySQLTopologyMaxAllowedPacket` to the correct connections.

@@ -4,6 +4,23 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### HTTP routing now uses Gin behind a compatibility adapter
+
+The standard Web/API listener and the agent listener now use Gin v1.12.0
+instead of Martini. No HTTP configuration keys or listener selection rules have
+changed. Existing API synonyms, optional trailing slashes, GET-to-HEAD
+compatibility, authentication modes, `URLPrefix`, custom `StatusEndpoint`,
+template layout, static assets, debug endpoints, and HTTP/HTTPS/Unix socket
+selection remain supported through a project-owned transport adapter.
+
+Before rollout, exercise representative read and mutating requests with the
+deployment's authentication mode and URL prefix. Deployments using mutual TLS
+or Raft should additionally validate certificate OU rejection and follower
+proxy behavior. Confirm the Web UI assets and debug endpoints through the same
+reverse proxy used in production. A rollback requires only the prior binary and
+matching configuration; this migration adds no persistent state or schema
+change.
+
 ### Backend DAO now uses GORM without schema ownership
 
 Backend DAO queries now use GORM for both MySQL and SQLite, while reusing the

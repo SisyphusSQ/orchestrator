@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-martini/martini"
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
 	"golang.org/x/term"
@@ -92,13 +91,11 @@ func Verify(r *nethttp.Request, validOUs []string) error {
 	return errors.New("Invalid OU")
 }
 
-// TODO: make this testable?
-func VerifyOUs(validOUs []string) martini.Handler {
-	return func(res nethttp.ResponseWriter, req *nethttp.Request, c martini.Context) {
+// VerifyOUs returns a request verifier suitable for the HTTP transport.
+func VerifyOUs(validOUs []string) func(*nethttp.Request) error {
+	return func(req *nethttp.Request) error {
 		log.Debug("Verifying client OU")
-		if err := Verify(req, validOUs); err != nil {
-			nethttp.Error(res, err.Error(), nethttp.StatusUnauthorized)
-		}
+		return Verify(req, validOUs)
 	}
 }
 
