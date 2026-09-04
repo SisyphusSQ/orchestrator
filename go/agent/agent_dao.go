@@ -17,7 +17,9 @@
 package agent
 
 import (
+	"context"
 	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,7 +31,6 @@ import (
 	"time"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/inst"
@@ -41,6 +42,24 @@ var SeededAgents chan *Agent = make(chan *Agent)
 
 var httpClient *http.Client
 var httpClientMutex = &sync.Mutex{}
+
+type agentBackendRow struct {
+	Hostname      string        `gorm:"column:hostname"`
+	Port          int           `gorm:"column:port"`
+	Token         string        `gorm:"column:token"`
+	LastSubmitted string        `gorm:"column:last_submitted"`
+	MySQLPort     sql.NullInt64 `gorm:"column:mysql_port"`
+}
+
+type seedOperationRow struct {
+	SeedID         int64  `gorm:"column:agent_seed_id"`
+	TargetHostname string `gorm:"column:target_hostname"`
+	SourceHostname string `gorm:"column:source_hostname"`
+	StartTimestamp string `gorm:"column:start_timestamp"`
+	EndTimestamp   string `gorm:"column:end_timestamp"`
+	IsComplete     bool   `gorm:"column:is_complete"`
+	IsSuccessful   bool   `gorm:"column:is_successful"`
+}
 
 // InitHttpClient gets called once, and initializes httpClient according to config.Config
 func InitHttpClient() {
@@ -170,11 +189,13 @@ func ReadOutdatedAgentsHosts() ([]string, error) {
 		where
 			IFNULL(last_checked < now() - interval ? minute, 1)
 			`
-	err := db.QueryOrchestrator(query, sqlutils.Args(config.Config.AgentPollMinutes), func(m sqlutils.RowMap) error {
-		hostname := m.GetString("hostname")
-		res = append(res, hostname)
-		return nil
-	})
+	type hostnameRow struct {
+		Hostname string `gorm:"column:hostname"`
+	}
+	rows, err := db.QueryOrchestratorRows[hostnameRow](context.Background(), query, config.Config.AgentPollMinutes)
+	for _, row := range rows {
+		res = append(res, row.Hostname)
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -197,17 +218,16 @@ func ReadAgents() ([]Agent, error) {
 		order by
 			hostname
 		`
-	err := db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
+	rows, err := db.QueryOrchestratorRows[agentBackendRow](context.Background(), query)
+	for _, row := range rows {
 		agent := Agent{}
-		agent.Hostname = m.GetString("hostname")
-		agent.Port = m.GetInt("port")
-		agent.MySQLPort = m.GetInt64("mysql_port")
+		agent.Hostname = row.Hostname
+		agent.Port = row.Port
+		agent.MySQLPort = row.MySQLPort.Int64
 		agent.Token = ""
-		agent.LastSubmitted = m.GetString("last_submitted")
-
+		agent.LastSubmitted = row.LastSubmitted
 		res = append(res, agent)
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -232,15 +252,14 @@ func readAgentBasicInfo(hostname string) (Agent, string, error) {
 		where
 			hostname = ?
 		`
-	err := db.QueryOrchestrator(query, sqlutils.Args(hostname), func(m sqlutils.RowMap) error {
-		agent.Hostname = m.GetString("hostname")
-		agent.Port = m.GetInt("port")
-		agent.LastSubmitted = m.GetString("last_submitted")
-		agent.MySQLPort = m.GetInt64("mysql_port")
-		token = m.GetString("token")
-
-		return nil
-	})
+	rows, err := db.QueryOrchestratorRows[agentBackendRow](context.Background(), query, hostname)
+	if err == nil && len(rows) > 0 {
+		agent.Hostname = rows[0].Hostname
+		agent.Port = rows[0].Port
+		agent.LastSubmitted = rows[0].LastSubmitted
+		agent.MySQLPort = rows[0].MySQLPort.Int64
+		token = rows[0].Token
+	}
 	if err != nil {
 		return agent, "", err
 	}
@@ -557,7 +576,7 @@ func PostCopy(hostname, sourceHostname string) (Agent, error) {
 
 // SubmitSeedEntry submits a new seed operation entry, returning its unique ID
 func SubmitSeedEntry(targetHostname string, sourceHostname string) (int64, error) {
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecOrchestratorSQLContext(context.Background(), `
 			insert
 				into agent_seed (
 					target_hostname, source_hostname, start_timestamp
@@ -599,7 +618,7 @@ func updateSeedComplete(seedId int64, seedError error) error {
 
 // submitSeedStateEntry submits a seed state: a single step in the overall seed process
 func submitSeedStateEntry(seedId int64, action string, errorMessage string) (int64, error) {
-	res, err := db.ExecOrchestrator(`
+	res, err := db.ExecOrchestratorSQLContext(context.Background(), `
 			insert
 				into agent_seed_state (
 					agent_seed_id, state_timestamp, state_action, error_message
@@ -840,19 +859,18 @@ func readSeeds(whereCondition string, args []interface{}, limit string) ([]SeedO
 			agent_seed_id desc
 		%s
 		`, whereCondition, limit)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	rows, err := db.QueryOrchestratorRows[seedOperationRow](context.Background(), query, args...)
+	for _, row := range rows {
 		seedOperation := SeedOperation{}
-		seedOperation.SeedId = m.GetInt64("agent_seed_id")
-		seedOperation.TargetHostname = m.GetString("target_hostname")
-		seedOperation.SourceHostname = m.GetString("source_hostname")
-		seedOperation.StartTimestamp = m.GetString("start_timestamp")
-		seedOperation.EndTimestamp = m.GetString("end_timestamp")
-		seedOperation.IsComplete = m.GetBool("is_complete")
-		seedOperation.IsSuccessful = m.GetBool("is_successful")
-
+		seedOperation.SeedId = row.SeedID
+		seedOperation.TargetHostname = row.TargetHostname
+		seedOperation.SourceHostname = row.SourceHostname
+		seedOperation.StartTimestamp = row.StartTimestamp
+		seedOperation.EndTimestamp = row.EndTimestamp
+		seedOperation.IsComplete = row.IsComplete
+		seedOperation.IsSuccessful = row.IsSuccessful
 		res = append(res, seedOperation)
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -870,7 +888,7 @@ func ReadActiveSeedsForHost(hostname string) ([]SeedOperation, error) {
 				or source_hostname = ?
 			)
 		`
-	return readSeeds(whereCondition, sqlutils.Args(hostname, hostname), "")
+	return readSeeds(whereCondition, []interface{}{hostname, hostname}, "")
 }
 
 // ReadRecentCompletedSeedsForHost reads active seeds where host participates either as source or target
@@ -883,7 +901,7 @@ func ReadRecentCompletedSeedsForHost(hostname string) ([]SeedOperation, error) {
 				or source_hostname = ?
 			)
 		`
-	return readSeeds(whereCondition, sqlutils.Args(hostname, hostname), "limit 10")
+	return readSeeds(whereCondition, []interface{}{hostname, hostname}, "limit 10")
 }
 
 // AgentSeedDetails reads details from backend table
@@ -892,12 +910,12 @@ func AgentSeedDetails(seedId int64) ([]SeedOperation, error) {
 		where
 			agent_seed_id = ?
 		`
-	return readSeeds(whereCondition, sqlutils.Args(seedId), "")
+	return readSeeds(whereCondition, []interface{}{seedId}, "")
 }
 
 // ReadRecentSeeds reads seeds from backend table.
 func ReadRecentSeeds() ([]SeedOperation, error) {
-	return readSeeds(``, sqlutils.Args(), "limit 100")
+	return readSeeds(``, nil, "limit 100")
 }
 
 // SeedOperationState reads states for a given seed operation
@@ -917,17 +935,23 @@ func ReadSeedStates(seedId int64) ([]SeedOperationState, error) {
 		order by
 			agent_seed_state_id desc
 		`
-	err := db.QueryOrchestrator(query, sqlutils.Args(seedId), func(m sqlutils.RowMap) error {
+	type seedStateRow struct {
+		StateID        int64  `gorm:"column:agent_seed_state_id"`
+		SeedID         int64  `gorm:"column:agent_seed_id"`
+		StateTimestamp string `gorm:"column:state_timestamp"`
+		Action         string `gorm:"column:state_action"`
+		ErrorMessage   string `gorm:"column:error_message"`
+	}
+	rows, err := db.QueryOrchestratorRows[seedStateRow](context.Background(), query, seedId)
+	for _, row := range rows {
 		seedState := SeedOperationState{}
-		seedState.SeedStateId = m.GetInt64("agent_seed_state_id")
-		seedState.SeedId = m.GetInt64("agent_seed_id")
-		seedState.StateTimestamp = m.GetString("state_timestamp")
-		seedState.Action = m.GetString("state_action")
-		seedState.ErrorMessage = m.GetString("error_message")
-
+		seedState.SeedStateId = row.StateID
+		seedState.SeedId = row.SeedID
+		seedState.StateTimestamp = row.StateTimestamp
+		seedState.Action = row.Action
+		seedState.ErrorMessage = row.ErrorMessage
 		res = append(res, seedState)
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)

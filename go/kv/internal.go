@@ -17,8 +17,9 @@
 package kv
 
 import (
+	"context"
+
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/db"
 )
 
@@ -53,11 +54,14 @@ func (this *internalKVStore) GetKeyValue(key string) (value string, found bool, 
       store_key = ?
 		`
 
-	err = db.QueryOrchestrator(query, sqlutils.Args(key), func(m sqlutils.RowMap) error {
-		value = m.GetString("store_value")
+	type keyValueRow struct {
+		Value string `gorm:"column:store_value"`
+	}
+	rows, err := db.QueryOrchestratorRows[keyValueRow](context.Background(), query, key)
+	if err == nil && len(rows) > 0 {
+		value = rows[0].Value
 		found = true
-		return nil
-	})
+	}
 
 	return value, found, log.Errore(err)
 }

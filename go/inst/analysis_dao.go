@@ -17,6 +17,8 @@
 package inst
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"regexp"
 	"time"
@@ -28,7 +30,6 @@ import (
 	"github.com/openark/orchestrator/go/util"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 )
@@ -37,6 +38,68 @@ var analysisChangeWriteAttemptCounter = metrics.NewCounter()
 var analysisChangeWriteCounter = metrics.NewCounter()
 
 var recentInstantAnalysis *cache.Cache
+
+type replicationAnalysisRow struct {
+	Hostname                           string         `gorm:"column:hostname"`
+	Port                               int            `gorm:"column:port"`
+	ReadOnly                           uint           `gorm:"column:read_only"`
+	DataCenter                         string         `gorm:"column:data_center"`
+	Region                             string         `gorm:"column:region"`
+	PhysicalEnvironment                string         `gorm:"column:physical_environment"`
+	MasterHost                         string         `gorm:"column:master_host"`
+	MasterPort                         int            `gorm:"column:master_port"`
+	ClusterName                        string         `gorm:"column:cluster_name"`
+	BinaryLogFile                      string         `gorm:"column:binary_log_file"`
+	BinaryLogPos                       int64          `gorm:"column:binary_log_pos"`
+	StaleBinlogCoordinates             bool           `gorm:"column:is_stale_binlog_coordinates"`
+	ClusterAlias                       string         `gorm:"column:cluster_alias"`
+	ClusterDomain                      string         `gorm:"column:cluster_domain"`
+	LastCheckValid                     bool           `gorm:"column:is_last_check_valid"`
+	LastCheckPartialSuccess            bool           `gorm:"column:last_check_partial_success"`
+	Master                             bool           `gorm:"column:is_master"`
+	ReplicationGroupMember             bool           `gorm:"column:is_replication_group_member"`
+	CoMaster                           bool           `gorm:"column:is_co_master"`
+	GTIDMode                           string         `gorm:"column:gtid_mode"`
+	CountReplicas                      uint           `gorm:"column:count_replicas"`
+	CountValidReplicas                 uint           `gorm:"column:count_valid_replicas"`
+	CountValidReplicatingReplicas      uint           `gorm:"column:count_valid_replicating_replicas"`
+	CountReplicasFailingToConnect      uint           `gorm:"column:count_replicas_failing_to_connect_to_master"`
+	ReplicationDepth                   uint           `gorm:"column:replication_depth"`
+	SlaveHosts                         sql.NullString `gorm:"column:slave_hosts"`
+	FailingToConnectToMaster           bool           `gorm:"column:is_failing_to_connect_to_master"`
+	Downtimed                          bool           `gorm:"column:is_downtimed"`
+	DowntimeEndTimestamp               string         `gorm:"column:downtime_end_timestamp"`
+	DowntimeRemainingSeconds           int            `gorm:"column:downtime_remaining_seconds"`
+	BinlogServer                       bool           `gorm:"column:is_binlog_server"`
+	PseudoGTID                         bool           `gorm:"column:is_pseudo_gtid"`
+	SemiSyncMasterEnabled              bool           `gorm:"column:semi_sync_master_enabled"`
+	SemiSyncMasterWaitForReplicaCount  uint           `gorm:"column:semi_sync_master_wait_for_slave_count"`
+	SemiSyncMasterClients              uint           `gorm:"column:semi_sync_master_clients"`
+	SemiSyncMasterStatus               bool           `gorm:"column:semi_sync_master_status"`
+	CountCoMasterReplicas              sql.NullInt64  `gorm:"column:count_co_master_replicas"`
+	CountValidOracleGTIDReplicas       uint           `gorm:"column:count_valid_oracle_gtid_replicas"`
+	CountValidBinlogServerReplicas     uint           `gorm:"column:count_valid_binlog_server_replicas"`
+	CountSemiSyncReplicas              sql.NullInt64  `gorm:"column:count_semi_sync_replicas"`
+	CountValidMariaDBGTIDReplicas      uint           `gorm:"column:count_valid_mariadb_gtid_replicas"`
+	CountLoggingReplicas               uint           `gorm:"column:count_logging_replicas"`
+	CountStatementBasedLoggingReplicas uint           `gorm:"column:count_statement_based_logging_replicas"`
+	CountMixedBasedLoggingReplicas     uint           `gorm:"column:count_mixed_based_logging_replicas"`
+	CountRowBasedLoggingReplicas       uint           `gorm:"column:count_row_based_logging_replicas"`
+	CountDelayedReplicas               uint           `gorm:"column:count_delayed_replicas"`
+	CountLaggingReplicas               uint           `gorm:"column:count_lagging_replicas"`
+	MinReplicaGTIDMode                 string         `gorm:"column:min_replica_gtid_mode"`
+	MaxReplicaGTIDMode                 string         `gorm:"column:max_replica_gtid_mode"`
+	MaxReplicaGTIDErrant               string         `gorm:"column:max_replica_gtid_errant"`
+	CountDowntimedReplicas             uint           `gorm:"column:count_downtimed_replicas"`
+	CountDistinctLoggingMajorVersions  uint           `gorm:"column:count_distinct_logging_major_versions"`
+}
+
+func nullInt64AsUint(value sql.NullInt64) uint {
+	if !value.Valid || value.Int64 <= 0 {
+		return 0
+	}
+	return uint(value.Int64)
+}
 
 func init() {
 	metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
@@ -55,7 +118,7 @@ func initializeAnalysisDaoPostConfiguration() {
 func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
 
-	args := sqlutils.Args(config.Config.ReasonableLockedSemiSyncMasterSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName)
+	args := []interface{}{config.Config.ReasonableLockedSemiSyncMasterSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName}
 	analysisQueryReductionClause := ``
 
 	if config.Config.ReduceReplicationAnalysisCount {
@@ -422,78 +485,82 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	`,
 		analysisQueryReductionClause)
 
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	rows, err := db.QueryOrchestratorRows[replicationAnalysisRow](context.Background(), query, args...)
+	if err != nil {
+		return result, log.Errore(err)
+	}
+	for _, row := range rows {
 		a := ReplicationAnalysis{
 			Analysis:               NoProblem,
 			ProcessingNodeHostname: process.ThisHostname,
 			ProcessingNodeToken:    util.ProcessToken.Hash,
 		}
 
-		a.IsMaster = m.GetBool("is_master")
-		a.IsReplicationGroupMember = m.GetBool("is_replication_group_member")
-		countCoMasterReplicas := m.GetUint("count_co_master_replicas")
-		a.IsCoMaster = m.GetBool("is_co_master") || (countCoMasterReplicas > 0)
-		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		a.AnalyzedInstanceMasterKey = InstanceKey{Hostname: m.GetString("master_host"), Port: m.GetInt("master_port")}
-		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
-		a.AnalyzedInstanceRegion = m.GetString("region")
-		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
+		a.IsMaster = row.Master
+		a.IsReplicationGroupMember = row.ReplicationGroupMember
+		countCoMasterReplicas := nullInt64AsUint(row.CountCoMasterReplicas)
+		a.IsCoMaster = row.CoMaster || countCoMasterReplicas > 0
+		a.AnalyzedInstanceKey = InstanceKey{Hostname: row.Hostname, Port: row.Port}
+		a.AnalyzedInstanceMasterKey = InstanceKey{Hostname: row.MasterHost, Port: row.MasterPort}
+		a.AnalyzedInstanceDataCenter = row.DataCenter
+		a.AnalyzedInstanceRegion = row.Region
+		a.AnalyzedInstancePhysicalEnvironment = row.PhysicalEnvironment
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
-			LogFile: m.GetString("binary_log_file"),
-			LogPos:  m.GetInt64("binary_log_pos"),
+			LogFile: row.BinaryLogFile,
+			LogPos:  row.BinaryLogPos,
 			Type:    BinaryLog,
 		}
-		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
-		a.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		a.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
-		a.ClusterDetails.ClusterDomain = m.GetString("cluster_domain")
-		a.GTIDMode = m.GetString("gtid_mode")
-		a.LastCheckValid = m.GetBool("is_last_check_valid")
-		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
-		a.CountReplicas = m.GetUint("count_replicas")
-		a.CountValidReplicas = m.GetUint("count_valid_replicas")
-		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
-		a.CountReplicasFailingToConnectToMaster = m.GetUint("count_replicas_failing_to_connect_to_master")
-		a.CountDowntimedReplicas = m.GetUint("count_downtimed_replicas")
-		a.ReplicationDepth = m.GetUint("replication_depth")
-		a.IsFailingToConnectToMaster = m.GetBool("is_failing_to_connect_to_master")
-		a.IsDowntimed = m.GetBool("is_downtimed")
-		a.DowntimeEndTimestamp = m.GetString("downtime_end_timestamp")
-		a.DowntimeRemainingSeconds = m.GetInt("downtime_remaining_seconds")
-		a.IsBinlogServer = m.GetBool("is_binlog_server")
+		isStaleBinlogCoordinates := row.StaleBinlogCoordinates
+		a.ClusterDetails.ClusterName = row.ClusterName
+		a.ClusterDetails.ClusterAlias = row.ClusterAlias
+		a.ClusterDetails.ClusterDomain = row.ClusterDomain
+		a.GTIDMode = row.GTIDMode
+		a.LastCheckValid = row.LastCheckValid
+		a.LastCheckPartialSuccess = row.LastCheckPartialSuccess
+		a.CountReplicas = row.CountReplicas
+		a.CountValidReplicas = row.CountValidReplicas
+		a.CountValidReplicatingReplicas = row.CountValidReplicatingReplicas
+		a.CountReplicasFailingToConnectToMaster = row.CountReplicasFailingToConnect
+		a.CountDowntimedReplicas = row.CountDowntimedReplicas
+		a.ReplicationDepth = row.ReplicationDepth
+		a.IsFailingToConnectToMaster = row.FailingToConnectToMaster
+		a.IsDowntimed = row.Downtimed
+		a.DowntimeEndTimestamp = row.DowntimeEndTimestamp
+		a.DowntimeRemainingSeconds = row.DowntimeRemainingSeconds
+		a.IsBinlogServer = row.BinlogServer
 		a.ClusterDetails.ReadRecoveryInfo()
 
 		a.Replicas = *NewInstanceKeyMap()
-		a.Replicas.ReadCommaDelimitedList(m.GetString("slave_hosts"))
+		a.Replicas.ReadCommaDelimitedList(row.SlaveHosts.String)
 
-		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
+		countValidOracleGTIDReplicas := row.CountValidOracleGTIDReplicas
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		countValidMariaDBGTIDReplicas := m.GetUint("count_valid_mariadb_gtid_replicas")
+		countValidMariaDBGTIDReplicas := row.CountValidMariaDBGTIDReplicas
 		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
+		countValidBinlogServerReplicas := row.CountValidBinlogServerReplicas
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		a.PseudoGTIDImmediateTopology = m.GetBool("is_pseudo_gtid")
-		a.SemiSyncMasterEnabled = m.GetBool("semi_sync_master_enabled")
-		a.SemiSyncMasterStatus = m.GetBool("semi_sync_master_status")
-		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
+		a.PseudoGTIDImmediateTopology = row.PseudoGTID
+		a.SemiSyncMasterEnabled = row.SemiSyncMasterEnabled
+		a.SemiSyncMasterStatus = row.SemiSyncMasterStatus
+		a.CountSemiSyncReplicasEnabled = nullInt64AsUint(row.CountSemiSyncReplicas)
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
-		a.SemiSyncMasterWaitForReplicaCount = m.GetUint("semi_sync_master_wait_for_slave_count")
-		a.SemiSyncMasterClients = m.GetUint("semi_sync_master_clients")
+		a.SemiSyncMasterWaitForReplicaCount = row.SemiSyncMasterWaitForReplicaCount
+		a.SemiSyncMasterClients = row.SemiSyncMasterClients
 
-		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")
-		a.MaxReplicaGTIDMode = m.GetString("max_replica_gtid_mode")
-		a.MaxReplicaGTIDErrant = m.GetString("max_replica_gtid_errant")
+		a.MinReplicaGTIDMode = row.MinReplicaGTIDMode
+		a.MaxReplicaGTIDMode = row.MaxReplicaGTIDMode
+		a.MaxReplicaGTIDErrant = row.MaxReplicaGTIDErrant
 
-		a.CountLoggingReplicas = m.GetUint("count_logging_replicas")
-		a.CountStatementBasedLoggingReplicas = m.GetUint("count_statement_based_logging_replicas")
-		a.CountMixedBasedLoggingReplicas = m.GetUint("count_mixed_based_logging_replicas")
-		a.CountRowBasedLoggingReplicas = m.GetUint("count_row_based_logging_replicas")
-		a.CountDistinctMajorVersionsLoggingReplicas = m.GetUint("count_distinct_logging_major_versions")
+		a.CountLoggingReplicas = row.CountLoggingReplicas
+		a.CountStatementBasedLoggingReplicas = row.CountStatementBasedLoggingReplicas
+		a.CountMixedBasedLoggingReplicas = row.CountMixedBasedLoggingReplicas
+		a.CountRowBasedLoggingReplicas = row.CountRowBasedLoggingReplicas
+		a.CountDistinctMajorVersionsLoggingReplicas = row.CountDistinctLoggingMajorVersions
 
-		a.CountDelayedReplicas = m.GetUint("count_delayed_replicas")
-		a.CountLaggingReplicas = m.GetUint("count_lagging_replicas")
+		a.CountDelayedReplicas = row.CountDelayedReplicas
+		a.CountLaggingReplicas = row.CountLaggingReplicas
 
-		a.IsReadOnly = m.GetUint("read_only") == 1
+		a.IsReadOnly = row.ReadOnly == 1
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: ClusterName: %+v, IsMaster: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToMaster: %+v",
@@ -727,11 +794,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			// Interesting enough for analysis
 			go auditInstanceAnalysisInChangelog(&a.AnalyzedInstanceKey, a.Analysis)
 		}
-		return nil
-	})
-
-	if err != nil {
-		return result, log.Errore(err)
 	}
 	// TODO: result, err = getConcensusReplicationAnalysis(result)
 	return result, log.Errore(err)
@@ -866,19 +928,24 @@ func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), 
 		order by
 			hostname, port, changelog_id
 		`
+	type analysisChangelogRow struct {
+		Hostname  string `gorm:"column:hostname"`
+		Port      int    `gorm:"column:port"`
+		Timestamp string `gorm:"column:analysis_timestamp"`
+		Analysis  string `gorm:"column:analysis"`
+	}
 	analysisChangelog := &ReplicationAnalysisChangelog{}
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		key := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
+	rows, err := db.QueryOrchestratorRows[analysisChangelogRow](context.Background(), query)
+	for _, row := range rows {
+		key := InstanceKey{Hostname: row.Hostname, Port: row.Port}
 
 		if !analysisChangelog.AnalyzedInstanceKey.Equals(&key) {
 			analysisChangelog = &ReplicationAnalysisChangelog{AnalyzedInstanceKey: key, Changelog: []string{}}
 			res = append(res, analysisChangelog)
 		}
-		analysisEntry := fmt.Sprintf("%s;%s,", m.GetString("analysis_timestamp"), m.GetString("analysis"))
+		analysisEntry := fmt.Sprintf("%s;%s,", row.Timestamp, row.Analysis)
 		analysisChangelog.Changelog = append(analysisChangelog.Changelog, analysisEntry)
-
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)
@@ -900,14 +967,17 @@ func ReadPeerAnalysisMap() (peerAnalysisMap PeerAnalysisMap, err error) {
 		order by
 			peer, hostname, port
 		`
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		instanceKey := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		analysis := m.GetString("analysis")
-		instanceAnalysis := NewInstanceAnalysis(&instanceKey, AnalysisCode(analysis))
+	type peerAnalysisRow struct {
+		Hostname string `gorm:"column:hostname"`
+		Port     int    `gorm:"column:port"`
+		Analysis string `gorm:"column:analysis"`
+	}
+	rows, err := db.QueryOrchestratorRows[peerAnalysisRow](context.Background(), query)
+	for _, row := range rows {
+		instanceKey := InstanceKey{Hostname: row.Hostname, Port: row.Port}
+		instanceAnalysis := NewInstanceAnalysis(&instanceKey, AnalysisCode(row.Analysis))
 		mapKey := instanceAnalysis.String()
 		peerAnalysisMap[mapKey] = peerAnalysisMap[mapKey] + 1
-
-		return nil
-	})
+	}
 	return peerAnalysisMap, log.Errore(err)
 }

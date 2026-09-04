@@ -17,14 +17,24 @@
 package process
 
 import (
+	"context"
+	"fmt"
 	"time"
 
-	"fmt"
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 )
+
+const healthyHTTPTokenQuery = `
+	select
+		token
+	from
+		node_health
+	where
+		token = ?
+		and extra_info = ?
+	`
 
 // RegisterNode writes down this node in the node_health table
 func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
@@ -157,38 +167,35 @@ func ReadAvailableNodes(onlyHttpNodes bool) (nodes [](*NodeHealth), err error) {
 			hostname
 		`
 
-	err = db.QueryOrchestrator(query, sqlutils.Args(config.HealthPollSeconds*2, extraInfo), func(m sqlutils.RowMap) error {
-		nodeHealth := &NodeHealth{
-			Hostname:        m.GetString("hostname"),
-			Token:           m.GetString("token"),
-			AppVersion:      m.GetString("app_version"),
-			FirstSeenActive: m.GetString("first_seen_active"),
-			LastSeenActive:  m.GetString("last_seen_active"),
-			DBBackend:       m.GetString("db_backend"),
-		}
-		nodes = append(nodes, nodeHealth)
-		return nil
-	})
+	type nodeHealthRow struct {
+		Hostname        string `gorm:"column:hostname"`
+		Token           string `gorm:"column:token"`
+		AppVersion      string `gorm:"column:app_version"`
+		FirstSeenActive string `gorm:"column:first_seen_active"`
+		LastSeenActive  string `gorm:"column:last_seen_active"`
+		DBBackend       string `gorm:"column:db_backend"`
+	}
+	rows, err := db.QueryOrchestratorRows[nodeHealthRow](context.Background(), query, config.HealthPollSeconds*2, extraInfo)
+	for _, row := range rows {
+		nodes = append(nodes, &NodeHealth{
+			Hostname:        row.Hostname,
+			Token:           row.Token,
+			AppVersion:      row.AppVersion,
+			FirstSeenActive: row.FirstSeenActive,
+			LastSeenActive:  row.LastSeenActive,
+			DBBackend:       row.DBBackend,
+		})
+	}
 	return nodes, log.Errore(err)
 }
 
 func TokenBelongsToHealthyHttpService(token string) (result bool, err error) {
 	extraInfo := string(OrchestratorExecutionHttpMode)
 
-	query := `
-		select
-			token
-		from
-			node_health
-		where
-			and token = ?
-			and extra_info = ?
-		`
-
-	err = db.QueryOrchestrator(query, sqlutils.Args(token, extraInfo), func(m sqlutils.RowMap) error {
-		// Row exists? We're happy
-		result = true
-		return nil
-	})
+	type healthyTokenRow struct {
+		Token string `gorm:"column:token"`
+	}
+	rows, err := db.QueryOrchestratorRows[healthyTokenRow](context.Background(), healthyHTTPTokenQuery, token, extraInfo)
+	result = err == nil && len(rows) > 0
 	return result, log.Errore(err)
 }

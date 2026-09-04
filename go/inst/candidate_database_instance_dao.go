@@ -17,10 +17,10 @@
 package inst
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
@@ -31,7 +31,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 	if candidate.LastSuggestedString == "" {
 		candidate = candidate.WithCurrentTime()
 	}
-	args := sqlutils.Args(candidate.Hostname, candidate.Port, string(candidate.PromotionRule), candidate.LastSuggestedString)
+	args := []interface{}{candidate.Hostname, candidate.Port, string(candidate.PromotionRule), candidate.LastSuggestedString}
 
 	query := fmt.Sprintf(`
 			insert into candidate_database_instance (
@@ -92,18 +92,23 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 		FROM
 			candidate_database_instance
 	`
-	err := db.QueryOrchestrator(query, sqlutils.Args(config.Config.CandidateInstanceExpireMinutes), func(m sqlutils.RowMap) error {
+	type candidateRow struct {
+		Hostname            string `gorm:"column:hostname"`
+		Port                int    `gorm:"column:port"`
+		PromotionRule       string `gorm:"column:promotion_rule"`
+		LastSuggested       string `gorm:"column:last_suggested"`
+		PromotionRuleExpiry string `gorm:"column:promotion_rule_expiry"`
+	}
+	rows, err := db.QueryOrchestratorRows[candidateRow](context.Background(), query, config.Config.CandidateInstanceExpireMinutes)
+	for _, row := range rows {
 		cdi := CandidateDatabaseInstance{
-			Hostname:            m.GetString("hostname"),
-			Port:                m.GetInt("port"),
-			PromotionRule:       CandidatePromotionRule(m.GetString("promotion_rule")),
-			LastSuggestedString: m.GetString("last_suggested"),
-			PromotionRuleExpiry: m.GetString("promotion_rule_expiry"),
+			Hostname:            row.Hostname,
+			Port:                row.Port,
+			PromotionRule:       CandidatePromotionRule(row.PromotionRule),
+			LastSuggestedString: row.LastSuggested,
+			PromotionRuleExpiry: row.PromotionRuleExpiry,
 		}
-		// add to end of candidateDatabaseInstances
 		candidateDatabaseInstances = append(candidateDatabaseInstances, cdi)
-
-		return nil
-	})
+	}
 	return candidateDatabaseInstances, err
 }

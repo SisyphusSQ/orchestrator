@@ -63,49 +63,6 @@ func init() {
 	metrics.Register("instance_tls.write_cache", writeInstanceTLSCacheCounter)
 }
 
-type SqlUtilsLogger struct {
-	client_context     string
-	backend_connection bool
-}
-
-func (logger SqlUtilsLogger) OnError(caller_context string, query string, err error) error {
-	query = strings.Join(strings.Fields(query), " ") // trim whitespaces
-	query = strings.Replace(query, "%", "%%", -1)    // escape %
-
-	msg := fmt.Sprintf("%+v(%+v) %+v: %+v",
-		caller_context,
-		logger.client_context,
-		query,
-		err)
-
-	return log.Errorf("%s", msg)
-}
-
-// This validator is for dev purposes only. Call of this validator is
-// disabled in sqlutils.go
-var query_whitelist = []string{
-	"substring_index(host, ':', 1) as slave_hostname",
-}
-
-func (logger SqlUtilsLogger) ValidateQuery(query string) {
-	if logger.backend_connection {
-		return
-	}
-
-	// check if whitelisted
-	for i := 0; i < len(query_whitelist); i++ {
-		if strings.Contains(query, query_whitelist[i]) {
-			return
-		}
-	}
-
-	lquery := strings.ToLower(query)
-	if strings.Contains(lquery, "master") || strings.Contains(lquery, "slave") {
-		log.Error("QUERY CONTAINS MASTER / SLAVE: ")
-		// panic("Query contains master/slave: " + query)
-	}
-}
-
 func requiresTLSContext(ctx context.Context, host string, port int, cfg *mysql.Config) (bool, error) {
 	poolKey := newTopologyPoolKey(topologyConnectionDiscovery, cfg)
 	cacheKey := fmt.Sprintf("%s:%d:%x", host, port, poolKey.fingerprint)

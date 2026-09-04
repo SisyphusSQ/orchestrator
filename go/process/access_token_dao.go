@@ -17,8 +17,9 @@
 package process
 
 import (
+	"context"
+
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/util"
@@ -80,10 +81,13 @@ func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 	query := `
 		select secret_token from access_token where public_token=?
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(publicToken), func(m sqlutils.RowMap) error {
-		secretToken = m.GetString("secret_token")
-		return nil
-	})
+	type secretTokenRow struct {
+		SecretToken string `gorm:"column:secret_token"`
+	}
+	records, err := db.QueryOrchestratorRows[secretTokenRow](context.Background(), query, publicToken)
+	if err == nil && len(records) > 0 {
+		secretToken = records[0].SecretToken
+	}
 	return secretToken, log.Errore(err)
 }
 
@@ -102,10 +106,13 @@ func TokenIsValid(publicToken string, secretToken string) (result bool, err erro
 					or is_reentrant = 1
 				)
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(publicToken, secretToken, config.Config.AccessTokenExpiryMinutes), func(m sqlutils.RowMap) error {
-		result = m.GetInt("valid_token") > 0
-		return nil
-	})
+	type validTokenRow struct {
+		Count int `gorm:"column:valid_token"`
+	}
+	rows, err := db.QueryOrchestratorRows[validTokenRow](context.Background(), query, publicToken, secretToken, config.Config.AccessTokenExpiryMinutes)
+	if err == nil && len(rows) > 0 {
+		result = rows[0].Count > 0
+	}
 	return result, log.Errore(err)
 }
 

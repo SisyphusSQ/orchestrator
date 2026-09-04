@@ -377,11 +377,11 @@ func TestDatabaseRuntimeSeparatesAndClosesTopologyPools(t *testing.T) {
 	}
 
 	firstConfig := newTopologyMySQLConfig("mysql.example", 3306, 2*time.Second)
-	discovery, err := runtime.openTopologyPool(context.Background(), topologyConnectionDiscovery, firstConfig, nil)
+	discovery, err := runtime.openTopologyPool(context.Background(), topologyConnectionDiscovery, firstConfig)
 	if err != nil {
 		t.Fatalf("open discovery pool: %v", err)
 	}
-	reused, err := runtime.openTopologyPool(context.Background(), topologyConnectionDiscovery, firstConfig, nil)
+	reused, err := runtime.openTopologyPool(context.Background(), topologyConnectionDiscovery, firstConfig)
 	if err != nil {
 		t.Fatalf("reuse discovery pool: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestDatabaseRuntimeSeparatesAndClosesTopologyPools(t *testing.T) {
 		t.Fatal("identical discovery configuration did not reuse its pool")
 	}
 
-	operation, err := runtime.openTopologyPool(context.Background(), topologyConnectionOperation, firstConfig, nil)
+	operation, err := runtime.openTopologyPool(context.Background(), topologyConnectionOperation, firstConfig)
 	if err != nil {
 		t.Fatalf("open operation pool: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestDatabaseRuntimeSeparatesAndClosesTopologyPools(t *testing.T) {
 
 	secondConfig := firstConfig.Clone()
 	secondConfig.Passwd = "second-secret"
-	rotated, err := runtime.openTopologyPool(context.Background(), topologyConnectionDiscovery, secondConfig, nil)
+	rotated, err := runtime.openTopologyPool(context.Background(), topologyConnectionDiscovery, secondConfig)
 	if err != nil {
 		t.Fatalf("open pool after credential rotation: %v", err)
 	}

@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/syslog"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/rcrowley/go-metrics"
@@ -151,7 +151,7 @@ func writeAuditSyslog(message string) (bool, error) {
 // ReadRecentAudit returns a list of audit entries order chronologically descending, using page number.
 func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 	res := []Audit{}
-	args := sqlutils.Args()
+	args := []interface{}{}
 	whereCondition := ``
 	if instanceKey != nil {
 		whereCondition = `where hostname=? and port=?`
@@ -174,18 +174,25 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 		offset ?
 		`, whereCondition)
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	type auditRow struct {
+		ID        int64  `gorm:"column:audit_id"`
+		Timestamp string `gorm:"column:audit_timestamp"`
+		Type      string `gorm:"column:audit_type"`
+		Hostname  string `gorm:"column:hostname"`
+		Port      int    `gorm:"column:port"`
+		Message   string `gorm:"column:message"`
+	}
+	rows, err := db.QueryOrchestratorRows[auditRow](context.Background(), query, args...)
+	for _, row := range rows {
 		audit := Audit{}
-		audit.AuditId = m.GetInt64("audit_id")
-		audit.AuditTimestamp = m.GetString("audit_timestamp")
-		audit.AuditType = m.GetString("audit_type")
-		audit.AuditInstanceKey.Hostname = m.GetString("hostname")
-		audit.AuditInstanceKey.Port = m.GetInt("port")
-		audit.Message = m.GetString("message")
-
+		audit.AuditId = row.ID
+		audit.AuditTimestamp = row.Timestamp
+		audit.AuditType = row.Type
+		audit.AuditInstanceKey.Hostname = row.Hostname
+		audit.AuditInstanceKey.Port = row.Port
+		audit.Message = row.Message
 		res = append(res, audit)
-		return nil
-	})
+	}
 
 	if err != nil {
 		log.Errore(err)

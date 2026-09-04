@@ -17,13 +17,24 @@
 package inst
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/openark/golib/log"
-	"github.com/openark/golib/sqlutils"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 )
+
+type clusterAliasRow struct {
+	Alias string `gorm:"column:alias"`
+}
+
+func firstClusterAlias(rows []clusterAliasRow) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	return rows[0].Alias
+}
 
 func IsSQLite() bool {
 	return config.Config.IsSQLite()
@@ -40,10 +51,13 @@ func ReadClusterNameByAlias(alias string) (clusterName string, err error) {
 			alias = ?
 			or cluster_name = ?
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(alias, alias), func(m sqlutils.RowMap) error {
-		clusterName = m.GetString("cluster_name")
-		return nil
-	})
+	type clusterNameRow struct {
+		ClusterName string `gorm:"column:cluster_name"`
+	}
+	rows, err := db.QueryOrchestratorRows[clusterNameRow](context.Background(), query, alias, alias)
+	if err == nil && len(rows) > 0 {
+		clusterName = rows[0].ClusterName
+	}
 	if err != nil {
 		return "", err
 	}
@@ -77,11 +91,11 @@ func ReadAliasByClusterName(clusterName string) (alias string, err error) {
 		where
 			cluster_name = ?
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(clusterName), func(m sqlutils.RowMap) error {
-		alias = m.GetString("alias")
-		return nil
-	})
-	return clusterName, err
+	rows, err := db.QueryOrchestratorRows[clusterAliasRow](context.Background(), query, clusterName)
+	if err == nil {
+		alias = firstClusterAlias(rows)
+	}
+	return alias, err
 }
 
 // WriteClusterAlias will write (and override) a single cluster name mapping
@@ -312,11 +326,14 @@ func ReadUnambiguousSuggestedClusterAliases() (result map[string]InstanceKey, er
 		having
 			count(*) = 1
 		`
-	err = db.QueryOrchestrator(query, sqlutils.Args(), func(m sqlutils.RowMap) error {
-		key := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		suggestedAlias := m.GetString("suggested_cluster_alias")
-		result[suggestedAlias] = key
-		return nil
-	})
+	type suggestedAliasRow struct {
+		SuggestedAlias string `gorm:"column:suggested_cluster_alias"`
+		Hostname       string `gorm:"column:hostname"`
+		Port           int    `gorm:"column:port"`
+	}
+	rows, err := db.QueryOrchestratorRows[suggestedAliasRow](context.Background(), query)
+	for _, row := range rows {
+		result[row.SuggestedAlias] = InstanceKey{Hostname: row.Hostname, Port: row.Port}
+	}
 	return result, err
 }
