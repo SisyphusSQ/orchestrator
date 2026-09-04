@@ -24,9 +24,6 @@ import (
 	"strconv"
 	"text/template"
 
-	"github.com/go-martini/martini"
-	"github.com/martini-contrib/auth"
-	"github.com/martini-contrib/render"
 	"github.com/rcrowley/go-metrics"
 	"github.com/rcrowley/go-metrics/exp"
 
@@ -51,7 +48,7 @@ func (this *HttpWeb) getInstanceKey(host string, port string) (inst.InstanceKey,
 	return instanceKey, err
 }
 
-func (this *HttpWeb) AccessToken(params martini.Params, r render.Render, req *http.Request, resp http.ResponseWriter, user auth.User) {
+func (this *HttpWeb) AccessToken(params Params, r Responder, req *http.Request, resp http.ResponseWriter, user Principal) {
 	publicToken := template.JSEscapeString(req.URL.Query().Get("publicToken"))
 	err := authenticateToken(publicToken, resp)
 	if err != nil {
@@ -61,14 +58,14 @@ func (this *HttpWeb) AccessToken(params martini.Params, r render.Render, req *ht
 	r.Redirect(this.URLPrefix + "/")
 }
 
-func (this *HttpWeb) Index(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Index(params Params, r Responder, req *http.Request, user Principal) {
 	// Redirect index so that all web URLs begin with "/web/".
 	// We also redirect /web/ to /web/clusters so that
 	// the Clusters page has a single canonical URL.
 	r.Redirect(this.URLPrefix + "/web/clusters")
 }
 
-func (this *HttpWeb) Clusters(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Clusters(params Params, r Responder, req *http.Request, user Principal) {
 	r.HTML(200, "templates/clusters", map[string]interface{}{
 		"agentsHttpActive":              config.Config.ServeAgentsHttp,
 		"title":                         "clusters",
@@ -81,7 +78,7 @@ func (this *HttpWeb) Clusters(params martini.Params, r render.Render, req *http.
 	})
 }
 
-func (this *HttpWeb) ClustersAnalysis(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) ClustersAnalysis(params Params, r Responder, req *http.Request, user Principal) {
 	r.HTML(200, "templates/clusters_analysis", map[string]interface{}{
 		"agentsHttpActive":              config.Config.ServeAgentsHttp,
 		"title":                         "clusters",
@@ -94,7 +91,7 @@ func (this *HttpWeb) ClustersAnalysis(params martini.Params, r render.Render, re
 	})
 }
 
-func (this *HttpWeb) Cluster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Cluster(params Params, r Responder, req *http.Request, user Principal) {
 	clusterName, _ := figureClusterName(params["clusterName"])
 
 	r.HTML(200, "templates/cluster", map[string]interface{}{
@@ -113,7 +110,7 @@ func (this *HttpWeb) Cluster(params martini.Params, r render.Render, req *http.R
 	})
 }
 
-func (this *HttpWeb) ClusterByAlias(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) ClusterByAlias(params Params, r Responder, req *http.Request, user Principal) {
 	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
 	// Willing to accept the case of multiple clusters; we just present one
 	if clusterName == "" && err != nil {
@@ -125,7 +122,7 @@ func (this *HttpWeb) ClusterByAlias(params martini.Params, r render.Render, req 
 	this.Cluster(params, r, req, user)
 }
 
-func (this *HttpWeb) ClusterByInstance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) ClusterByInstance(params Params, r Responder, req *http.Request, user Principal) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		r.JSON(200, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -147,7 +144,7 @@ func (this *HttpWeb) ClusterByInstance(params martini.Params, r render.Render, r
 	this.Cluster(params, r, req, user)
 }
 
-func (this *HttpWeb) ClusterPools(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) ClusterPools(params Params, r Responder, req *http.Request, user Principal) {
 	clusterName, _ := figureClusterName(params["clusterName"])
 	r.HTML(200, "templates/cluster_pools", map[string]interface{}{
 		"agentsHttpActive":              config.Config.ServeAgentsHttp,
@@ -165,7 +162,7 @@ func (this *HttpWeb) ClusterPools(params martini.Params, r render.Render, req *h
 	})
 }
 
-func (this *HttpWeb) Search(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Search(params Params, r Responder, req *http.Request, user Principal) {
 	searchString := params["searchString"]
 	if searchString == "" {
 		searchString = req.URL.Query().Get("s")
@@ -183,7 +180,7 @@ func (this *HttpWeb) Search(params martini.Params, r render.Render, req *http.Re
 	})
 }
 
-func (this *HttpWeb) Discover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Discover(params Params, r Responder, req *http.Request, user Principal) {
 
 	r.HTML(200, "templates/discover", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
@@ -196,7 +193,7 @@ func (this *HttpWeb) Discover(params martini.Params, r render.Render, req *http.
 	})
 }
 
-func (this *HttpWeb) Audit(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Audit(params Params, r Responder, req *http.Request, user Principal) {
 	page, err := strconv.Atoi(params["page"])
 	if err != nil {
 		page = 0
@@ -216,7 +213,7 @@ func (this *HttpWeb) Audit(params martini.Params, r render.Render, req *http.Req
 	})
 }
 
-func (this *HttpWeb) AuditRecovery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) AuditRecovery(params Params, r Responder, req *http.Request, user Principal) {
 	page, err := strconv.Atoi(params["page"])
 	if err != nil {
 		page = 0
@@ -245,7 +242,7 @@ func (this *HttpWeb) AuditRecovery(params martini.Params, r render.Render, req *
 	})
 }
 
-func (this *HttpWeb) AuditFailureDetection(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) AuditFailureDetection(params Params, r Responder, req *http.Request, user Principal) {
 	page, err := strconv.Atoi(params["page"])
 	if err != nil {
 		page = 0
@@ -270,7 +267,7 @@ func (this *HttpWeb) AuditFailureDetection(params martini.Params, r render.Rende
 	})
 }
 
-func (this *HttpWeb) Agents(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Agents(params Params, r Responder, req *http.Request, user Principal) {
 	r.HTML(200, "templates/agents", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
 		"title":               "agents",
@@ -282,7 +279,7 @@ func (this *HttpWeb) Agents(params martini.Params, r render.Render, req *http.Re
 	})
 }
 
-func (this *HttpWeb) Agent(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Agent(params Params, r Responder, req *http.Request, user Principal) {
 	r.HTML(200, "templates/agent", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
 		"title":               "agent",
@@ -295,7 +292,7 @@ func (this *HttpWeb) Agent(params martini.Params, r render.Render, req *http.Req
 	})
 }
 
-func (this *HttpWeb) AgentSeedDetails(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) AgentSeedDetails(params Params, r Responder, req *http.Request, user Principal) {
 	r.HTML(200, "templates/agent_seed_details", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
 		"title":               "agent seed details",
@@ -308,7 +305,7 @@ func (this *HttpWeb) AgentSeedDetails(params martini.Params, r render.Render, re
 	})
 }
 
-func (this *HttpWeb) Seeds(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Seeds(params Params, r Responder, req *http.Request, user Principal) {
 	r.HTML(200, "templates/seeds", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
 		"title":               "seeds",
@@ -320,7 +317,7 @@ func (this *HttpWeb) Seeds(params martini.Params, r render.Render, req *http.Req
 	})
 }
 
-func (this *HttpWeb) Home(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Home(params Params, r Responder, req *http.Request, user Principal) {
 
 	r.HTML(200, "templates/home", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
@@ -333,7 +330,7 @@ func (this *HttpWeb) Home(params martini.Params, r render.Render, req *http.Requ
 	})
 }
 
-func (this *HttpWeb) About(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) About(params Params, r Responder, req *http.Request, user Principal) {
 
 	r.HTML(200, "templates/about", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
@@ -346,7 +343,7 @@ func (this *HttpWeb) About(params martini.Params, r render.Render, req *http.Req
 	})
 }
 
-func (this *HttpWeb) KeepCalm(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) KeepCalm(params Params, r Responder, req *http.Request, user Principal) {
 
 	r.HTML(200, "templates/keep-calm", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
@@ -359,7 +356,7 @@ func (this *HttpWeb) KeepCalm(params martini.Params, r render.Render, req *http.
 	})
 }
 
-func (this *HttpWeb) FAQ(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) FAQ(params Params, r Responder, req *http.Request, user Principal) {
 
 	r.HTML(200, "templates/faq", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
@@ -372,7 +369,7 @@ func (this *HttpWeb) FAQ(params martini.Params, r render.Render, req *http.Reque
 	})
 }
 
-func (this *HttpWeb) Status(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (this *HttpWeb) Status(params Params, r Responder, req *http.Request, user Principal) {
 
 	r.HTML(200, "templates/status", map[string]interface{}{
 		"agentsHttpActive":    config.Config.ServeAgentsHttp,
@@ -385,7 +382,7 @@ func (this *HttpWeb) Status(params martini.Params, r render.Render, req *http.Re
 	})
 }
 
-func (this *HttpWeb) registerWebRequest(m *martini.ClassicMartini, path string, handler martini.Handler) {
+func (this *HttpWeb) registerWebRequest(m *Router, path string, handler Handler) {
 	fullPath := fmt.Sprintf("%s/web/%s", this.URLPrefix, path)
 	if path == "/" {
 		fullPath = fmt.Sprintf("%s/", this.URLPrefix)
@@ -399,7 +396,7 @@ func (this *HttpWeb) registerWebRequest(m *martini.ClassicMartini, path string, 
 }
 
 // RegisterRequests makes for the de-facto list of known Web calls
-func (this *HttpWeb) RegisterRequests(m *martini.ClassicMartini) {
+func (this *HttpWeb) RegisterRequests(m *Router) {
 	this.registerWebRequest(m, "access-token", this.AccessToken)
 	this.registerWebRequest(m, "", this.Index)
 	this.registerWebRequest(m, "/", this.Index)
@@ -444,7 +441,7 @@ func (this *HttpWeb) RegisterRequests(m *martini.ClassicMartini) {
 }
 
 // RegisterDebug adds handlers for /debug/vars (expvar) and /debug/pprof (net/http/pprof) support
-func (this *HttpWeb) RegisterDebug(m *martini.ClassicMartini) {
+func (this *HttpWeb) RegisterDebug(m *Router) {
 	m.Get(this.URLPrefix+"/debug/vars", func(w http.ResponseWriter, r *http.Request) {
 		// from expvar.go, since the expvarHandler isn't exported :(
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

@@ -7,11 +7,10 @@ import (
 
 	"github.com/openark/golib/log"
 
-	"github.com/go-martini/martini"
 	"github.com/openark/orchestrator/go/raft"
 )
 
-func raftReverseProxy(w http.ResponseWriter, r *http.Request, c martini.Context) {
+func raftReverseProxy(w http.ResponseWriter, r *http.Request) {
 	if !orcraft.IsRaftEnabled() {
 		// No raft, so no reverse proxy to the leader
 		return

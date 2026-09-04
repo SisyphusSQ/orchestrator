@@ -4,6 +4,7 @@ To build, test and contribute to `orchestrator`, please refer to the following p
 
 - [Understanding CI](ci.md)
 - [Building and testing](build.md)
+- [HTTP transport](http-transport.md)
 - [System test environment](ci-env.md)
 - [Docker](docker.md)
 - [Contributions](contributions.md)

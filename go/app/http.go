@@ -32,10 +32,6 @@ import (
 	"github.com/openark/orchestrator/go/process"
 	"github.com/openark/orchestrator/go/ssl"
 
-	"github.com/go-martini/martini"
-	"github.com/martini-contrib/auth"
-	"github.com/martini-contrib/gzip"
-	"github.com/martini-contrib/render"
 	"github.com/openark/golib/log"
 )
 
@@ -50,7 +46,6 @@ func Http(continuousDiscovery bool) error {
 	promptForSSLPasswords()
 	process.ContinuousRegistration(process.OrchestratorExecutionHttpMode, "")
 
-	martini.Env = martini.Prod
 	runtimeErrors := make(chan error, 3)
 	go reportRuntimeError(runtimeErrors, "standard HTTP server", func() error {
 		return standardHttp(continuousDiscovery, runtimeErrors)
@@ -86,49 +81,9 @@ func promptForSSLPasswords() {
 
 // standardHttp starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
 func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
-	m := martini.Classic()
-
-	switch strings.ToLower(config.Config.AuthenticationMethod) {
-	case "basic":
-		{
-			if config.Config.HTTPAuthUser == "" {
-				// Still allowed; may be disallowed in future versions
-				log.Warning("AuthenticationMethod is configured as 'basic' but HTTPAuthUser undefined. Running without authentication.")
-			}
-			m.Use(auth.Basic(config.Config.HTTPAuthUser, config.Config.HTTPAuthPassword))
-		}
-	case "multi":
-		{
-			if config.Config.HTTPAuthUser == "" {
-				// Still allowed; may be disallowed in future versions
-				return fmt.Errorf("AuthenticationMethod is 'multi' but HTTPAuthUser is undefined")
-			}
-
-			m.Use(auth.BasicFunc(func(username, password string) bool {
-				if username == "readonly" {
-					// Will be treated as "read-only"
-					return true
-				}
-				return auth.SecureCompare(username, config.Config.HTTPAuthUser) && auth.SecureCompare(password, config.Config.HTTPAuthPassword)
-			}))
-		}
-	default:
-		{
-			// We inject a dummy User object because we have function signatures with User argument in api.go
-			m.Map(auth.User(""))
-		}
-	}
-
-	m.Use(gzip.All())
-	// Render html templates from templates directory
-	m.Use(render.Renderer(render.Options{
-		Directory:       "resources",
-		Layout:          "templates/layout",
-		HTMLContentType: "text/html",
-	}))
-	m.Use(martini.Static("resources/public", martini.StaticOptions{Prefix: config.Config.URLPrefix}))
-	if config.Config.UseMutualTLS {
-		m.Use(ssl.VerifyOUs(config.Config.SSLValidOUs))
+	m, err := newStandardHTTPRouter()
+	if err != nil {
+		return err
 	}
 
 	inst.SetMaintenanceOwner(process.ThisHostname)
@@ -143,10 +98,6 @@ func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
 	}
 
 	log.Info("Registering endpoints")
-	http.API.URLPrefix = config.Config.URLPrefix
-	http.Web.URLPrefix = config.Config.URLPrefix
-	http.API.RegisterRequests(m)
-	http.Web.RegisterRequests(m)
 
 	// Serve
 	if config.Config.ListenSocket != "" {
@@ -184,20 +135,15 @@ func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
 
 // agentsHttp startes serving agents HTTP or HTTPS API requests
 func agentsHttp() error {
-	m := martini.Classic()
-	m.Use(gzip.All())
-	m.Use(render.Renderer())
-	if config.Config.AgentsUseMutualTLS {
-		m.Use(ssl.VerifyOUs(config.Config.AgentSSLValidOUs))
+	m, err := newAgentsHTTPRouter()
+	if err != nil {
+		return err
 	}
 
 	log.Info("Starting agents listener")
 
 	agent.InitHttpClient()
 	go logic.ContinuousAgentsPoll()
-
-	http.AgentsAPI.URLPrefix = config.Config.URLPrefix
-	http.AgentsAPI.RegisterRequests(m)
 
 	// Serve
 	if config.Config.AgentsUseSSL {
@@ -221,4 +167,56 @@ func agentsHttp() error {
 	}
 	log.Info("Agent server started")
 	return nil
+}
+
+func newStandardHTTPRouter() (*http.Router, error) {
+	if strings.EqualFold(config.Config.AuthenticationMethod, "basic") && config.Config.HTTPAuthUser == "" {
+		// Still allowed; may be disallowed in future versions.
+		log.Warning("AuthenticationMethod is configured as 'basic' but HTTPAuthUser undefined. Running without authentication.")
+	}
+
+	options := http.RouterOptions{
+		Authentication: http.AuthenticationOptions{
+			Method:   config.Config.AuthenticationMethod,
+			Username: config.Config.HTTPAuthUser,
+			Password: config.Config.HTTPAuthPassword,
+		},
+		EnableGzip: true,
+		Templates: &http.TemplateOptions{
+			Directory:       "resources",
+			Layout:          "templates/layout",
+			HTMLContentType: "text/html",
+		},
+	}
+	if config.Config.UseMutualTLS {
+		options.VerifyRequest = ssl.VerifyOUs(config.Config.SSLValidOUs)
+	}
+
+	router, err := http.NewRouter(options)
+	if err != nil {
+		return nil, err
+	}
+	for _, directory := range []string{"bootstrap", "css", "images", "js"} {
+		router.Static(config.Config.URLPrefix+"/"+directory, "resources/public/"+directory)
+	}
+
+	http.API.URLPrefix = config.Config.URLPrefix
+	http.Web.URLPrefix = config.Config.URLPrefix
+	http.API.RegisterRequests(router)
+	http.Web.RegisterRequests(router)
+	return router, nil
+}
+
+func newAgentsHTTPRouter() (*http.Router, error) {
+	options := http.RouterOptions{EnableGzip: true}
+	if config.Config.AgentsUseMutualTLS {
+		options.VerifyRequest = ssl.VerifyOUs(config.Config.AgentSSLValidOUs)
+	}
+	router, err := http.NewRouter(options)
+	if err != nil {
+		return nil, err
+	}
+	http.AgentsAPI.URLPrefix = config.Config.URLPrefix
+	http.AgentsAPI.RegisterRequests(router)
+	return router, nil
 }

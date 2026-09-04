@@ -21,8 +21,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/martini-contrib/auth"
-
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/inst"
 	"github.com/openark/orchestrator/go/os"
@@ -39,7 +37,7 @@ func getProxyAuthUser(req *http.Request) string {
 
 // isAuthorizedForAction checks req to see whether authenticated user has write-privileges.
 // This depends on configured authentication method.
-func isAuthorizedForAction(req *http.Request, user auth.User) bool {
+func isAuthorizedForAction(req *http.Request, user Principal) bool {
 	if config.Config.ReadOnly {
 		return false
 	}
@@ -114,7 +112,7 @@ func authenticateToken(publicToken string, resp http.ResponseWriter) error {
 }
 
 // getUserId returns the authenticated user id, if available, depending on authertication method.
-func getUserId(req *http.Request, user auth.User) string {
+func getUserId(req *http.Request, user Principal) string {
 	if config.Config.ReadOnly {
 		return ""
 	}
