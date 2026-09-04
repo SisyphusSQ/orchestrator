@@ -142,6 +142,16 @@
   "GraphitePath": "",
   "GraphiteConvertHostnameDotsToUnderscores": true,
   "ConsulAddress": "",
+  "ConsulScheme": "http",
   "ConsulAclToken": "",
-  "ConsulKVStoreProvider": "consul"
+  "ConsulDatacenter": "",
+  "ConsulTLSCAFile": "",
+  "ConsulTLSCAPath": "",
+  "ConsulTLSCertFile": "",
+  "ConsulTLSPrivateKeyFile": "",
+  "ConsulTLSServerName": "",
+  "ConsulTLSSkipVerify": false,
+  "ConsulHttpTimeoutSeconds": 60,
+  "ConsulKVStoreProvider": "consul",
+  "ConsulCrossDataCenterDistribution": false
 }

@@ -226,7 +226,9 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	if !skipDatabaseCommands && !*config.RuntimeCLIFlags.SkipContinuousRegistration {
 		process.ContinuousRegistration(string(process.OrchestratorExecutionCliMode), command)
 	}
-	kv.InitKVStores()
+	if err := kv.InitKVStores(); err != nil {
+		return fmt.Errorf("initialize KV stores: %w", err)
+	}
 
 	// begin commands
 	switch command {

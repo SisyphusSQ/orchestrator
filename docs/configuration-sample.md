@@ -169,6 +169,18 @@ The following is a production configuration file, with some details redacted.
   "RaftAdvertise": "redacted:10008",
   "RaftDataDir": "/var/lib/orchestrator",
   "DefaultRaftPort": 10008,
-  "ConsulAddress": "redacted:8500"
+  "ConsulAddress": "redacted:8500",
+  "ConsulScheme": "http",
+  "ConsulAclToken": "",
+  "ConsulDatacenter": "",
+  "ConsulTLSCAFile": "",
+  "ConsulTLSCAPath": "",
+  "ConsulTLSCertFile": "",
+  "ConsulTLSPrivateKeyFile": "",
+  "ConsulTLSServerName": "",
+  "ConsulTLSSkipVerify": false,
+  "ConsulHttpTimeoutSeconds": 60,
+  "ConsulKVStoreProvider": "consul",
+  "ConsulCrossDataCenterDistribution": false
 }
 ```

@@ -276,9 +276,17 @@ type Configuration struct {
 	DiscoveryIgnoreHostnameFilters             []string          // Regexp filters to apply to prevent discovering instances of any kind
 	DiscoveryIgnoreReplicationUsernameFilters  []string          // Regexp filters to apply to prevent discovering instances that use a matching replication username
 	EnableDiscoveryFiltersLogs                 bool              // Should Orchestrator log the fact of filtered instance during discovery
-	ConsulAddress                              string            // Address where Consul HTTP api is found. Example: 127.0.0.1:8500
-	ConsulScheme                               string            // Scheme (http or https) for Consul
-	ConsulAclToken                             string            // ACL token used to write to Consul KV
+	ConsulAddress                              string            // Address where Consul HTTP api is found. Example: 127.0.0.1:8500 or https://127.0.0.1:8501
+	ConsulScheme                               string            // Scheme (http or https) for Consul; ignored when ConsulAddress includes a scheme
+	ConsulAclToken                             string            // ACL token used to write to Consul KV; sent as X-Consul-Token
+	ConsulDatacenter                           string            // Optional Consul datacenter passed as the default dc query parameter
+	ConsulTLSCAFile                            string            // Optional CA file used to verify Consul HTTPS
+	ConsulTLSCAPath                            string            // Optional CA directory used to verify Consul HTTPS
+	ConsulTLSCertFile                          string            // Optional client certificate for Consul mTLS; requires ConsulTLSPrivateKeyFile
+	ConsulTLSPrivateKeyFile                    string            // Optional client private key for Consul mTLS; requires ConsulTLSCertFile
+	ConsulTLSServerName                        string            // Optional TLS ServerName / SNI when talking to Consul over HTTPS
+	ConsulTLSSkipVerify                        bool              // If true, skip Consul TLS verification; default false. Must be explicit.
+	ConsulHttpTimeoutSeconds                   int               // Overall Consul HTTP client timeout in seconds; 0 disables the deadline
 	ConsulCrossDataCenterDistribution          bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
 	ConsulKVStoreProvider                      string            // Consul KV store provider (consul or consul-txn), default: "consul"
 	ConsulMaxKVsPerTransaction                 int               // Maximum number of KV operations to perform in a single Consul Transaction. Requires the "consul-txn" ConsulKVStoreProvider
@@ -463,6 +471,14 @@ func newConfiguration() *Configuration {
 		ConsulAddress:                              "",
 		ConsulScheme:                               "http",
 		ConsulAclToken:                             "",
+		ConsulDatacenter:                           "",
+		ConsulTLSCAFile:                            "",
+		ConsulTLSCAPath:                            "",
+		ConsulTLSCertFile:                          "",
+		ConsulTLSPrivateKeyFile:                    "",
+		ConsulTLSServerName:                        "",
+		ConsulTLSSkipVerify:                        false,
+		ConsulHttpTimeoutSeconds:                   60,
 		ConsulCrossDataCenterDistribution:          false,
 		ConsulKVStoreProvider:                      "consul",
 		ConsulMaxKVsPerTransaction:                 ConsulKVsPerCluster,
@@ -655,6 +671,9 @@ func (this *Configuration) postReadAdjustments() error {
 		this.ConsulMaxKVsPerTransaction = ConsulKVsPerCluster
 	} else if this.ConsulMaxKVsPerTransaction > ConsulMaxTransactionOps {
 		this.ConsulMaxKVsPerTransaction = ConsulMaxTransactionOps
+	}
+	if err := this.normalizeAndValidateConsul(); err != nil {
+		return err
 	}
 	if this.ReasonableLockedSemiSyncMasterSeconds == 0 {
 		this.ReasonableLockedSemiSyncMasterSeconds = uint(this.ReasonableReplicationLagSeconds)
