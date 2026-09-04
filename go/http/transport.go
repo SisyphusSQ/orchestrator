@@ -129,6 +129,11 @@ func (router *Router) Post(path string, handlers ...Handler) {
 	router.registerLogicalRoute(nethttp.MethodPost, path, handlers...)
 }
 
+// Delete registers the requested path and its optional-trailing-slash counterpart.
+func (router *Router) Delete(path string, handlers ...Handler) {
+	router.registerLogicalRoute(nethttp.MethodDelete, path, handlers...)
+}
+
 func (router *Router) registerLogicalRoute(method, path string, handlers ...Handler) {
 	validateHandlers(handlers)
 	router.logicalRoutes = append(router.logicalRoutes, routeContract{Method: method, Path: path})

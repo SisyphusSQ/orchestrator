@@ -71,18 +71,26 @@ func (nodeHealth *NodeHealth) Update() *NodeHealth {
 var ThisNodeHealth = NewNodeHealth()
 
 type HealthStatus struct {
-	Healthy            bool
-	Hostname           string
-	Token              string
-	IsActiveNode       bool
-	ActiveNode         NodeHealth
-	Error              error
-	AvailableNodes     [](*NodeHealth)
-	RaftLeader         string
-	IsRaftLeader       bool
-	RaftLeaderURI      string
-	RaftAdvertise      string
-	RaftHealthyMembers []string
+	Healthy                    bool
+	Hostname                   string
+	Token                      string
+	IsActiveNode               bool
+	ActiveNode                 NodeHealth
+	Error                      error
+	AvailableNodes             [](*NodeHealth)
+	RaftLeader                 string
+	RaftLeaderAddress          string
+	RaftNodeID                 string
+	IsRaftLeader               bool
+	RaftLeaderURI              string
+	RaftAdvertise              string
+	RaftState                  string
+	RaftReady                  bool
+	RaftInConfiguration        bool
+	RaftIsVoter                bool
+	RaftConfigurationIndex     uint64
+	RaftConfigurationCommitted bool
+	RaftMembers                []string
 }
 
 type OrchestratorExecutionMode string
@@ -122,13 +130,22 @@ func HealthTest() (health *HealthStatus, err error) {
 	}
 
 	if orcraft.IsRaftEnabled() {
-		health.ActiveNode.Hostname = orcraft.GetLeader()
-		health.IsActiveNode = orcraft.IsLeader()
-		health.RaftLeader = orcraft.GetLeader()
+		status := orcraft.GetStatus()
+		health.ActiveNode.Hostname = status.LeaderID
+		health.IsActiveNode = status.LeaderVerified
+		health.RaftLeader = status.LeaderID
+		health.RaftLeaderAddress = status.LeaderAddress
+		health.RaftNodeID = status.NodeID
 		health.RaftLeaderURI = orcraft.LeaderURI.Get()
-		health.IsRaftLeader = orcraft.IsLeader()
-		health.RaftAdvertise = config.Config.RaftAdvertise
-		health.RaftHealthyMembers = orcraft.HealthyMembers()
+		health.IsRaftLeader = status.LeaderVerified
+		health.RaftAdvertise = status.Address
+		health.RaftState = status.State
+		health.RaftReady = status.Ready
+		health.RaftInConfiguration = status.InConfiguration
+		health.RaftIsVoter = status.IsVoter
+		health.RaftConfigurationIndex = status.ConfigurationIndex
+		health.RaftConfigurationCommitted = status.ConfigurationCommitted
+		health.RaftMembers = orcraft.Members()
 	} else {
 		if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
 			health.Error = err

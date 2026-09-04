@@ -252,19 +252,36 @@ function urlencode {
 }
 
 function api {
+  api_request "GET" "$1" "" "${2:-}"
+}
+
+function api_post {
+  api_request "POST" "$1" "${2:-}" "${3:-}"
+}
+
+function api_request {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  local raw_output="${4:-}"
   local curl_auth_params="$(get_curl_auth_params)"
 
-  path="$1"
-  raw_output="${2:-}"
-
   uri="$leader_api/$path"
-  # echo $uri
   set -o pipefail
 
   api_call_result=0
   if [[ ${curl_auth_params} != "401 Unauthorized" ]]; then
-    for sleep_time in 0.1 0.2 0.5 1 2 2.5 5 0 ; do
-      api_response=$(curl ${curl_auth_params} -s "$uri" | jq '.')
+    local retry_delays=(0.1 0.2 0.5 1 2 2.5 5 0)
+    if [ "$method" != "GET" ]; then
+      # A lost response to a mutating request is ambiguous. Do not replay it.
+      retry_delays=(0)
+    fi
+    for sleep_time in "${retry_delays[@]}" ; do
+      if [ -n "$body" ]; then
+        api_response=$(curl ${curl_auth_params} -s -X "$method" -H "Content-Type: application/json" -d "$body" "$uri" | jq '.')
+      else
+        api_response=$(curl ${curl_auth_params} -s -X "$method" "$uri" | jq '.')
+      fi
       api_call_result=$?
       [ $api_call_result -eq 0 ] && break
       sleep $sleep_time
@@ -889,17 +906,25 @@ function raft_leader_hostname {
   fi
 }
 
-# raft_elect_leader elects the raft leader by using --hostname as hint
+# raft_elect_leader transfers raft leadership. --hostname is the target server ID.
+# Omit --hostname for an undirected transfer.
 function raft_elect_leader {
-  assert_nonempty "hostname" "$hostname_flag"
   api "raft-state"
   if print_response | jq -r . | grep -q Leader ; then
-    # confirmed raft is running well
-    api "raft-yield-hint/${hostname_flag}"
+    local transfer_body="{}"
+    if [ -n "$hostname_flag" ]; then
+      transfer_body=$(jq -cn --arg id "$hostname_flag" '{id: $id}')
+    fi
+    api_post "raft/leadership/transfer" "$transfer_body"
     print_details | jq -r .
   else
     fail "Cannot determine raft state"
   fi
+}
+
+function raft_configuration {
+  api "raft/configuration"
+  print_response | jq .
 }
 
 function run_command {
@@ -1027,10 +1052,11 @@ function run_command {
 
     "replication-analysis") replication_analysis ;;           # Request an analysis of potential crash incidents in all known topologies
 
-    "raft-leader") raft_leader ;;                   # Get identify of raft leader, assuming raft setup
+    "raft-leader") raft_leader ;;                   # Get identity of raft leader, assuming raft setup
     "raft-health") raft_health ;;                   # Whether node is part of a healthy raft group
     "raft-leader-hostname") raft_leader_hostname ;; # Get hostname of raft leader, assuming raft setup
-    "raft-elect-leader") raft_elect_leader ;;       # Request raft re-elections, provide hint for new leader's identity
+    "raft-configuration") raft_configuration ;;     # Get ID-aware raft configuration
+    "raft-elect-leader") raft_elect_leader ;;       # Transfer raft leadership; --hostname is target server ID
     *) fail "Unsupported command $command" ;;
   esac
 }

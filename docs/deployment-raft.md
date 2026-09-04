@@ -33,7 +33,7 @@ You may choose between using `MySQL` and `SQLite`. See [backend configuration](c
     -  Otherwise all healthy raft nodes will reverse proxy your requests to the leader. See [proxy: healthy raft nodes section](raft.md#proxy-healthy-raft-nodes).
 - Nothing should directly interact with a backend DB. Only the leader is capable of coordinating changes to the data with the other `raft` nodes.
 
-- `orchestrator` nodes communicate between themselves on `DefaultRaftPort`. This port should be open to all `orchestrator` nodes, and no one else needs to have access to this port.
+- `orchestrator` nodes communicate through the ports configured in `RaftBind` / `RaftAdvertise`; `DefaultRaftPort` only fills in an omitted port. These ports should be open to all `orchestrator` nodes, and no one else needs access to them.
 
 ### What to deploy: client
 
@@ -62,7 +62,7 @@ To interact with orchestrator from shell/automation/scripts, you may choose to:
 
 ### Orchestrator service
 
-As noted, a single `orchestrator` node will assume leadership. Only the leader will:
+After one seed node is bootstrapped and a leader is elected, only the leader will:
 
 - Run recoveries
 
@@ -98,31 +98,33 @@ Start the node, start the `MySQL` service if applicable, start the `orchestrator
 
 ##### A new node is provisioned / a node is re-provisioned
 
-Such that the backend database is completely empty/missing.
+Such that the backend database and Raft data directory are completely empty/missing.
 
-- If `SQLite`, nothing to be done. The node will just join the `raft` group, get a snapshot from one of the active nodes, catch up with `raft` log and run as normal.
-- If `MySQL`, the same will be attempted. However, the `MySQL` server will have to [have the privileges](configuration-backend.md#mysql-backend-db-setup) for `orchestrator` to operate. So if this is a brand new server, those privileges are likely to not be there.
-  As example, our `puppet` setup periodically ensures privileges are set on our MySQL servers. Thus, when a new server is provisioned, next `puppet` run lays the privileges for `orchestrator`. `puppet` also ensures the `orchestrator` service is running, and so, pending some time, `orchestrator` can automatically join the group.
+- Give the process a new, stable `RaftNodeID`, configure its reachable `RaftAdvertise`, and start it. It listens but does not auto-join.
+- If `MySQL`, first grant the privileges described in [backend configuration](configuration-backend.md#mysql-backend-db-setup). If `SQLite`, ensure its database path is writable.
+- On the current leader, call `POST /api/raft/members` with the new ID/address and desired suffrage. Confirm a committed configuration containing that server before considering it joined; the leader will then replicate logs or a snapshot as needed.
 
 ##### Cloning is valid
 
 If you choose to, you may also provision new boxes by cloning your existing backend databases using your favorite backup/restore  or dump/load method.
 
-This is **perfectly valid** though **not required**.
+This is valid for preparing the backend database, but it does not copy or establish Raft membership.
 
 - If `MySQL`, run backup/restore, either logical or physical.
 - If `SQLite`, run `.dump` + restore, see [10. Converting An Entire Database To An ASCII Text File](https://sqlite.org/cli.html).
 
-- Start the `orchestrator` service. It should catch up with `raft` replication log and join the `raft` cluster.
+- Start the `orchestrator` service with its own stable `RaftNodeID`, then add it through the current leader's membership API. Do not clone another node's `RaftDataDir` or `node-id` file.
 
 ##### Replacing a node
 
-Assuming `RaftNodes: ["node1", "node2", "node3"]`, and you wish to replace `node3` with `nodeX`.
+Assuming voters `node1`, `node2`, `node3`, and you wish to replace `node3` with `nodeX`.
 
 - You may take down `node3`, and the `raft` cluster will continue to work as long as `node1` and `node2` are good.
-- Create `nodeX` box. Generate backend db data (see above).
-- On `node1`, `node2` and `nodeX` reconfigure `RaftNodes: ["node1", "node2", "nodeX"]`.
-- Start `orchestrator` on `nodeX`. It will be refused and will not join the cluster because `node1` and `node2` are not yet aware of the change.
-- Restart `orchestrator` on `node1`.
-- Restart `orchestrator` on `node2`.
-  - All three nodes should form a happy cluster at this time.
+- Create `nodeX` with a new stable `RaftNodeID` (for example `nodeX`) and its own `RaftBind` / `RaftAdvertise`. Generate backend db data (see above) and start `orchestrator`. It listens but does not auto-join.
+- On the current leader, add the new voter:
+
+  `POST /api/raft/members` with `{"id":"nodeX","address":"<nodeX-advertise:port>","suffrage":"voter"}`
+- After `nodeX` is in the configuration and healthy, remove the old member by ID:
+
+  `DELETE /api/raft/members/node3`
+- Confirm `GET /api/raft/configuration` on remaining nodes. The raft configuration log is the only membership source of truth.

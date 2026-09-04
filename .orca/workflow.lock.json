@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "plugin": "personal-orca",
+  "pluginVersion": "0.10.1",
+  "driverVersion": "0.10.1",
+  "driverSourceSha256": "9f116105534f53802c6a2e1c47e0b39e573fcf2c512228e5c652640145d330d7",
+  "workflow": "engineering-delivery",
+  "workflowSchemaVersion": 2,
+  "templateSha256": "7e027272981e9e904f85ae8d5a857782127c2954a124d7f2832132a2816566cc"
+}

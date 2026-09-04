@@ -164,14 +164,11 @@ The following is a production configuration file, with some details redacted.
   "MySQLDiscoveryReadTimeoutSeconds": 3,
   "SQLite3DataFile": "/var/lib/orchestrator/orchestrator-sqlite.db",
   "RaftEnabled": false,
-  "RaftBind": "redacted",
+  "RaftNodeID": "redacted",
+  "RaftBind": "redacted:10008",
+  "RaftAdvertise": "redacted:10008",
   "RaftDataDir": "/var/lib/orchestrator",
   "DefaultRaftPort": 10008,
-  "ConsulAddress": "redacted:8500",
-  "RaftNodes": [
-    "redacted",
-    "redacted",
-    "redacted"
-  ]
+  "ConsulAddress": "redacted:8500"
 }
 ```

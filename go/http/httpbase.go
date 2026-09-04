@@ -35,15 +35,9 @@ func getProxyAuthUser(req *http.Request) string {
 	return ""
 }
 
-// isAuthorizedForAction checks req to see whether authenticated user has write-privileges.
-// This depends on configured authentication method.
-func isAuthorizedForAction(req *http.Request, user Principal) bool {
+// isAuthorizedForWrite checks req to see whether authenticated user has write-privileges.
+func isAuthorizedForWrite(req *http.Request, user Principal) bool {
 	if config.Config.ReadOnly {
-		return false
-	}
-
-	if orcraft.IsRaftEnabled() && !orcraft.IsLeader() {
-		// A raft member that is not a leader is unauthorized.
 		return false
 	}
 
@@ -98,6 +92,19 @@ func isAuthorizedForAction(req *http.Request, user Principal) bool {
 			return true
 		}
 	}
+}
+
+// isAuthorizedForAction checks req to see whether authenticated user has write-privileges.
+// This depends on configured authentication method.
+func isAuthorizedForAction(req *http.Request, user Principal) bool {
+	if !isAuthorizedForWrite(req, user) {
+		return false
+	}
+	if orcraft.IsRaftEnabled() && !orcraft.IsLeader() {
+		// A raft member that is not a leader is unauthorized.
+		return false
+	}
+	return true
 }
 
 func authenticateToken(publicToken string, resp http.ResponseWriter) error {

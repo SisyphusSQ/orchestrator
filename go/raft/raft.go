@@ -21,38 +21,20 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/raft"
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
-	"github.com/openark/orchestrator/go/util"
-
-	"github.com/hashicorp/raft"
-	"github.com/patrickmn/go-cache"
 )
 
-const (
-	YieldCommand     = "yield"
-	YieldHintCommand = "yield-hint"
-)
+const asyncSnapshotTimeframe = 1 * time.Minute
 
-const (
-	retainSnapshotCount    = 10
-	snapshotInterval       = 30 * time.Minute
-	asyncSnapshotTimeframe = 1 * time.Minute
-	raftTimeout            = 10 * time.Second
-)
-
-var RaftNotRunning error = fmt.Errorf("raft is not configured/running")
 var store *Store
 var raftSetupComplete int64
 var ThisHostname string
-var healthRequestAuthenticationTokenCache = cache.New(config.RaftHealthPollSeconds*2*time.Second, time.Second)
-var healthReportsCache = cache.New(config.RaftHealthPollSeconds*2*time.Second, time.Second)
-var healthRequestReportCache = cache.New(time.Second, time.Second)
 
 var fatalRaftErrorChan = make(chan error, 1)
 
@@ -62,7 +44,7 @@ type leaderURI struct {
 }
 
 var LeaderURI leaderURI
-var thisLeaderURI string // How this node identifies itself assuming it is the leader
+var thisLeaderURI string
 
 func (luri *leaderURI) Get() string {
 	luri.Lock()
@@ -83,7 +65,7 @@ func (luri *leaderURI) IsThisLeaderURI() bool {
 }
 
 func IsRaftEnabled() bool {
-	return store != nil
+	return store != nil && store.raft != nil
 }
 
 func FatalRaftError(err error) error {
@@ -104,62 +86,42 @@ func enqueueFatalRaftError(fatalErrors chan<- error, err error) bool {
 
 func computeLeaderURI() (uri string, err error) {
 	if config.Config.HTTPAdvertise != "" {
-		// Explicitly given
 		return config.Config.HTTPAdvertise, nil
 	}
-	// Not explicitly given. Let's heuristically compute using RaftAdvertise
 	scheme := "http"
 	if config.Config.UseSSL {
 		scheme = "https"
 	}
 
-	hostname := strings.Split(config.Config.RaftAdvertise, ":")[0]
-	listenTokens := strings.Split(config.Config.ListenAddress, ":")
-	if len(listenTokens) < 2 {
+	hostname, _, err := net.SplitHostPort(config.Config.RaftAdvertise)
+	if err != nil {
+		return uri, fmt.Errorf("computeLeaderURI: cannot determine raft advertise host out of %q: %w", config.Config.RaftAdvertise, err)
+	}
+	_, port, err := net.SplitHostPort(config.Config.ListenAddress)
+	if err != nil || port == "" {
 		return uri, fmt.Errorf("computeLeaderURI: cannot determine listen port out of config.Config.ListenAddress: %+v", config.Config.ListenAddress)
 	}
-	port := listenTokens[1]
-
-	uri = fmt.Sprintf("%s://%s:%s", scheme, hostname, port)
-	return uri, nil
+	return fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(hostname, port)), nil
 }
 
-// Setup creates the entire raft shananga. Creates the store, associates with the throttler,
-// contacts peer nodes, and subscribes to leader changes to export them.
+// Setup creates the raft runtime. New clusters are not auto-bootstrapped.
 func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier, thisHostname string) error {
 	log.Debugf("Setting up raft")
 	ThisHostname = thisHostname
-	raftBind, err := normalizeRaftNode(config.Config.RaftBind)
-	if err != nil {
-		return err
-	}
-	raftAdvertise, err := normalizeRaftNode(config.Config.RaftAdvertise)
-	if err != nil {
-		return err
-	}
-	store = NewStore(config.Config.RaftDataDir, raftBind, raftAdvertise, applier, snapshotCreatorApplier)
-	peerNodes := []string{}
-	for _, raftNode := range config.Config.RaftNodes {
-		peerNode, err := normalizeRaftNode(raftNode)
-		if err != nil {
-			return err
-		}
-		peerNodes = append(peerNodes, peerNode)
-	}
-	if len(peerNodes) == 1 && peerNodes[0] == raftAdvertise {
-		// To run in single node setup we will either specify an empty RaftNodes, or a single
-		// raft node that is exactly RaftAdvertise
-		peerNodes = []string{}
-	}
-	if err := store.Open(peerNodes); err != nil {
+	created := NewStore(config.Config.RaftDataDir, config.Config.RaftBind, config.Config.RaftAdvertise, config.Config.RaftNodeID, applier, snapshotCreatorApplier)
+	if err := created.Open(); err != nil {
+		_ = created.Close()
 		return log.Errorf("failed to open raft store: %s", err.Error())
 	}
 
-	thisLeaderURI, err = computeLeaderURI()
+	uri, err := computeLeaderURI()
 	if err != nil {
+		_ = created.Close()
 		return FatalRaftError(err)
 	}
+	thisLeaderURI = uri
 
+	store = created
 	leaderCh := store.raft.LeaderCh()
 	go func() {
 		for isTurnedLeader := range leaderCh {
@@ -170,152 +132,188 @@ func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier
 	}()
 
 	setupHttpClient()
-
 	atomic.StoreInt64(&raftSetupComplete, 1)
 	return nil
+}
+
+func Shutdown() error {
+	atomic.StoreInt64(&raftSetupComplete, 0)
+	if store == nil {
+		return nil
+	}
+	err := store.Close()
+	store = nil
+	return err
 }
 
 func isRaftSetupComplete() bool {
 	return atomic.LoadInt64(&raftSetupComplete) == 1
 }
 
-// getRaft is a convenience method
 func getRaft() *raft.Raft {
 	return store.raft
 }
 
-func normalizeRaftHostnameIP(host string) (string, error) {
-	if ip := net.ParseIP(host); ip != nil {
-		// this is a valid IP address.
-		return host, nil
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		// resolve failed. But we don't want to fail the entire operation for that
-		log.Errore(err)
-		return host, nil
-	}
-	// resolve success!
-	for _, ip := range ips {
-		return ip.String(), nil
-	}
-	return host, fmt.Errorf("%+v resolved but no IP found", host)
-}
-
-// normalizeRaftNode attempts to make sure there's a port to the given node.
-// It consults the DefaultRaftPort when there isn't
 func normalizeRaftNode(node string) (string, error) {
-	hostPort := strings.Split(node, ":")
-	host, err := normalizeRaftHostnameIP(hostPort[0])
-	if err != nil {
-		return host, err
-	}
-	if len(hostPort) > 1 {
-		return fmt.Sprintf("%s:%s", host, hostPort[1]), nil
-	} else if config.Config.DefaultRaftPort != 0 {
-		// No port specified, add one
-		return fmt.Sprintf("%s:%d", host, config.Config.DefaultRaftPort), nil
-	} else {
-		return host, nil
-	}
+	return config.NormalizeRaftAddress(node, config.Config.DefaultRaftPort)
 }
 
-// IsPartOfQuorum returns `true` when this node is part of the raft quorum, meaning its
-// data and opinion are trustworthy.
-// Compare that to a node which has left (or has not yet joined) the quorum: it has stale data.
+// IsPartOfQuorum reports whether this node's data is trustworthy.
 func IsPartOfQuorum() bool {
-	if GetLeader() == "" {
+	return IsReady()
+}
+
+func IsLeader() bool {
+	if !IsRaftEnabled() || !isRaftSetupComplete() {
 		return false
 	}
-	state := GetState()
-	return state == raft.Leader || state == raft.Follower
-}
-
-// IsLeader tells if this node is the current raft leader
-func IsLeader() bool {
 	return GetState() == raft.Leader
 }
 
-// GetLeader returns identity of raft leader
+func IsLeaderReady() bool {
+	if !IsRaftEnabled() || !isRaftSetupComplete() {
+		return false
+	}
+	return store.leaderVerified()
+}
+
+func IsReady() bool {
+	if !IsRaftEnabled() || !isRaftSetupComplete() {
+		return false
+	}
+	return store.Status().Ready
+}
+
 func GetLeader() string {
-	if !isRaftSetupComplete() {
+	if !isRaftSetupComplete() || !IsRaftEnabled() {
 		return ""
 	}
-	return getRaft().Leader()
+	_, id := getRaft().LeaderWithID()
+	return string(id)
+}
+
+func GetLeaderAddress() string {
+	if !isRaftSetupComplete() || !IsRaftEnabled() {
+		return ""
+	}
+	addr, _ := getRaft().LeaderWithID()
+	return string(addr)
 }
 
 func QuorumSize() (int, error) {
-	peers, err := GetPeers()
+	if !IsRaftEnabled() {
+		return 0, RaftNotRunning
+	}
+	voters, err := store.voterCount()
 	if err != nil {
 		return 0, err
 	}
-	return len(peers)/2 + 1, nil
+	return voters/2 + 1, nil
 }
 
-// GetState returns current raft state
 func GetState() raft.RaftState {
-	if !isRaftSetupComplete() {
-		return raft.Candidate
+	if !isRaftSetupComplete() || !IsRaftEnabled() {
+		return raft.Shutdown
 	}
 	return getRaft().State()
 }
 
-// IsHealthy checks whether this node is healthy in the raft group
 func IsHealthy() bool {
-	if !isRaftSetupComplete() {
-		return false
-	}
-	state := GetState()
-	return state == raft.Leader || state == raft.Follower
+	return IsReady()
 }
 
 func Snapshot() error {
-	future := getRaft().Snapshot()
-	return future.Error()
+	if !IsRaftEnabled() {
+		return RaftNotRunning
+	}
+	return store.Snapshot()
 }
 
 func AsyncSnapshot() error {
-	asyncDuration := (time.Duration(rand.Int63()) % asyncSnapshotTimeframe)
+	asyncDuration := time.Duration(rand.Int63()) % asyncSnapshotTimeframe
 	go time.AfterFunc(asyncDuration, func() {
 		Snapshot()
 	})
 	return nil
 }
 
-func StepDown() {
-	getRaft().StepDown()
-}
-
-func Yield() error {
-	if !IsRaftEnabled() {
-		return RaftNotRunning
-	}
-	return getRaft().Yield()
-}
-
 func GetRaftBind() string {
+	if store == nil {
+		return ""
+	}
 	return store.raftBind
 }
 
 func GetRaftAdvertise() string {
+	if store == nil {
+		return ""
+	}
 	return store.raftAdvertise
 }
 
-func GetPeers() ([]string, error) {
-	if !IsRaftEnabled() {
-		return []string{}, RaftNotRunning
+func GetRaftNodeID() string {
+	if store == nil {
+		return ""
 	}
-	return store.peerStore.Peers()
+	return store.nodeID
 }
 
-func IsPeer(peer string) (bool, error) {
+func GetClusterView() (ClusterView, error) {
 	if !IsRaftEnabled() {
-		return false, RaftNotRunning
+		return ClusterView{}, RaftNotRunning
 	}
-	return (store.raftBind == peer), nil
+	return store.GetClusterView()
 }
 
-// PublishCommand will distribute a command across the group
+func GetStatus() NodeStatus {
+	if !IsRaftEnabled() {
+		return NodeStatus{}
+	}
+	return store.Status()
+}
+
+func Bootstrap() (ConfigurationView, error) {
+	if !IsRaftEnabled() {
+		return ConfigurationView{}, RaftNotRunning
+	}
+	return store.Bootstrap()
+}
+
+func AddMember(req MemberRequest) (ConfigurationView, error) {
+	if !IsRaftEnabled() {
+		return ConfigurationView{}, RaftNotRunning
+	}
+	if req.Address != "" {
+		normalized, err := normalizeRaftNode(req.Address)
+		if err != nil {
+			return ConfigurationView{}, invalidArgument("member address is invalid: %v", err)
+		}
+		req.Address = normalized
+	}
+	return store.AddMember(req)
+}
+
+func RemoveMember(id string, expectedIndex *uint64) (ConfigurationView, error) {
+	if !IsRaftEnabled() {
+		return ConfigurationView{}, RaftNotRunning
+	}
+	return store.RemoveMember(id, expectedIndex)
+}
+
+func TransferLeadership(id, address string) error {
+	if !IsRaftEnabled() {
+		return RaftNotRunning
+	}
+	if address != "" {
+		normalized, err := normalizeRaftNode(address)
+		if err != nil {
+			return invalidArgument("target address is invalid: %v", err)
+		}
+		address = normalized
+	}
+	return store.TransferLeadership(id, address)
+}
+
 func PublishCommand(op string, value interface{}) (response interface{}, err error) {
 	if !IsRaftEnabled() {
 		return nil, RaftNotRunning
@@ -327,95 +325,44 @@ func PublishCommand(op string, value interface{}) (response interface{}, err err
 	return store.genericCommand(op, b)
 }
 
-func AddPeer(addr string) (response interface{}, err error) {
-	addr, err = normalizeRaftNode(addr)
-	if err != nil {
-		return "", err
-	}
-	err = store.AddPeer(addr)
-	return addr, err
-}
-
-func RemovePeer(addr string) (response interface{}, err error) {
-	addr, err = normalizeRaftNode(addr)
-	if err != nil {
-		return "", err
-	}
-	err = store.RemovePeer(addr)
-	return addr, err
-}
-
-func PublishYield(toPeer string) (response interface{}, err error) {
-	toPeer, err = normalizeRaftNode(toPeer)
-	if err != nil {
-		return "", err
-	}
-	return store.genericCommand(YieldCommand, []byte(toPeer))
-}
-
-func PublishYieldHostnameHint(hostnameHint string) (response interface{}, err error) {
-	return store.genericCommand(YieldHintCommand, []byte(hostnameHint))
-}
-
-// ReportToRaftLeader tells the leader this raft node is raft-healthy
-func ReportToRaftLeader(authenticationToken string) (err error) {
-	if err := healthRequestReportCache.Add(config.Config.RaftBind, true, cache.DefaultExpiration); err != nil {
-		// Recently reported
+// Members returns IDs from the latest Raft configuration. It does not claim
+// that every configured member is currently reachable or healthy.
+func Members() []string {
+	if !IsRaftEnabled() {
 		return nil
 	}
-	path := fmt.Sprintf("raft-follower-health-report/%s/%s/%s", authenticationToken, config.Config.RaftBind, config.Config.RaftAdvertise)
-	_, err = HttpGetLeader(path)
-	return err
-}
-
-// OnHealthReport acts on a raft-member reporting its health
-func OnHealthReport(authenticationToken, raftBind, raftAdvertise string) (err error) {
-	if _, found := healthRequestAuthenticationTokenCache.Get(authenticationToken); !found {
-		return log.Errorf("Raft health report: unknown token %s", authenticationToken)
+	view, err := store.GetClusterView()
+	if err != nil {
+		return nil
 	}
-	healthReportsCache.Set(raftAdvertise, true, cache.DefaultExpiration)
-	return nil
-}
-
-func HealthyMembers() (advertised []string) {
-	items := healthReportsCache.Items()
-	for raftAdvertised := range items {
-		advertised = append(advertised, raftAdvertised)
+	ids := make([]string, 0, len(view.Servers))
+	for _, server := range view.Servers {
+		ids = append(ids, server.ID)
 	}
-	return advertised
+	return ids
 }
 
 // Monitor observes leadership state until the Raft runtime reports a fatal error.
 func Monitor() error {
 	tick := time.NewTicker(5 * time.Second)
 	heartbeat := time.NewTicker(1 * time.Minute)
-	followerHealthTick := time.NewTicker(config.RaftHealthPollSeconds * time.Second)
 	defer tick.Stop()
 	defer heartbeat.Stop()
-	defer followerHealthTick.Stop()
-	return monitor(tick.C, heartbeat.C, followerHealthTick.C, fatalRaftErrorChan)
+	return monitor(tick.C, heartbeat.C, fatalRaftErrorChan)
 }
 
-func monitor(tick, heartbeat, followerHealthTick <-chan time.Time, fatalErrors <-chan error) error {
+func monitor(tick, heartbeat <-chan time.Time, fatalErrors <-chan error) error {
 	for {
 		select {
 		case <-tick:
 			leaderHint := GetLeader()
-
 			if IsLeader() {
 				leaderHint = fmt.Sprintf("%s (this host)", leaderHint)
 			}
 			log.Debugf("raft leader is %s; state: %s", leaderHint, GetState().String())
-
 		case <-heartbeat:
 			if IsLeader() {
 				go PublishCommand("heartbeat", "")
-			}
-		case <-followerHealthTick:
-			if IsLeader() {
-				athenticationToken := util.NewToken().Short()
-				healthRequestAuthenticationTokenCache.Set(athenticationToken, true, cache.DefaultExpiration)
-				go PublishCommand("request-health-report", athenticationToken)
 			}
 		case err, ok := <-fatalErrors:
 			if !ok {
