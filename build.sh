@@ -74,11 +74,6 @@ function precheck() {
     fi
   fi
 
-  if [[ -z "$GOPATH" ]]; then
-    echo "GOPATH not set"
-    ok=1
-  fi
-
   if [[ ! -x "$( which go )" ]]; then
     echo "go binary not found in PATH"
     ok=1
@@ -115,7 +110,7 @@ build_binary() {
   debug "Building via $(go version)"
   mkdir -p "$binary_build_path/bin"
   rm -f $binary_artifact
-  gobuild="go build ${opt_race} -ldflags \"$ldflags\" -o $binary_artifact go/cmd/orchestrator/main.go"
+  gobuild="go build ${opt_race} -mod=readonly -ldflags \"$ldflags\" -o $binary_artifact go/cmd/orchestrator/main.go"
 
   case $os in
     'linux')

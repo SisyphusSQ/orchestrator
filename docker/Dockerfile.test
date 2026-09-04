@@ -5,8 +5,12 @@ RUN apt-get update
 RUN apt-get install -y lsb-release rsync libaio1 numactl sqlite3 libncurses5 libtinfo5
 RUN rm -rf /var/lib/apt/lists/*
 
-ENV WORKPATH /go/src/github.com/openark/orchestrator
+ENV WORKPATH=/orchestrator
 WORKDIR $WORKPATH
+
+COPY go.mod go.sum ./
+COPY go/golib/go.mod go/golib/go.sum ./go/golib/
+RUN go mod download
 
 # Setup dbdeployer
 RUN mkdir /dbdeployer

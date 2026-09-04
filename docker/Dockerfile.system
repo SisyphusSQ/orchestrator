@@ -13,6 +13,10 @@ RUN apt-get install -y sudo haproxy python-is-python3 2to3 git jq rsync libaio1 
 RUN mkdir /orchestrator
 WORKDIR /orchestrator
 
+COPY go.mod go.sum ./
+COPY go/golib/go.mod go/golib/go.sum ./go/golib/
+RUN go mod download
+
 RUN git clone -b $ci_env_branch $ci_env_repo # cache
 # For dev purposes only, just to avoid cloning over and over
 # COPY docker/orchestrator-ci-env /orchestrator/orchestrator-ci-env

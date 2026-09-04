@@ -197,7 +197,7 @@ EOF
 
 build_binary() {
   echo "Building"
-  go build -o $orchestrator_binary go/cmd/orchestrator/main.go
+  go build -mod=readonly -o $orchestrator_binary go/cmd/orchestrator/main.go
 }
 
 

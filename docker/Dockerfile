@@ -16,12 +16,12 @@
 
 FROM golang:1.26.5-alpine3.23 as build
 
-ENV GOPATH=/tmp/go
-
 RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git
 
-RUN mkdir -p $GOPATH/src/github.com/openark/orchestrator
-WORKDIR $GOPATH/src/github.com/openark/orchestrator
+WORKDIR /orchestrator
+COPY go.mod go.sum ./
+COPY go/golib/go.mod go/golib/go.sum ./go/golib/
+RUN go mod download
 COPY . .
 RUN bash build.sh -b -P
 RUN rsync -av $(find /tmp/orchestrator-release -type d -name orchestrator -maxdepth 2)/ /

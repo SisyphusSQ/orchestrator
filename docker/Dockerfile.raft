@@ -9,7 +9,9 @@ COPY docker/resources/systemctl.py /usr/bin/systemctl
 RUN mkdir /orchestrator
 WORKDIR /orchestrator
 
-WORKDIR /orchestrator
+COPY go.mod go.sum ./
+COPY go/golib/go.mod go/golib/go.sum ./go/golib/
+RUN go mod download
 COPY . .
 RUN (cd /orchestrator && script/build)
 

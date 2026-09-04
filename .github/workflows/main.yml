@@ -20,6 +20,9 @@ jobs:
       with:
         go-version-file: go.mod
 
+    - name: Test modules
+      run:  script/test-modules
+
     - name: Test source code
       run:  script/test-source
 

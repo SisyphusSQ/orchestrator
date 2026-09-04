@@ -1,11 +1,11 @@
 #!/bin/bash
 
-export GOPATH="$PWD/.gopath"
-cd .gopath/src/github.com/openark/orchestrator
+set -e
 
 unit_tests() {
   echo "# Running unit tests"
-  go test ./go/...
+  go test -mod=readonly ./go/...
+  go -C go/golib test -mod=readonly ./...
 }
 
 unit_tests

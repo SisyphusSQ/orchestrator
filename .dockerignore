@@ -1,5 +1,7 @@
 .github
+.gopath
 .cache
 Dockerfile
 README.md
 Vagrantfile
+vendor
