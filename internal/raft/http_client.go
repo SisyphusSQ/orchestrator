@@ -41,7 +41,7 @@ func GetRaftHttpTransport() (*http.Transport, error) {
 	if httpTransport != nil {
 		return httpTransport, nil
 	}
-	httpTimeout := time.Duration(config.ActiveNodeExpireSeconds) * time.Second
+	httpTimeout := 5 * time.Second
 	dialTimeout := func(network, addr string) (net.Conn, error) {
 		return net.DialTimeout(network, addr, httpTimeout)
 	}

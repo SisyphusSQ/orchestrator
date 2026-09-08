@@ -13,7 +13,7 @@ TOO-412 将 Graphite、rcrowley/go-metrics、自研 Collection 和队列历史�
 | `/health/ready` | backend 可用且满足当前模式的服务条件 | 可用 200，否则 503 |
 | `/health/leader-ready` | 本节点具备 leader 工作条件 | 可用 200，否则 503；follower 返回 503 |
 
-`/api/status` 保持原有行为。新健康接口返回本节点快照，不将 follower 自动代理给 leader。Raft 未启用时 `raftEnabled=false`，不要将 `raftReady=false` 单独判为故障。
+`/api/status` 保持原有行为。新健康接口返回本节点快照，不将 follower 自动代理给 leader。Raft 为唯一运行架构；就绪要求元数据库可用且本节点 Raft 就绪。未 bootstrap、未加入配置或失去联系时不会回退为非 Raft 就绪。
 
 健康监控每 5 秒检查一次，backend 检查使用 2 秒 context；Raft 复用现有状态/领导权验证。超过 15 秒没有更新时 readiness 失效。抓取接口只读取本地同步状态，不发起数据库查询或 Raft 验证。Trace exporter 故障不使业务 readiness 失败。
 
@@ -67,7 +67,7 @@ Prometheus 必须逐节点抓取，不能使用仅指向 leader 的 VIP。为每
 | `orchestrator_backend_max_connections` | Gauge | backend pool 连接上限 |
 | `orchestrator_backend_connection_wait_total` / `orchestrator_backend_connection_wait_seconds_total` | Counter | pool 累计等待次数及时间 |
 | `orchestrator_ready` / `orchestrator_backend_ready` / `orchestrator_active` / `orchestrator_leader_ready` | Gauge / 0,1 | 缓存的本地健康及角色状态 |
-| `orchestrator_raft_enabled` / `orchestrator_raft_ready` / `orchestrator_raft_leader` | Gauge / 0,1 | 仅 enabled=1 时解释 Raft 健康 |
+| `orchestrator_raft_ready` / `orchestrator_raft_leader` | Gauge / 0,1 | 本节点 Raft 就绪与领导角色 |
 | `orchestrator_raft_last_index` / `orchestrator_raft_commit_index` / `orchestrator_raft_applied_index` | Gauge | 本地 Raft 进度索引；不添加成员地址标签 |
 | `orchestrator_trace_export_failures_total` | Counter | exporter 返回失败的批次，SDK 其他错误使用脱敏日志 |
 | `go_*` / `process_*` | 标准 collector | Go runtime / 进程状态；可用的 process 指标随平台变化，以目标实际暴露结果为准 |

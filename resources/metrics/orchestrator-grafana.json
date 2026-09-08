@@ -339,7 +339,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Raft 启用节点数",
+      "title": "Raft 节点数",
       "description": "0 表示未启用，不代表故障。",
       "datasource": {
         "type": "prometheus",
@@ -373,7 +373,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"})",
+          "expr": "count(orchestrator_raft_ready{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"})",
           "legendFormat": "{{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -2165,7 +2165,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "orchestrator_raft_leader{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} and on (job,orchestrator_cluster,instance) orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} == 1",
+          "expr": "orchestrator_raft_leader{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"}",
           "legendFormat": "{{__name__}} {{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -2176,7 +2176,7 @@
         },
         {
           "refId": "B",
-          "expr": "orchestrator_raft_ready{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} and on (job,orchestrator_cluster,instance) orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} == 1",
+          "expr": "orchestrator_raft_ready{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"}",
           "legendFormat": "{{__name__}} {{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -2187,7 +2187,7 @@
         },
         {
           "refId": "C",
-          "expr": "orchestrator_leader_ready{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} and on (job,orchestrator_cluster,instance) orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} == 1",
+          "expr": "orchestrator_leader_ready{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"}",
           "legendFormat": "{{__name__}} {{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -2243,7 +2243,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "orchestrator_raft_commit_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} and on (job,orchestrator_cluster,instance) orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} == 1",
+          "expr": "orchestrator_raft_commit_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"}",
           "legendFormat": "{{__name__}} {{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -2254,7 +2254,7 @@
         },
         {
           "refId": "B",
-          "expr": "orchestrator_raft_applied_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} and on (job,orchestrator_cluster,instance) orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} == 1",
+          "expr": "orchestrator_raft_applied_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"}",
           "legendFormat": "{{__name__}} {{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -2310,7 +2310,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "(orchestrator_raft_commit_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} - orchestrator_raft_applied_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"}) and on (job,orchestrator_cluster,instance) orchestrator_raft_enabled{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} == 1",
+          "expr": "(orchestrator_raft_commit_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"} - orchestrator_raft_applied_index{job=\"orchestrator\",orchestrator_cluster=~\"$orchestrator_cluster\",instance=~\"$instance\"})",
           "legendFormat": "{{instance}}",
           "datasource": {
             "type": "prometheus",

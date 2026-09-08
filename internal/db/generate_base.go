@@ -280,19 +280,6 @@ var generateSQLBase = []string{
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS active_node (
-		  anchor tinyint unsigned NOT NULL,
-		  hostname varchar(128) CHARACTER SET ascii NOT NULL,
-		  token varchar(128) NOT NULL,
-		  last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		  PRIMARY KEY (anchor)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
-		INSERT IGNORE INTO active_node (anchor, hostname, token, last_seen_active)
-			VALUES (1, '', '', NOW())
-	`,
-	`
 		CREATE TABLE IF NOT EXISTS node_health (
 		  hostname varchar(128) CHARACTER SET ascii NOT NULL,
 		  token varchar(128) NOT NULL,

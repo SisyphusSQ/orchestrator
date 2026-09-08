@@ -22,7 +22,6 @@
 #### Deployment
 - [High availability](high-availability.md): making `orchestrator` highly available
 - [Deployment](deployment.md) instructions, hints and tips
-- [Shared backend DB](deployment-shared-backend.md) deployment
 - [orchestrator/raft](deployment-raft.md) deployment
 
 #### Failure detection & recovery

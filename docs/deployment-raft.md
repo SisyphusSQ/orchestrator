@@ -48,8 +48,7 @@ orch clusters
 orch topology --cluster my-cluster
 ```
 
-Direct database business commands and the old Shell client have been removed. Both Raft
-and shared-backend deployments use HTTP. Local server maintenance remains under
+Direct database business commands and the old Shell client have been removed. All remote operations use HTTP. Local server maintenance remains under
 `orchestrator admin`; it must not be used as an alternative remote management interface.
 
 ### Orchestrator service

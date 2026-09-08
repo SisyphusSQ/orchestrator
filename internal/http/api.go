@@ -281,10 +281,9 @@ func (this *HttpAPI) Discover(params Params, r Responder, req *http.Request, use
 		return
 	}
 
-	if orcraft.IsRaftEnabled() {
-		orcraft.PublishCommand("discover", instanceKey)
-	} else {
-		logic.DiscoverInstance(instanceKey)
+	if _, err := orcraft.PublishCommand("discover", instanceKey); err != nil {
+		respondRaft(r, err, "", nil)
+		return
 	}
 
 	if instance != nil {
@@ -328,11 +327,8 @@ func (this *HttpAPI) Forget(params Params, r Responder, req *http.Request, user 
 		return
 	}
 
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("forget", instanceKey)
-	} else {
-		err = inst.ForgetInstance(&instanceKey)
-	}
+	_, err = orcraft.PublishCommand("forget", instanceKey)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -352,11 +348,11 @@ func (this *HttpAPI) ForgetCluster(params Params, r Responder, req *http.Request
 		return
 	}
 
-	if orcraft.IsRaftEnabled() {
-		orcraft.PublishCommand("forget-cluster", clusterName)
-	} else {
-		inst.ForgetCluster(clusterName)
+	if _, err := orcraft.PublishCommand("forget-cluster", clusterName); err != nil {
+		respondRaft(r, err, "", nil)
+		return
 	}
+
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Cluster forgotten: %+v", clusterName)})
 }
 
@@ -506,11 +502,8 @@ func (this *HttpAPI) BeginDowntime(params Params, r Responder, req *http.Request
 	}
 	duration := time.Duration(durationSeconds) * time.Second
 	downtime := inst.NewDowntime(&instanceKey, params["owner"], params["reason"], duration)
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("begin-downtime", downtime)
-	} else {
-		err = inst.BeginDowntime(downtime)
-	}
+
+	_, err = orcraft.PublishCommand("begin-downtime", downtime)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: instanceKey})
@@ -532,11 +525,9 @@ func (this *HttpAPI) EndDowntime(params Params, r Responder, req *http.Request, 
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("end-downtime", instanceKey)
-	} else {
-		_, err = inst.EndDowntime(&instanceKey)
-	}
+
+	_, err = orcraft.PublishCommand("end-downtime", instanceKey)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -1917,11 +1908,8 @@ func (this *HttpAPI) SetClusterAliasManualOverride(params Params, r Responder, r
 	alias := req.URL.Query().Get("alias")
 
 	var err error
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("set-cluster-alias-manual-override", []string{clusterName, alias})
-	} else {
-		err = inst.SetClusterAliasManualOverride(clusterName, alias)
-	}
+
+	_, err = orcraft.PublishCommand("set-cluster-alias-manual-override", []string{clusterName, alias})
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
@@ -2027,11 +2015,9 @@ func (this *HttpAPI) Tag(params Params, r Responder, req *http.Request, user Pri
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("put-instance-tag", inst.InstanceTag{Key: instanceKey, T: *tag})
-	} else {
-		err = inst.PutInstanceTag(&instanceKey, tag)
-	}
+
+	_, err = orcraft.PublishCommand("put-instance-tag", inst.InstanceTag{Key: instanceKey, T: *tag})
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -2261,11 +2247,9 @@ func (this *HttpAPI) DeregisterHostnameUnresolve(params Params, r Responder, req
 
 	var err error
 	registration := inst.NewHostnameDeregistration(instanceKey)
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("register-hostname-unresolve", registration)
-	} else {
-		err = inst.RegisterHostnameUnresolve(registration)
-	}
+
+	_, err = orcraft.PublishCommand("register-hostname-unresolve", registration)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -2288,11 +2272,9 @@ func (this *HttpAPI) RegisterHostnameUnresolve(params Params, r Responder, req *
 	hostname := params["virtualname"]
 	var err error
 	registration := inst.NewHostnameRegistration(instanceKey, hostname)
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("register-hostname-unresolve", registration)
-	} else {
-		err = inst.RegisterHostnameUnresolve(registration)
-	}
+
+	_, err = orcraft.PublishCommand("register-hostname-unresolve", registration)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -2311,11 +2293,9 @@ func (this *HttpAPI) SubmitPoolInstances(params Params, r Responder, req *http.R
 
 	var err error
 	submission := inst.NewPoolInstancesSubmission(pool, instances)
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("submit-pool-instances", submission)
-	} else {
-		err = inst.ApplyPoolInstances(submission)
-	}
+
+	_, err = orcraft.PublishCommand("submit-pool-instances", submission)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -2817,36 +2797,6 @@ func (this *HttpAPI) StatusCheck(params Params, r Responder, req *http.Request) 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Application node is healthy"), Details: health})
 }
 
-// GrabElection forcibly grabs leadership. Use with care!!
-func (this *HttpAPI) GrabElection(params Params, r Responder, req *http.Request, user Principal) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	err := process.GrabElection()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Unable to grab election: %+v", err)})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Node elected as leader")})
-}
-
-// Reelect causes re-elections for an active node
-func (this *HttpAPI) Reelect(params Params, r Responder, req *http.Request, user Principal) {
-	if !isAuthorizedForAction(req, user) {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
-		return
-	}
-	err := process.Reelect()
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Unable to re-elect: %+v", err)})
-		return
-	}
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Set re-elections")})
-}
-
 // ReloadConfiguration reloads confiug settings (not all of which will apply after change)
 func (this *HttpAPI) ReloadConfiguration(params Params, r Responder, req *http.Request, user Principal) {
 	if !isAuthorizedForAction(req, user) {
@@ -3071,11 +3021,7 @@ func (this *HttpAPI) RegisterCandidate(params Params, r Responder, req *http.Req
 
 	candidate := inst.NewCandidateDatabaseInstance(&instanceKey, promotionRule).WithCurrentTime()
 
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("register-candidate", candidate)
-	} else {
-		err = inst.RegisterCandidateInstance(candidate)
-	}
+	_, err = orcraft.PublishCommand("register-candidate", candidate)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
@@ -3242,13 +3188,11 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params Params, r Responder, re
 	if userId == "" {
 		userId = inst.GetMaintenanceOwner()
 	}
-	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
-		ack.ClusterName = clusterName
-		_, err = orcraft.PublishCommand("ack-recovery", ack)
-	} else {
-		_, err = logic.AcknowledgeClusterRecoveries(clusterName, userId, comment)
-	}
+
+	ack := logic.NewRecoveryAcknowledgement(userId, comment)
+	ack.ClusterName = clusterName
+	_, err = orcraft.PublishCommand("ack-recovery", ack)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -3279,13 +3223,11 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params Params, r Responder, r
 	if userId == "" {
 		userId = inst.GetMaintenanceOwner()
 	}
-	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
-		ack.Key = instanceKey
-		_, err = orcraft.PublishCommand("ack-recovery", ack)
-	} else {
-		_, err = logic.AcknowledgeInstanceRecoveries(&instanceKey, userId, comment)
-	}
+
+	ack := logic.NewRecoveryAcknowledgement(userId, comment)
+	ack.Key = instanceKey
+	_, err = orcraft.PublishCommand("ack-recovery", ack)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -3325,18 +3267,11 @@ func (this *HttpAPI) AcknowledgeRecovery(params Params, r Responder, req *http.R
 	if userId == "" {
 		userId = inst.GetMaintenanceOwner()
 	}
-	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
-		ack.Id = recoveryId
-		ack.UID = recoveryUid
-		_, err = orcraft.PublishCommand("ack-recovery", ack)
-	} else {
-		if recoveryUid != "" {
-			_, err = logic.AcknowledgeRecoveryByUID(recoveryUid, userId, comment)
-		} else {
-			_, err = logic.AcknowledgeRecovery(recoveryId, userId, comment)
-		}
-	}
+
+	ack := logic.NewRecoveryAcknowledgement(userId, comment)
+	ack.Id = recoveryId
+	ack.UID = recoveryUid
+	_, err = orcraft.PublishCommand("ack-recovery", ack)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
@@ -3363,13 +3298,11 @@ func (this *HttpAPI) AcknowledgeAllRecoveries(params Params, r Responder, req *h
 		userId = inst.GetMaintenanceOwner()
 	}
 	var err error
-	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
-		ack.AllRecoveries = true
-		_, err = orcraft.PublishCommand("ack-recovery", ack)
-	} else {
-		_, err = logic.AcknowledgeAllRecoveries(userId, comment)
-	}
+
+	ack := logic.NewRecoveryAcknowledgement(userId, comment)
+	ack.AllRecoveries = true
+	_, err = orcraft.PublishCommand("ack-recovery", ack)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -3398,11 +3331,8 @@ func (this *HttpAPI) DisableGlobalRecoveries(params Params, r Responder, req *ht
 	}
 
 	var err error
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("disable-global-recoveries", 0)
-	} else {
-		err = logic.DisableRecovery()
-	}
+
+	_, err = orcraft.PublishCommand("disable-global-recoveries", 0)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
@@ -3420,11 +3350,9 @@ func (this *HttpAPI) EnableGlobalRecoveries(params Params, r Responder, req *htt
 	}
 
 	var err error
-	if orcraft.IsRaftEnabled() {
-		_, err = orcraft.PublishCommand("enable-global-recoveries", 0)
-	} else {
-		err = logic.EnableRecovery()
-	}
+
+	_, err = orcraft.PublishCommand("enable-global-recoveries", 0)
+
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -3460,14 +3388,14 @@ func (this *HttpAPI) registerSingleAPIRequest(m *Router, path string, handler Ha
 	registeredPaths = append(registeredPaths, path)
 	fullPath := fmt.Sprintf("%s/api/%s", this.URLPrefix, path)
 
-	if allowProxy && config.Config.RaftEnabled {
+	if allowProxy {
 		m.Get(fullPath, raftReverseProxy, handler)
 	} else {
 		m.Get(fullPath, handler)
 	}
 	if isWebAction(path) {
 		handlers := []Handler{guardWebAction, handler}
-		if allowProxy && config.Config.RaftEnabled {
+		if allowProxy {
 			handlers = []Handler{guardWebAction, raftReverseProxy, handler}
 		}
 		m.Post(fullPath, handlers...)
@@ -3494,8 +3422,11 @@ func (this *HttpAPI) registerAPIMethod(m *Router, method, path string, handler H
 	registeredPaths = append(registeredPaths, path)
 	fullPath := fmt.Sprintf("%s/api/%s", this.URLPrefix, path)
 	handlers := []Handler{handler}
-	if allowProxy && config.Config.RaftEnabled {
-		handlers = []Handler{raftReverseProxy, handler}
+	if method != http.MethodGet {
+		handlers = []Handler{guardWebAction, handler}
+	}
+	if allowProxy {
+		handlers = append(handlers[:len(handlers)-1], raftReverseProxy, handler)
 	}
 	switch method {
 	case http.MethodGet:
@@ -3726,7 +3657,6 @@ func (this *HttpAPI) RegisterRequests(m *Router) {
 	this.registerAPIRequestNoProxy(m, "_ping", this.LBCheck)
 	this.registerAPIRequestNoProxy(m, "leader-check", this.LeaderCheck)
 	this.registerAPIRequestNoProxy(m, "leader-check/:errorStatusCode", this.LeaderCheck)
-	this.registerAPIRequestNoProxy(m, "grab-election", this.GrabElection)
 	this.registerAPIRequestNoProxy(m, "raft/configuration", this.RaftConfiguration)
 	this.registerAPIMethod(m, http.MethodPost, "raft/bootstrap", this.RaftBootstrap, false)
 	this.registerAPIMethod(m, http.MethodPost, "raft/members", this.RaftAddMember, true)
@@ -3742,7 +3672,6 @@ func (this *HttpAPI) RegisterRequests(m *Router) {
 	this.registerAPIRequestNoProxy(m, "reset-hostname-resolve-cache", this.ResetHostnameResolveCache)
 	// Meta
 	this.registerAPIRequest(m, "routed-leader-check", this.LeaderCheck)
-	this.registerAPIRequest(m, "reelect", this.Reelect)
 	this.registerAPIRequest(m, "reload-cluster-alias", this.ReloadClusterAlias)
 	this.registerAPIRequest(m, "deregister-hostname-unresolve/:host/:port", this.DeregisterHostnameUnresolve)
 	this.registerAPIRequest(m, "register-hostname-unresolve/:host/:port/:virtualname", this.RegisterHostnameUnresolve)

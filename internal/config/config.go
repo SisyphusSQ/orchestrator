@@ -40,13 +40,17 @@ const (
 	DefaultStatusAPIEndpoint          = "/api/status"
 )
 
+var raftConfigurationLocked bool
+
+// LockRaftConfiguration freezes node identity and transport settings for the running process.
+func LockRaftConfiguration() { raftConfigurationLocked = true }
+
 var configurationLoaded chan bool = make(chan bool)
 
 const (
 	HealthPollSeconds                            = 1
 	RaftHealthPollSeconds                        = 10
 	RecoveryPollSeconds                          = 1
-	ActiveNodeExpireSeconds                      = 5
 	BinlogFileHistoryDays                        = 1
 	MaintenanceOwner                             = "orchestrator"
 	AuditPageSize                                = 20
@@ -113,8 +117,7 @@ type Configuration struct {
 	SQLite3DataFile                            string // when BackendDB == "sqlite3", full path to sqlite3 datafile
 	SkipOrchestratorDatabaseUpdate             bool   // When true, do not check backend database schema nor attempt to update it. Useful when you may be running multiple versions of orchestrator, and you only wish certain boxes to dictate the db structure (or else any time a different orchestrator version runs it will rebuild database schema)
 	PanicIfDifferentDatabaseDeploy             bool   // When true, and this process finds the orchestrator backend DB was provisioned by a different version, panic
-	RaftEnabled                                bool   // When true, setup orchestrator in a raft consensus layout. When false (default) all Raft* variables are ignored
-	RaftNodeID                                 string // Stable raft server ID. Required when RaftEnabled. Never derived from bind/advertise/DNS.
+	RaftNodeID                                 string // Stable raft server ID. Required for server startup. Never derived from bind/advertise/DNS.
 	RaftBind                                   string // Local raft listen address (host:port)
 	RaftAdvertise                              string // Cluster-facing raft address (host:port). Defaults to normalized RaftBind.
 	RaftDataDir                                string
@@ -596,37 +599,6 @@ func (this *Configuration) postReadAdjustments() error {
 	if this.IsSQLite() {
 		//		this.HostnameResolveMethod = "none"
 	}
-	if this.RaftEnabled {
-		if this.RaftDataDir == "" {
-			return fmt.Errorf("RaftDataDir must be defined since raft is enabled (RaftEnabled)")
-		}
-		this.RaftNodeID = strings.TrimSpace(this.RaftNodeID)
-		if this.RaftNodeID == "" {
-			return fmt.Errorf("RaftNodeID must be defined since raft is enabled (RaftEnabled)")
-		}
-		if strings.ContainsAny(this.RaftNodeID, " \t\r\n") {
-			return fmt.Errorf("RaftNodeID must not contain whitespace")
-		}
-		if this.RaftBind == "" {
-			return fmt.Errorf("RaftBind must be defined since raft is enabled (RaftEnabled)")
-		}
-		normalizedBind, err := NormalizeRaftAddress(this.RaftBind, this.DefaultRaftPort)
-		if err != nil {
-			return fmt.Errorf("RaftBind is invalid: %w", err)
-		}
-		this.RaftBind = normalizedBind
-		if this.RaftAdvertise == "" {
-			this.RaftAdvertise = this.RaftBind
-		} else {
-			normalizedAdvertise, err := NormalizeRaftAddress(this.RaftAdvertise, this.DefaultRaftPort)
-			if err != nil {
-				return fmt.Errorf("RaftAdvertise is invalid: %w", err)
-			}
-			this.RaftAdvertise = normalizedAdvertise
-		}
-	} else if this.RaftAdvertise == "" {
-		this.RaftAdvertise = this.RaftBind
-	}
 	if this.KVClusterMasterPrefix != "/" {
 		// "/" remains "/"
 		// "prefix" turns to "prefix/"
@@ -693,6 +665,9 @@ func (this *Configuration) IsMySQL() bool {
 
 func rejectRemovedConfigurationFields(fields map[string]json.RawMessage) error {
 	for field := range fields {
+		if strings.EqualFold(field, "RaftEnabled") {
+			return fmt.Errorf("configuration field RaftEnabled was removed; only Raft is supported: remove the field and configure RaftNodeID, RaftDataDir and RaftBind")
+		}
 		for _, removed := range []string{"GraphiteAddr", "GraphitePath", "GraphiteConvertHostnameDotsToUnderscores", "GraphitePollSeconds", "DiscoveryCollectionRetentionSeconds", "DiscoveryQueueMaxStatisticsSize"} {
 			if strings.EqualFold(field, removed) {
 				return fmt.Errorf("configuration field %q was removed; use Prometheus /metrics and Grafana instead", removed)
@@ -701,6 +676,38 @@ func rejectRemovedConfigurationFields(fields map[string]json.RawMessage) error {
 		if strings.EqualFold(field, "ZkAddress") {
 			return fmt.Errorf("configuration field %q was removed; migrate ZooKeeper master publishing to Consul KV or an external failover hook before upgrading", "ZkAddress")
 		}
+	}
+	return nil
+}
+
+// ValidateRaft validates the mandatory server runtime; offline admin commands do not start Raft.
+func (this *Configuration) ValidateRaft() error {
+	if this.RaftDataDir == "" {
+		return fmt.Errorf("RaftDataDir must be defined for server startup")
+	}
+	this.RaftNodeID = strings.TrimSpace(this.RaftNodeID)
+	if this.RaftNodeID == "" {
+		return fmt.Errorf("RaftNodeID must be defined for server startup")
+	}
+	if strings.ContainsAny(this.RaftNodeID, " \t\r\n") {
+		return fmt.Errorf("RaftNodeID must not contain whitespace")
+	}
+	if this.RaftBind == "" {
+		return fmt.Errorf("RaftBind must be defined for server startup")
+	}
+	normalizedBind, err := NormalizeRaftAddress(this.RaftBind, this.DefaultRaftPort)
+	if err != nil {
+		return fmt.Errorf("RaftBind is invalid: %w", err)
+	}
+	this.RaftBind = normalizedBind
+	if this.RaftAdvertise == "" {
+		this.RaftAdvertise = this.RaftBind
+	} else {
+		normalizedAdvertise, err := NormalizeRaftAddress(this.RaftAdvertise, this.DefaultRaftPort)
+		if err != nil {
+			return fmt.Errorf("RaftAdvertise is invalid: %w", err)
+		}
+		this.RaftAdvertise = normalizedAdvertise
 	}
 	return nil
 }
@@ -769,6 +776,17 @@ func applyFiles(fileNames []string, skipMissing bool) (*Configuration, error) {
 			return Config, err
 		}
 		appliedFiles = append(appliedFiles, fileName)
+	}
+	if raftConfigurationLocked {
+		if err := candidate.ValidateRaft(); err != nil {
+			return Config, err
+		}
+		if candidate.RaftNodeID != Config.RaftNodeID || candidate.RaftDataDir != Config.RaftDataDir ||
+			candidate.RaftBind != Config.RaftBind || candidate.RaftAdvertise != Config.RaftAdvertise ||
+			candidate.HTTPAdvertise != Config.HTTPAdvertise || candidate.ListenAddress != Config.ListenAddress ||
+			candidate.DefaultRaftPort != Config.DefaultRaftPort {
+			return Config, fmt.Errorf("raft identity and address changes require a process restart")
+		}
 	}
 	if telemetryConfigurationLocked && (candidate.OTelTraceEndpoint != Config.OTelTraceEndpoint || candidate.OTelTraceSampleRatio != Config.OTelTraceSampleRatio) {
 		return Config, fmt.Errorf("telemetry configuration changes require a process restart")

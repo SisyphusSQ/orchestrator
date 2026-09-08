@@ -9,7 +9,6 @@ A new cluster is created by bootstrapping **one** seed node, then adding the rem
 Assuming you will run `orchestrator/raft` on a `3` node setup, configure each node with its own identity and addresses:
 
 ```json
-  "RaftEnabled": true,
   "RaftNodeID": "<stable-id-of-this-node>",
   "RaftDataDir": "<path.to.orchestrator.data.directory>",
   "RaftBind": "<local.listen.host:port>",
@@ -19,7 +18,7 @@ Assuming you will run `orchestrator/raft` on a `3` node setup, configure each no
 
 Some breakdown:
 
-- `RaftEnabled` must be set to `true`, otherwise `orchestrator` runs in shared-backend mode.
+- Raft 是唯一运行架构，不再配置 `RaftEnabled`；旧字段会被拒绝。
 - `RaftNodeID` is required, persistent, and unique in the cluster. Do not use bind/advertise addresses as a substitute for identity.
 - `RaftDataDir` must be set to a directory writable to `orchestrator`. `orchestrator` will attempt to create the directory if it does not exist. Raft state is stored as `raft.db`, `node-id`, and `snapshots/` under this directory.
 - Treat `node-id` as part of the Raft state. If it is missing while `raft.db` or snapshots contain state, startup fails rather than binding that state to a newly supplied ID.
@@ -27,10 +26,11 @@ Some breakdown:
 - `RaftAdvertise` is the address other cluster members use to reach this node. If omitted, it defaults to the normalized `RaftBind`. It is not used as a node ID.
 - `DefaultRaftPort` is used only to complete a bind/advertise value that has no port.
 
+节点身份、数据目录和通信地址在服务启动时固定。运行中 reload 尝试改变这些字段会被拒绝；调整后需要重启。`orchestrator admin` 属于本地维护入口，不启动 Raft，允许使用只含后端参数的配置。
+
 As example, the following might be a working setup for node `orc-2`:
 
 ```json
-  "RaftEnabled": true,
   "RaftNodeID": "orc-2",
   "RaftDataDir": "/var/lib/orchestrator",
   "RaftBind": "10.0.0.2:10008",
@@ -41,7 +41,6 @@ As example, the following might be a working setup for node `orc-2`:
 as well as this:
 
 ```json
-  "RaftEnabled": true,
   "RaftNodeID": "orc-2",
   "RaftDataDir": "/var/lib/orchestrator",
   "RaftBind": "0.0.0.0:10008",
@@ -81,7 +80,7 @@ Do not bootstrap more than one node. A node that already has raft state returns 
 - `POST /api/raft/leadership/transfer` — optional target voter `id` (and `address` for conflict checks). Undirected if both are omitted; an address cannot be supplied alone, and the local server or a nonvoter cannot be the target. No hostname hints.
 - `POST /api/raft/snapshot` — wait for the official snapshot future.
 
-Malformed JSON, unknown fields, invalid or conflicting `expectedIndex` values, raft disabled, not bootstrapped, not leader, CAS conflict, confirmed failure, and indeterminate results are returned as distinct `ErrorClass` values. A timed-out mutation is only reported as confirmed success when readback shows the requested configuration and its `committed` field is true.
+Malformed JSON, unknown fields, invalid or conflicting `expectedIndex` values, runtime not initialized, not bootstrapped, not leader, CAS conflict, confirmed failure, and indeterminate results are returned as distinct `ErrorClass` values. A timed-out mutation is only reported as confirmed success when readback shows the requested configuration and its `committed` field is true.
 
 ### NAT, firewalls, routing
 

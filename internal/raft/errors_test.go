@@ -14,7 +14,7 @@ func TestClassOfDistinguishesErrorCategories(t *testing.T) {
 		want Class
 	}{
 		{err: nil, want: ""},
-		{err: ErrNotEnabled, want: ClassDisabled},
+		{err: ErrNotRunning, want: ClassUnavailable},
 		{err: ErrNotLeader, want: ClassNotLeader},
 		{err: ErrNotBootstrapped, want: ClassNotBootstrapped},
 		{err: ErrAlreadyBootstrapped, want: ClassConflict},

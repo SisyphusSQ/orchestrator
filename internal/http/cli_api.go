@@ -121,11 +121,9 @@ func (api *HttpAPI) cliDiagnostic(name string, params Params, req *http.Request)
 			return nil, fmt.Errorf("expected one writable master, got %d", len(masters))
 		}
 		value := attributes.HostAttributes{Hostname: "*", AttributeName: info.ClusterDomain, AttributeValue: masters[0].Key.StringCode()}
-		if orcraft.IsRaftEnabled() {
-			_, err = orcraft.PublishCommand("set-general-attribute", value)
-		} else {
-			err = attributes.SetGeneralAttribute(value.AttributeName, value.AttributeValue)
-		}
+
+		_, err = orcraft.PublishCommand("set-general-attribute", value)
+
 		if err != nil {
 			return nil, err
 		}
@@ -217,9 +215,7 @@ type relayCorrelation struct{ Source, Correlated, Next *inst.BinlogCoordinates }
 
 // untagThroughRaft keeps tag removal consistent across backends and returns the applied result.
 func untagThroughRaft(key *inst.InstanceKey, tag *inst.Tag) (*inst.InstanceKeyMap, error) {
-	if !orcraft.IsRaftEnabled() {
-		return inst.Untag(key, tag)
-	}
+
 	var value any
 	var err error
 	if key == nil {

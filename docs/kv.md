@@ -90,7 +90,7 @@ Ordinary KV and transaction providers share one official Consul Go client (`gith
 - A non-empty JSON `ConsulAclToken` is sent as the `X-Consul-Token` header. When it is empty, the official `CONSUL_HTTP_TOKEN_FILE` / `CONSUL_HTTP_TOKEN` environment fallback is allowed. Tokens are not placed in URLs or logs.
 - `ConsulKVStoreProvider` accepts `consul`, `consul-txn`, and the historical alias `consul_txn`.
 - `ConsulCrossDataCenterDistribution` requires `ConsulAddress`. Cross-DC updates wait for every datacenter and return an aggregated error; successful datacenters are not rolled back.
-- Consul client construction failures, including TLS file errors, fail CLI and continuous-mode startup. Configuration reload does not rebuild the client; restart after Consul setting changes.
+- Consul client construction failures, including TLS file errors, fail server startup. Configuration reload does not rebuild the client; restart after Consul setting changes.
 
 Optionally, you may configure:
 

@@ -274,10 +274,6 @@ var generateSQLPatches = []string{
 		ALTER TABLE agent_seed /* sqlite3-skip */
 			MODIFY end_timestamp timestamp NOT NULL DEFAULT '1971-01-01 00:00:00'
 	`,
-	`
-		ALTER TABLE active_node /* sqlite3-skip */
-			MODIFY last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
-	`,
 
 	`
 		ALTER TABLE node_health /* sqlite3-skip */
@@ -428,10 +424,6 @@ var generateSQLPatches = []string{
 		ALTER TABLE
 			database_instance
 			ADD COLUMN version_comment varchar(128) NOT NULL DEFAULT ''
-	`,
-	`
-		ALTER TABLE active_node
-			ADD COLUMN first_seen_active timestamp NOT NULL DEFAULT '1971-01-01 00:00:00'
 	`,
 	`
 		ALTER TABLE node_health

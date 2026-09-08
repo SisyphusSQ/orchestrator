@@ -49,7 +49,7 @@ type MemberRequest struct {
 
 func (store *Store) configuration() (raft.Configuration, uint64, error) {
 	if store == nil || store.raft == nil || store.configLog == nil {
-		return raft.Configuration{}, 0, ErrNotEnabled
+		return raft.Configuration{}, 0, ErrNotRunning
 	}
 	deadline := time.Now().Add(raftTimeout)
 	for {
@@ -177,14 +177,14 @@ func (store *Store) GetClusterView() (ClusterView, error) {
 
 func (store *Store) hasExistingState() (bool, error) {
 	if store.logStore == nil || store.stableStore == nil || store.snapshots == nil {
-		return false, ErrNotEnabled
+		return false, ErrNotRunning
 	}
 	return raft.HasExistingState(store.logStore, store.stableStore, store.snapshots)
 }
 
 func (store *Store) Bootstrap() (ConfigurationView, error) {
 	if store == nil || store.raft == nil {
-		return ConfigurationView{}, ErrNotEnabled
+		return ConfigurationView{}, ErrNotRunning
 	}
 	existing, err := store.hasExistingState()
 	if err != nil {
@@ -253,7 +253,7 @@ func (store *Store) currentConfigurationView() (ConfigurationView, error) {
 
 func (store *Store) AddMember(req MemberRequest) (ConfigurationView, error) {
 	if store == nil || store.raft == nil {
-		return ConfigurationView{}, ErrNotEnabled
+		return ConfigurationView{}, ErrNotRunning
 	}
 	id := strings.TrimSpace(req.ID)
 	address := strings.TrimSpace(req.Address)
@@ -307,7 +307,7 @@ func (store *Store) AddMember(req MemberRequest) (ConfigurationView, error) {
 
 func (store *Store) RemoveMember(id string, expectedIndex *uint64) (ConfigurationView, error) {
 	if store == nil || store.raft == nil {
-		return ConfigurationView{}, ErrNotEnabled
+		return ConfigurationView{}, ErrNotRunning
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -334,7 +334,7 @@ func (store *Store) RemoveMember(id string, expectedIndex *uint64) (Configuratio
 
 func (store *Store) TransferLeadership(id, address string) error {
 	if store == nil || store.raft == nil {
-		return ErrNotEnabled
+		return ErrNotRunning
 	}
 	id = strings.TrimSpace(id)
 	address = strings.TrimSpace(address)
@@ -374,7 +374,7 @@ func (store *Store) TransferLeadership(id, address string) error {
 
 func (store *Store) Snapshot() error {
 	if store == nil || store.raft == nil {
-		return ErrNotEnabled
+		return ErrNotRunning
 	}
 	future := store.raft.Snapshot()
 	if err := waitFuture(future, raftTimeout); err != nil {

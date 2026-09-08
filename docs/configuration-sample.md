@@ -161,7 +161,6 @@ The following is a production configuration file, with some details redacted.
   "MySQLTopologyReadTimeoutSeconds": 3,
   "MySQLDiscoveryReadTimeoutSeconds": 3,
   "SQLite3DataFile": "/var/lib/orchestrator/orchestrator-sqlite.db",
-  "RaftEnabled": false,
   "RaftNodeID": "redacted",
   "RaftBind": "redacted:10008",
   "RaftAdvertise": "redacted:10008",

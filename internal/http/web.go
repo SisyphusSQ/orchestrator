@@ -92,11 +92,8 @@ func (this *HttpWeb) registerWebRequest(m *Router, path string, handler Handler)
 		fullPath = fmt.Sprintf("%s/", this.URLPrefix)
 	}
 
-	if config.Config.RaftEnabled {
-		m.Get(fullPath, raftReverseProxy, handler)
-	} else {
-		m.Get(fullPath, handler)
-	}
+	m.Get(fullPath, raftReverseProxy, handler)
+
 }
 
 // RegisterRequests makes for the de-facto list of known Web calls
@@ -142,9 +139,9 @@ func (this *HttpWeb) RegisterRequests(m *Router) {
 	this.registerWebRequest(m, "seeds", this.Page)
 
 	handlers := []Handler{this.Bootstrap}
-	if config.Config.RaftEnabled {
-		handlers = []Handler{raftReverseProxy, this.Bootstrap}
-	}
+
+	handlers = []Handler{raftReverseProxy, this.Bootstrap}
+
 	m.Get(this.URLPrefix+"/api/web-config", handlers...)
 
 	this.RegisterDebug(m)

@@ -4,12 +4,7 @@ What does an `orchestrator` deployment look like? What do you need to set in `pu
 
 ## Deploying the service & clients
 
-You will first decide whether you want to run `orchestrator` on a shared backend DB or with a `raft` setup. See [High availability](high-availability.md) for some options, and [orchestrator/raft vs. synchronous replication setup](raft-vs-sync-repl.md) for comparison & discussion.
-
-Follow these deployment guides:
-
-- Deploying `orchestrator` on [shared backend DB](deployment-shared-backend.md)
-- Deploying `orchestrator` via [raft consensus](deployment-raft.md)
+Orchestrator 统一使用 Raft。按照 [Raft 部署](deployment-raft.md) 部署服务与客户端，并参照 [高可用](high-availability.md) 选择节点数量。每个节点使用独立元数据库。
 
 ## Next steps
 
@@ -31,7 +26,7 @@ However, how does `orchestrator` discover completely new topologies?
 
   In the above, each host lets `orchestrator` know about itself once per day; newly bootstrapped hosts are discovered the next midnight. The `sleep` in introduced to avoid storming `orchestrator` by all servers at the same time.
 
-  The above uses [orch](orch.md), which is also the management entry point for shared-backend deployments.
+  The above uses [orch](orch.md), the HTTP management entry point for the Raft cluster.
 
 ### Adding promotion rules
 

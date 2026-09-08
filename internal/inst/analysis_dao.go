@@ -799,9 +799,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 }
 
 func getConcensusReplicationAnalysis(analysisEntries []ReplicationAnalysis) ([]ReplicationAnalysis, error) {
-	if !orcraft.IsRaftEnabled() {
-		return analysisEntries, nil
-	}
+
 	if !config.Config.ExpectFailureAnalysisConcensus {
 		return analysisEntries, nil
 	}

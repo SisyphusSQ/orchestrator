@@ -14,7 +14,7 @@ This turns useful in cross data-center (DC) setups. Assume you set three `orches
 
 ### orchestrator/raft setup technical details
 
-See also: [orchestrator/raft vs. synchronous replication setup](raft-vs-sync-repl.md)
+See also: [Raft deployment](deployment-raft.md).
 
 #### Service nodes
 
@@ -23,7 +23,6 @@ You will set up `3` or `5` (recommended raft node count) `orchestrator` nodes. O
 New clusters are formed by bootstrapping one seed node, then adding voters through the leader membership API. Each node has a durable `RaftNodeID` that is independent of bind/advertise addresses:
 
 ```json
-  "RaftEnabled": true,
   "RaftNodeID": "<stable-id-of-this-node>",
   "RaftDataDir": "/var/lib/orchestrator",
   "RaftBind": "<local.listen.host:port>",

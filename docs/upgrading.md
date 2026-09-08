@@ -1,5 +1,19 @@
 # Upgrading orchestrator
 
+## 仅支持 Raft（TOO-428）
+
+服务端移除非 Raft 单机、共享数据库选主及半高可用路径。MySQL 和 SQLite 仍可作为每个节点的独立元数据后端。单节点开发也使用 Raft，并显式 bootstrap。
+
+- 删除所有配置层中的 `RaftEnabled`，无论原值为 true、false 或 null，新版本都会拒绝；配置稳定、唯一的 `RaftNodeID`、`RaftDataDir`、`RaftBind` / `RaftAdvertise`。这些参数的含义见 [Raft 配置](configuration-raft.md)。
+- 服务统一使用 `orchestrator server`。删除 `continuous`、`--grab-election` 调用；旧 `/api/grab-election`、`/api/reelect` 已删除，领导权转移使用 `orch raft-transfer-leadership` 或 `POST /api/raft/leadership/transfer`。
+- `server --discovery=false` 只关闭自动发现，仍启动 Raft。暂停发现的测试也必须 bootstrap 并等待 Leader；未就绪不再允许业务写入。
+- 健康返回移除 `raftEnabled`，指标移除 `orchestrator_raft_enabled`。更新 Grafana 面板与自定义规则，直接读取 Raft 就绪、领导角色和日志进度。
+- 新库不再创建 `active_node`，对应历史建表和补丁引用已一并移除。已有库中的旧表不自动删除，避免升级时销毁数据。
+
+已有 Raft 集群保留节点身份、Raft 日志/快照和独立元数据库，修改配置与启动入口后重启；不重复 bootstrap。本变更不引入 Raft 日志或快照格式变化。回滚时同时恢复原二进制、原配置与启动脚本。
+
+现存非 Raft 部署不能直接改配置后继续共用数据库。先停止旧系统的发现、自动恢复和业务写入，备份需要保留的数据，另行准备独立元数据库与节点身份，建立新 Raft 集群后验收再切换客户端。本变更不自动复制、删除或迁移现存环境数据；不得让新旧系统同时执行故障恢复。
+
 ## 独立 Go HTTP 客户端（TOO-426）
 
 一次性移除旧 Shell 客户端、直连业务 CLI、`-c`/`cli`、旧参数别名和环境变量。安装 `orch` 并使用 `ORCH_ENDPOINT` 等新配置。服务启动从 `http` 改为 `server`；本地维护迁入 `orchestrator admin`。不需要迁移数据库数据；不能仅替换二进制而保留旧启动脚本。回滚需同时恢复上一版本的服务端、客户端、启动配置及脚本。新 `set-general-attribute`、`delete-all-instance-tags` 及标签删除结果契约要求集群节点使用同一新版本，首次使用前完成全节点升级；本卡不承诺旧节点混跑。
@@ -110,7 +124,7 @@ This change does not migrate existing ZooKeeper data or consumers. If rollback i
 
 Previous HTTPS clients set `InsecureSkipVerify: true` unconditionally. The new default verifies certificates against the system trust store, or against `ConsulTLSCAFile` / `ConsulTLSCAPath` when configured. `CONSUL_HTTP_SSL_VERIFY` cannot turn verification off. Historical HTTPS deployments that relied on skipped verification must configure a trusted CA and `ConsulTLSServerName` before upgrading. Only a temporary compatibility path should set `"ConsulTLSSkipVerify": true`, which logs one non-sensitive startup warning.
 
-Client construction and TLS file errors now fail CLI and continuous-mode startup instead of logging and continuing with a nil Consul client. `ConsulCrossDataCenterDistribution` requires `ConsulAddress`. Cross-DC updates can still succeed in some datacenters and fail in others; the caller receives an aggregated error and successful datacenters are not rolled back.
+Client construction and TLS file errors now fail server startup instead of logging and continuing with a nil Consul client. `ConsulCrossDataCenterDistribution` requires `ConsulAddress`. Cross-DC updates can still succeed in some datacenters and fail in others; the caller receives an aggregated error and successful datacenters are not rolled back.
 
 Consul settings are not rebuilt on `SIGHUP` configuration reload. Restart every `orchestrator` process after changing Consul address, scheme, token, datacenter, TLS files, skip-verify, timeout, or provider. `ConsulHttpTimeoutSeconds` defaults to `60`; `0` means no overall deadline. Timed-out writes are not retried.
 

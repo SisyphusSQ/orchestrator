@@ -58,12 +58,9 @@ func TestKnownPaths(t *testing.T) {
 
 func TestCompleteRouteRegistrationContract(t *testing.T) {
 	previousStatusEndpoint := config.Config.StatusEndpoint
-	previousRaftEnabled := config.Config.RaftEnabled
 	config.Config.StatusEndpoint = config.DefaultStatusAPIEndpoint
-	config.Config.RaftEnabled = true
 	t.Cleanup(func() {
 		config.Config.StatusEndpoint = previousStatusEndpoint
-		config.Config.RaftEnabled = previousRaftEnabled
 	})
 
 	standard := mustRouter(t, RouterOptions{})
@@ -71,12 +68,12 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	web := HttpWeb{URLPrefix: "/orchestrator"}
 	registeredAPIsBefore := len(registeredPaths)
 	api.RegisterRequests(standard)
-	if got, want := len(registeredPaths)-registeredAPIsBefore, 258; got != want {
+	if got, want := len(registeredPaths)-registeredAPIsBefore, 256; got != want {
 		t.Fatalf("registered API routes = %d, want %d", got, want)
 	}
 	RegisterObservability(standard, "/orchestrator")
 	web.RegisterRequests(standard)
-	if got, want := len(standard.logicalRoutes), 385; got != want {
+	if got, want := len(standard.logicalRoutes), 382; got != want {
 		t.Fatalf("standard logical routes = %d, want %d", got, want)
 	}
 
@@ -91,7 +88,7 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	if got, want := len(agents.logicalRoutes), 6; got != want {
 		t.Fatalf("agent logical routes = %d, want %d", got, want)
 	}
-	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 391; got != want {
+	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 388; got != want {
 		t.Fatalf("total logical routes = %d, want %d", got, want)
 	}
 

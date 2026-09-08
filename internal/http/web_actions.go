@@ -26,7 +26,7 @@ var webActionNames = map[string]bool{
 	"graceful-master-takeover": true, "register-candidate": true,
 	"ack-recovery": true, "set-cluster-alias": true, "submit-pool-instances": true,
 	"enable-global-recoveries": true, "disable-global-recoveries": true,
-	"reload-configuration": true, "reset-hostname-resolve-cache": true, "reelect": true,
+	"reload-configuration": true, "reset-hostname-resolve-cache": true,
 	"agent-umount": true, "agent-mount": true, "agent-removelv": true,
 	"agent-create-snapshot": true, "agent-mysql-start": true, "agent-mysql-stop": true,
 	"agent-seed": true, "agent-abort-seed": true,

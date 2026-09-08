@@ -281,7 +281,6 @@ for (const [id, label] of [
   ["disable-global-recoveries", "暂停自动恢复"],
   ["reload-configuration", "重新加载配置"],
   ["reset-hostname-resolve-cache", "清空主机解析缓存"],
-  ["reelect", "重新选举活动节点"],
 ])
   definitions.push({
     id,
@@ -291,6 +290,14 @@ for (const [id, label] of [
     fields: [],
     path: () => endpoint(id),
   });
+definitions.push({
+  id: "raft-transfer-leadership",
+  label: "转移 Raft 领导权",
+  group: "系统",
+  description: "将领导权转移给另一个投票节点。单节点集群没有可转移的目标，操作会失败。",
+  fields: [],
+  path: () => endpoint("raft", "leadership", "transfer"),
+});
 for (const [id, label] of [
   ["agent-umount", "卸载数据卷"],
   ["agent-create-snapshot", "创建快照"],

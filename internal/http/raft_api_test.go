@@ -32,7 +32,7 @@ func serveHTTPRequest(t *testing.T, handler http.Handler, req *http.Request) *ht
 	return resp
 }
 
-func TestRaftHTTPErrorClassesWhenDisabled(t *testing.T) {
+func TestRaftHTTPErrorClassesBeforeInitialization(t *testing.T) {
 	router := mustRouter(t, RouterOptions{})
 	api := HttpAPI{URLPrefix: ""}
 	api.RegisterRequests(router)
@@ -52,8 +52,8 @@ func TestRaftHTTPErrorClassesWhenDisabled(t *testing.T) {
 	for _, tc := range tests {
 		req := newJSONRequest(t, tc.method, tc.path, tc.body)
 		resp := serveHTTPRequest(t, router, req)
-		if resp.Code != http.StatusBadRequest {
-			t.Fatalf("%s %s status = %d, want 400; body=%s", tc.method, tc.path, resp.Code, resp.Body.String())
+		if resp.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s %s status = %d, want 503; body=%s", tc.method, tc.path, resp.Code, resp.Body.String())
 		}
 		var payload struct {
 			Code       string
@@ -63,8 +63,8 @@ func TestRaftHTTPErrorClassesWhenDisabled(t *testing.T) {
 		if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("decode %s %s: %v body=%s", tc.method, tc.path, err, resp.Body.String())
 		}
-		if payload.ErrorClass != string(orcraft.ClassDisabled) {
-			t.Fatalf("%s %s ErrorClass = %q, want %q", tc.method, tc.path, payload.ErrorClass, orcraft.ClassDisabled)
+		if payload.ErrorClass != string(orcraft.ClassUnavailable) {
+			t.Fatalf("%s %s ErrorClass = %q, want %q", tc.method, tc.path, payload.ErrorClass, orcraft.ClassUnavailable)
 		}
 	}
 }

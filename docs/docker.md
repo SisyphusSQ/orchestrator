@@ -27,12 +27,22 @@ This will use [`docker/Dockerfile.test`](https://github.com/openark/orchestrator
 
 Run this command:
 ```shell
-$ make run
+$ make run DOCKER_EXTRA_ARGS="-v /absolute/path/orchestrator.conf.json:/etc/orchestrator.conf.json:ro -v /absolute/path/node-data:/var/lib/orchestrator -p 10008:10008"
 ```
 which uses [`docker/Dockerfile`](https://github.com/openark/orchestrator/blob/master/docker/Dockerfile) to build `orchestrator` on an Alpine Linux, and run the service. Docker will map port `:3000` onto your machine, you may browse onto `http://127.0.0.1:3000` to access the orchestrator web interface.
 
 The following environment variables are available and take effect if no config
 file is bind mounted into container at `/etc/orchestrator.conf.json`
+
+容器必须挂载完整的 Raft 配置，或提供以下环境变量生成配置。每个节点独立挂载持久数据目录；首次建群只对一个种子执行 `orch raft-bootstrap`，不会自动 bootstrap。单节点也遵循这个流程。示例配置见 [Raft 配置](configuration-raft.md)。
+
+* `ORC_RAFT_NODE_ID`：必填，稳定且唯一的节点 ID。
+* `ORC_RAFT_ADVERTISE`：必填，其他节点可访问的 Raft 地址。
+* `ORC_RAFT_BIND`：默认 `0.0.0.0:10008`。
+* `ORC_RAFT_DATA_DIR`：默认 `/var/lib/orchestrator/raft`。
+* `ORC_HTTP_ADVERTISE`：经端口映射访问时应配置节点 HTTP 地址。
+
+环境变量生成的配置使用下列 MySQL 后端参数，每个节点必须使用独立元数据库。选择 SQLite 时挂载调整后的 `conf/orchestrator-sample-sqlite.conf.json`。
 
 * `ORC_TOPOLOGY_USER`: defaults to `orchestrator`
 * `ORC_TOPOLOGY_PASSWORD`: defaults to `orchestrator`

@@ -38,12 +38,11 @@ FROM alpine:3.23
 
 RUN apk --no-cache add bash curl jq
 
-EXPOSE 3000
+EXPOSE 3000 10008
 
 COPY --from=build /orchestrator/bin/ /usr/local/orchestrator/
 COPY --from=build /orchestrator/bin/orch /usr/bin/orch
 COPY --from=build /orchestrator/conf/orchestrator-sample*.conf.json /usr/local/orchestrator/
-COPY --from=build /orchestrator/conf/orchestrator-sample-sqlite.conf.json /etc/orchestrator.conf.json
 
 WORKDIR /usr/local/orchestrator
 COPY docker/entrypoint.sh /entrypoint.sh

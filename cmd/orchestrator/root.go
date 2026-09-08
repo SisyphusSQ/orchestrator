@@ -32,16 +32,11 @@ func execute(args []string, stdout, stderr io.Writer, run func(*commandOptions, 
 	options.runtime.SkipUnresolve = flags.Bool("skip-unresolve", false, "Do not unresolve hostnames")
 	options.runtime.SkipUnresolveCheck = flags.Bool("skip-unresolve-check", false, "Skip unresolve consistency checks")
 	options.runtime.SkipBinlogSearch = flags.Bool("skip-binlog-search", false, "Only search relay logs for Pseudo-GTID")
-	options.runtime.GrabElection = flags.Bool("grab-election", false, "Grab shared-backend leadership on startup")
 	options.runtime.EnableDatabaseUpdate = flags.Bool("enable-database-update", false, "Allow server schema updates")
 	root.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
-	for _, name := range []string{"server", "continuous"} {
-		command := &cobra.Command{Use: name, Short: map[string]string{"server": "Run HTTP/Web services and optional discovery", "continuous": "Run discovery without HTTP services"}[name], Args: cobra.NoArgs, RunE: func(*cobra.Command, []string) error { return run(options, name) }}
-		if name == "server" {
-			command.Flags().BoolVar(&options.discovery, "discovery", true, "Enable automatic topology discovery")
-		}
-		root.AddCommand(command)
-	}
+	server := &cobra.Command{Use: "server", Short: "Run the Raft node and HTTP/Web services", Args: cobra.NoArgs, RunE: func(*cobra.Command, []string) error { return run(options, "server") }}
+	server.Flags().BoolVar(&options.discovery, "discovery", true, "Enable automatic topology discovery")
+	root.AddCommand(server)
 	admin := &cobra.Command{Use: "admin", Short: "Local server maintenance; requires server configuration", Args: cobra.NoArgs}
 	for _, name := range []string{"dump-config", "redeploy-internal-db", "access-token", "suggest-promoted-replacement"} {
 		command := &cobra.Command{Use: name, Short: name, Args: cobra.NoArgs, RunE: func(*cobra.Command, []string) error {

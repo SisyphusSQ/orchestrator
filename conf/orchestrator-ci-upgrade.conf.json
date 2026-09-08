@@ -1,4 +1,7 @@
 {
+  "RaftNodeID": "node-1",
+  "RaftDataDir": "/var/lib/orchestrator/raft",
+  "RaftBind": "127.0.0.1:10008",
   "Debug": true,
   "EnableSyslog": false,
   "ListenAddress": ":3000",

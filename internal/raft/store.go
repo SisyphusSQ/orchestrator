@@ -298,7 +298,7 @@ func (store *Store) Close() error {
 
 func (store *Store) genericCommand(op string, bytes []byte) (response interface{}, err error) {
 	if store == nil || store.raft == nil {
-		return nil, ErrNotEnabled
+		return nil, ErrNotRunning
 	}
 	if store.raft.State() != raft.Leader {
 		return nil, ErrNotLeader

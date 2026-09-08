@@ -139,9 +139,11 @@ EOF
     # 每个 fixture 独立启动服务端，禁止自动发现改写预置拓扑。
     listen_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
     python3 - "$test_config_file" "$task_tmp/server.json" "$listen_port" <<'PYCONFIG'
-import json,sys
+import json,sys,socket,os
 with open(sys.argv[1]) as f: config=json.load(f)
-config.update(ListenAddress="127.0.0.1:"+sys.argv[3],HostnameResolveMethod="none",Debug=False,AuditLogFile="",RaftEnabled=False)
+sock=socket.socket(); sock.bind(("127.0.0.1",0)); raft_port=sock.getsockname()[1]; sock.close()
+config.pop("RaftEnabled",None)
+config.update(ListenAddress="127.0.0.1:"+sys.argv[3],HostnameResolveMethod="none",Debug=False,AuditLogFile="",RaftNodeID="integration",RaftDataDir=os.path.join(os.path.dirname(sys.argv[2]),"raft-"+sys.argv[3]),RaftBind="127.0.0.1:"+str(raft_port),RaftAdvertise="127.0.0.1:"+str(raft_port))
 with open(sys.argv[2],"w") as f: json.dump(config,f)
 PYCONFIG
     "$orchestrator_binary" server --config="$task_tmp/server.json" --discovery=false >"$task_tmp/server.log" 2>&1 &
@@ -149,6 +151,14 @@ PYCONFIG
     ready=
     for attempt in $(seq 1 100); do
       if "$cli_binary" --endpoint="http://127.0.0.1:$listen_port" api lb-check >/dev/null 2>&1; then ready=1; break; fi
+      kill -0 "$server_pid" 2>/dev/null || break
+      sleep 0.1
+    done
+    if [ -z "$ready" ]; then cat "$task_tmp/server.log"; return 1; fi
+    "$cli_binary" --endpoint="http://127.0.0.1:$listen_port" raft-bootstrap >/dev/null || return 1
+    ready=
+    for attempt in $(seq 1 100); do
+      if "$cli_binary" --endpoint="http://127.0.0.1:$listen_port" api leader-check >/dev/null 2>&1; then ready=1; break; fi
       kill -0 "$server_pid" 2>/dev/null || break
       sleep 0.1
     done
@@ -240,15 +250,15 @@ deploy_internal_db() {
 }
 
 generate_config_file() {
-  python3 - "$tests_path/orchestrator.conf.json" "$test_config_file" "$test_mysql_defaults_file" <<'PYCONFIG'
+  python3 - "$tests_path/orchestrator.conf.json" "$test_config_file" "$test_mysql_defaults_file" "$db_type" "$sqlite_file" <<'PYCONFIG'
 import json,re,sys
 text=open(sys.argv[1]).read(); config=json.loads(re.sub(r",\s*([}\]])",r"\1",text))
 config["MySQLOrchestratorCredentialsConfigFile"]=sys.argv[3]
 config["AuditLogFile"]=""
+config["BackendDB"]=sys.argv[4]
+config["SQLite3DataFile"]=sys.argv[5]
 with open(sys.argv[2],"w") as f: json.dump(config,f)
 PYCONFIG
-  sed -i -e "s/backend-db-placeholder/${db_type}/g" ${test_config_file}
-  sed -i -e "s^sqlite-data-file-placeholder^${sqlite_file}^g" ${test_config_file}
   touch "$test_mysql_defaults_file" # required even for sqlite because config file references the my.cnf cgf file
   echo "- generate_config_file OK"
 }
