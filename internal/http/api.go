@@ -218,7 +218,7 @@ func (this *HttpAPI) InstanceReplicas(params Params, r Responder, req *http.Requ
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	replicas, err := inst.ReadReplicaInstances(&instanceKey)
@@ -235,7 +235,7 @@ func (this *HttpAPI) Instance(params Params, r Responder, req *http.Request) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
@@ -256,7 +256,7 @@ func (this *HttpAPI) AsyncDiscover(params Params, r Responder, req *http.Request
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	go this.Discover(params, r, req, user)
@@ -272,12 +272,12 @@ func (this *HttpAPI) Discover(params Params, r Responder, req *http.Request, use
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.ReadTopologyInstanceContext(req.Context(), &instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -303,13 +303,13 @@ func (this *HttpAPI) Refresh(params Params, r Responder, req *http.Request, user
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	_, err = inst.RefreshTopologyInstance(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -324,7 +324,7 @@ func (this *HttpAPI) Forget(params Params, r Responder, req *http.Request, user 
 	}
 	instanceKey, err := this.getNoResolveInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -334,7 +334,7 @@ func (this *HttpAPI) Forget(params Params, r Responder, req *http.Request, user 
 		err = inst.ForgetInstance(&instanceKey)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance forgotten: %+v", instanceKey), Details: instanceKey})
@@ -348,7 +348,7 @@ func (this *HttpAPI) ForgetCluster(params Params, r Responder, req *http.Request
 	}
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -365,14 +365,14 @@ func (this *HttpAPI) Resolve(params Params, r Responder, req *http.Request) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	if conn, err := net.Dial("tcp", instanceKey.DisplayString()); err == nil {
 		conn.Close()
 	} else {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -388,12 +388,20 @@ func (this *HttpAPI) BeginMaintenance(params Params, r Responder, req *http.Requ
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	key, err := inst.BeginBoundedMaintenance(&instanceKey, params["owner"], params["reason"], 0, true)
+	durationSeconds := 0
+	if duration := req.URL.Query().Get("duration"); duration != "" {
+		durationSeconds, err = util.SimpleTimeToSeconds(duration)
+		if err != nil || durationSeconds < 0 {
+			Respond(r, &APIResponse{Code: ERROR, Message: "Invalid maintenance duration"})
+			return
+		}
+	}
+	key, err := inst.BeginBoundedMaintenance(&instanceKey, params["owner"], params["reason"], uint(durationSeconds), true)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: key})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: key})
 		return
 	}
 
@@ -408,12 +416,12 @@ func (this *HttpAPI) EndMaintenance(params Params, r Responder, req *http.Reques
 	}
 	maintenanceKey, err := strconv.ParseInt(params["maintenanceKey"], 10, 0)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	_, err = inst.EndMaintenance(maintenanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -429,12 +437,12 @@ func (this *HttpAPI) EndMaintenanceByInstanceKey(params Params, r Responder, req
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	_, err = inst.EndMaintenanceByInstanceKey(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -445,12 +453,12 @@ func (this *HttpAPI) EndMaintenanceByInstanceKey(params Params, r Responder, req
 func (this *HttpAPI) InMaintenance(params Params, r Responder, req *http.Request, user Principal) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	inMaintenance, err := inst.InMaintenance(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	responseDetails := ""
@@ -465,7 +473,7 @@ func (this *HttpAPI) Maintenance(params Params, r Responder, req *http.Request) 
 	maintenanceList, err := inst.ReadActiveMaintenance()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -481,7 +489,7 @@ func (this *HttpAPI) BeginDowntime(params Params, r Responder, req *http.Request
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -492,7 +500,7 @@ func (this *HttpAPI) BeginDowntime(params Params, r Responder, req *http.Request
 			err = fmt.Errorf("Duration value must be non-negative. Given value: %d", durationSeconds)
 		}
 		if err != nil {
-			Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+			Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 			return
 		}
 	}
@@ -505,7 +513,7 @@ func (this *HttpAPI) BeginDowntime(params Params, r Responder, req *http.Request
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: instanceKey})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: instanceKey})
 		return
 	}
 
@@ -521,7 +529,7 @@ func (this *HttpAPI) EndDowntime(params Params, r Responder, req *http.Request, 
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if orcraft.IsRaftEnabled() {
@@ -530,7 +538,7 @@ func (this *HttpAPI) EndDowntime(params Params, r Responder, req *http.Request, 
 		_, err = inst.EndDowntime(&instanceKey)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -546,12 +554,12 @@ func (this *HttpAPI) MoveUp(params Params, r Responder, req *http.Request, user 
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.MoveUp(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -566,13 +574,13 @@ func (this *HttpAPI) MoveUpReplicas(params Params, r Responder, req *http.Reques
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	replicas, newMaster, err, errs := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -588,18 +596,22 @@ func (this *HttpAPI) Repoint(params Params, r Responder, req *http.Request, user
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
+	var belowKey *inst.InstanceKey
+	if params["belowHost"] != "" {
+		key, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+		if err != nil {
+			Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
+			return
+		}
+		belowKey = &key
 	}
 
-	instance, err := inst.Repoint(&instanceKey, &belowKey, inst.GTIDHintNeutral)
+	instance, err := inst.Repoint(&instanceKey, belowKey, inst.GTIDHintNeutral)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -614,13 +626,21 @@ func (this *HttpAPI) RepointReplicas(params Params, r Responder, req *http.Reque
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
-	replicas, err, _ := inst.RepointReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	var destination *inst.InstanceKey
+	if raw := req.URL.Query().Get("destination"); raw != "" {
+		destination, err = inst.ParseResolveInstanceKey(raw)
+		if err != nil {
+			Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
+			return
+		}
+	}
+	replicas, err, _ := inst.RepointReplicasTo(&instanceKey, req.URL.Query().Get("pattern"), destination)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -636,12 +656,12 @@ func (this *HttpAPI) MakeCoMaster(params Params, r Responder, req *http.Request,
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.MakeCoMaster(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -657,12 +677,12 @@ func (this *HttpAPI) ResetReplication(params Params, r Responder, req *http.Requ
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.ResetReplicationOperation(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -679,17 +699,17 @@ func (this *HttpAPI) ChangeMasterCredentials(params Params, r Responder, req *ht
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	creds, err := inst.ReadReplicationCredentials(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.ChangeMasterCredentials(&instanceKey, creds)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -706,12 +726,12 @@ func (this *HttpAPI) DetachReplicaMasterHost(params Params, r Responder, req *ht
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.DetachReplicaMasterHost(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -728,12 +748,12 @@ func (this *HttpAPI) ReattachReplicaMasterHost(params Params, r Responder, req *
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.ReattachReplicaMasterHost(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -749,12 +769,12 @@ func (this *HttpAPI) EnableGTID(params Params, r Responder, req *http.Request, u
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.EnableGTID(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -770,12 +790,12 @@ func (this *HttpAPI) DisableGTID(params Params, r Responder, req *http.Request, 
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.DisableGTID(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -787,12 +807,12 @@ func (this *HttpAPI) LocateErrantGTID(params Params, r Responder, req *http.Requ
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	errantBinlogs, err := inst.LocateErrantGTID(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("located errant GTID"), Details: errantBinlogs})
@@ -807,12 +827,12 @@ func (this *HttpAPI) ErrantGTIDResetMaster(params Params, r Responder, req *http
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.ErrantGTIDResetMaster(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -828,12 +848,12 @@ func (this *HttpAPI) ErrantGTIDInjectEmpty(params Params, r Responder, req *http
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, clusterMaster, countInjectedTransactions, err := inst.ErrantGTIDInjectEmpty(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -848,18 +868,18 @@ func (this *HttpAPI) MoveBelow(params Params, r Responder, req *http.Request, us
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	siblingKey, err := this.getInstanceKey(params["siblingHost"], params["siblingPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.MoveBelow(&instanceKey, &siblingKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -874,18 +894,18 @@ func (this *HttpAPI) MoveBelowGTID(params Params, r Responder, req *http.Request
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.MoveBelowGTID(&instanceKey, &belowKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -900,18 +920,18 @@ func (this *HttpAPI) MoveReplicasGTID(params Params, r Responder, req *http.Requ
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	movedReplicas, _, err, errs := inst.MoveReplicasGTID(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -926,13 +946,13 @@ func (this *HttpAPI) TakeSiblings(params Params, r Responder, req *http.Request,
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, count, err := inst.TakeSiblings(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -947,13 +967,13 @@ func (this *HttpAPI) TakeMaster(params Params, r Responder, req *http.Request, u
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.TakeMaster(&instanceKey, false)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -969,18 +989,18 @@ func (this *HttpAPI) RelocateBelow(params Params, r Responder, req *http.Request
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.RelocateBelow(&instanceKey, &belowKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -995,18 +1015,18 @@ func (this *HttpAPI) RelocateReplicas(params Params, r Responder, req *http.Requ
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	replicas, _, err, errs := inst.RelocateReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1021,18 +1041,18 @@ func (this *HttpAPI) MoveEquivalent(params Params, r Responder, req *http.Reques
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.MoveEquivalent(&instanceKey, &belowKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1047,27 +1067,27 @@ func (this *HttpAPI) LastPseudoGTID(params Params, r Responder, req *http.Reques
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if instance == nil || !found {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Instance not found: %+v", instanceKey)})
 		return
 	}
-	coordinates, text, err := inst.FindLastPseudoGTIDEntry(instance, instance.RelaylogCoordinates, nil, false, nil)
+	coordinates, text, err := inst.FindLastPseudoGTIDEntry(instance, instance.RelaylogCoordinates, nil, req.URL.Query().Get("strict") == "true", nil)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1082,18 +1102,18 @@ func (this *HttpAPI) MatchBelow(params Params, r Responder, req *http.Request, u
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, matchedCoordinates, err := inst.MatchBelow(&instanceKey, &belowKey, true)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1108,13 +1128,13 @@ func (this *HttpAPI) MatchUp(params Params, r Responder, req *http.Request, user
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, matchedCoordinates, err := inst.MatchUp(&instanceKey, true)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1129,18 +1149,18 @@ func (this *HttpAPI) MultiMatchReplicas(params Params, r Responder, req *http.Re
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	replicas, newMaster, err, errs := inst.MultiMatchReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1155,13 +1175,13 @@ func (this *HttpAPI) MatchUpReplicas(params Params, r Responder, req *http.Reque
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	replicas, newMaster, err, errs := inst.MatchUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1177,14 +1197,14 @@ func (this *HttpAPI) RegroupReplicas(params Params, r Responder, req *http.Reque
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicas(&instanceKey, false, nil, nil)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1201,7 +1221,7 @@ func (this *HttpAPI) RegroupReplicasPseudoGTID(params Params, r Responder, req *
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1209,7 +1229,7 @@ func (this *HttpAPI) RegroupReplicasPseudoGTID(params Params, r Responder, req *
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1225,7 +1245,7 @@ func (this *HttpAPI) RegroupReplicasGTID(params Params, r Responder, req *http.R
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1233,7 +1253,7 @@ func (this *HttpAPI) RegroupReplicasGTID(params Params, r Responder, req *http.R
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1249,14 +1269,14 @@ func (this *HttpAPI) RegroupReplicasBinlogServers(params Params, r Responder, re
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	_, promotedBinlogServer, err := inst.RegroupReplicasBinlogServers(&instanceKey, false)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1272,13 +1292,13 @@ func (this *HttpAPI) MakeMaster(params Params, r Responder, req *http.Request, u
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.MakeMaster(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1294,13 +1314,13 @@ func (this *HttpAPI) MakeLocalMaster(params Params, r Responder, req *http.Reque
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instance, err := inst.MakeLocalMaster(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1316,12 +1336,12 @@ func (this *HttpAPI) SkipQuery(params Params, r Responder, req *http.Request, us
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.SkipQuery(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1337,12 +1357,12 @@ func (this *HttpAPI) StartReplication(params Params, r Responder, req *http.Requ
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.StartReplication(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1358,12 +1378,12 @@ func (this *HttpAPI) RestartReplication(params Params, r Responder, req *http.Re
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.RestartReplication(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1379,12 +1399,12 @@ func (this *HttpAPI) StopReplication(params Params, r Responder, req *http.Reque
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.StopReplication(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1400,12 +1420,12 @@ func (this *HttpAPI) StopReplicationNicely(params Params, r Responder, req *http
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.StopReplicationNicely(&instanceKey, 0)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1421,12 +1441,17 @@ func (this *HttpAPI) FlushBinaryLogs(params Params, r Responder, req *http.Reque
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := inst.FlushBinaryLogs(&instanceKey, 1)
+	var instance *inst.Instance
+	if file := req.URL.Query().Get("binlog"); file != "" {
+		instance, err = inst.FlushBinaryLogsTo(&instanceKey, file)
+	} else {
+		instance, err = inst.FlushBinaryLogs(&instanceKey, 1)
+	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1442,7 +1467,7 @@ func (this *HttpAPI) PurgeBinaryLogs(params Params, r Responder, req *http.Reque
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	logFile := params["logFile"]
@@ -1458,7 +1483,7 @@ func (this *HttpAPI) PurgeBinaryLogs(params Params, r Responder, req *http.Reque
 		instance, err = inst.PurgeBinaryLogsTo(&instanceKey, logFile, force)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1476,7 +1501,7 @@ func (this *HttpAPI) RestartReplicationStatements(params Params, r Responder, re
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1484,7 +1509,7 @@ func (this *HttpAPI) RestartReplicationStatements(params Params, r Responder, re
 	statements, err := inst.GetReplicationRestartPreserveStatements(&instanceKey, query)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1499,19 +1524,19 @@ func (this *HttpAPI) MasterEquivalent(params Params, r Responder, req *http.Requ
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	coordinates, err := this.getBinlogCoordinates(params["logFile"], params["logPos"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instanceCoordinates := &inst.InstanceBinlogCoordinates{Key: instanceKey, Coordinates: coordinates}
 
 	equivalentCoordinates, err := inst.GetEquivalentMasterCoordinates(instanceCoordinates)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1522,7 +1547,7 @@ func (this *HttpAPI) MasterEquivalent(params Params, r Responder, req *http.Requ
 func (this *HttpAPI) CanReplicateFrom(params Params, r Responder, req *http.Request, user Principal) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
@@ -1532,7 +1557,7 @@ func (this *HttpAPI) CanReplicateFrom(params Params, r Responder, req *http.Requ
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowInstance, found, err := inst.ReadInstanceContext(req.Context(), &belowKey)
@@ -1543,7 +1568,7 @@ func (this *HttpAPI) CanReplicateFrom(params Params, r Responder, req *http.Requ
 
 	canReplicate, err := instance.CanReplicateFromEx(belowInstance, "CanReplicateFrom()")
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1554,7 +1579,7 @@ func (this *HttpAPI) CanReplicateFrom(params Params, r Responder, req *http.Requ
 func (this *HttpAPI) CanReplicateFromGTID(params Params, r Responder, req *http.Request, user Principal) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
@@ -1564,7 +1589,7 @@ func (this *HttpAPI) CanReplicateFromGTID(params Params, r Responder, req *http.
 	}
 	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	belowInstance, found, err := inst.ReadInstanceContext(req.Context(), &belowKey)
@@ -1575,7 +1600,7 @@ func (this *HttpAPI) CanReplicateFromGTID(params Params, r Responder, req *http.
 
 	canReplicate, err := instance.CanReplicateFromEx(belowInstance, "CanReplicateFromGTID()")
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if !canReplicate {
@@ -1584,7 +1609,7 @@ func (this *HttpAPI) CanReplicateFromGTID(params Params, r Responder, req *http.
 	}
 	err = inst.CheckMoveViaGTID(instance, belowInstance)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	canReplicate = (err == nil)
@@ -1601,12 +1626,12 @@ func (this *HttpAPI) setSemiSyncMaster(params Params, r Responder, req *http.Req
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.SetSemiSyncMaster(&instanceKey, enable)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1629,12 +1654,12 @@ func (this *HttpAPI) setSemiSyncReplica(params Params, r Responder, req *http.Re
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.SetSemiSyncReplica(&instanceKey, enable)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1657,7 +1682,7 @@ func (this *HttpAPI) DelayReplication(params Params, r Responder, req *http.Requ
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	seconds, err := strconv.Atoi(params["seconds"])
@@ -1667,7 +1692,7 @@ func (this *HttpAPI) DelayReplication(params Params, r Responder, req *http.Requ
 	}
 	err = inst.DelayReplication(&instanceKey, seconds)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1683,12 +1708,12 @@ func (this *HttpAPI) SetReadOnly(params Params, r Responder, req *http.Request, 
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.SetReadOnly(&instanceKey, true)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1704,12 +1729,12 @@ func (this *HttpAPI) SetWriteable(params Params, r Responder, req *http.Request,
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.SetReadOnly(&instanceKey, false)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1725,17 +1750,17 @@ func (this *HttpAPI) KillQuery(params Params, r Responder, req *http.Request, us
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	processId, err := strconv.ParseInt(params["process"], 10, 0)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, err := inst.KillQuery(&instanceKey, processId)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1746,13 +1771,13 @@ func (this *HttpAPI) KillQuery(params Params, r Responder, req *http.Request, us
 func (this *HttpAPI) asciiTopology(params Params, r Responder, req *http.Request, tabulated bool, printTags bool) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	asciiOutput, err := inst.ASCIITopology(clusterName, "", tabulated, printTags)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1760,10 +1785,14 @@ func (this *HttpAPI) asciiTopology(params Params, r Responder, req *http.Request
 }
 
 // SnapshotTopologies triggers orchestrator to record a snapshot of host/master for all known hosts.
-func (this *HttpAPI) SnapshotTopologies(params Params, r Responder, req *http.Request) {
+func (this *HttpAPI) SnapshotTopologies(params Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForAction(req, user) {
+		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
+		return
+	}
 	start := time.Now()
 	if err := inst.SnapshotTopologies(); err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), Details: fmt.Sprintf("Took %v", time.Since(start))})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err)), Details: fmt.Sprintf("Took %v", time.Since(start))})
 		return
 	}
 
@@ -1789,14 +1818,14 @@ func (this *HttpAPI) AsciiTopologyTags(params Params, r Responder, req *http.Req
 func (this *HttpAPI) Cluster(params Params, r Responder, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instances, err := inst.ReadClusterInstances(clusterName)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1807,7 +1836,7 @@ func (this *HttpAPI) Cluster(params Params, r Responder, req *http.Request) {
 func (this *HttpAPI) ClusterByAlias(params Params, r Responder, req *http.Request) {
 	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1819,7 +1848,7 @@ func (this *HttpAPI) ClusterByAlias(params Params, r Responder, req *http.Reques
 func (this *HttpAPI) ClusterByInstance(params Params, r Responder, req *http.Request) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
@@ -1836,13 +1865,13 @@ func (this *HttpAPI) ClusterByInstance(params Params, r Responder, req *http.Req
 func (this *HttpAPI) ClusterInfo(params Params, r Responder, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	clusterInfo, err := inst.ReadClusterInfo(clusterName)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1853,7 +1882,7 @@ func (this *HttpAPI) ClusterInfo(params Params, r Responder, req *http.Request) 
 func (this *HttpAPI) ClusterInfoByAlias(params Params, r Responder, req *http.Request) {
 	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1865,13 +1894,13 @@ func (this *HttpAPI) ClusterInfoByAlias(params Params, r Responder, req *http.Re
 func (this *HttpAPI) ClusterOSCReplicas(params Params, r Responder, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instances, err := inst.GetClusterOSCReplicas(clusterName)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1895,7 +1924,7 @@ func (this *HttpAPI) SetClusterAliasManualOverride(params Params, r Responder, r
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Cluster %s now has alias '%s'", clusterName, alias)})
@@ -1906,7 +1935,7 @@ func (this *HttpAPI) Clusters(params Params, r Responder, req *http.Request) {
 	clusterNames, err := inst.ReadClusters()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1918,7 +1947,7 @@ func (this *HttpAPI) ClustersInfo(params Params, r Responder, req *http.Request)
 	clustersInfo, err := inst.ReadClustersInfo("")
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1929,13 +1958,13 @@ func (this *HttpAPI) ClustersInfo(params Params, r Responder, req *http.Request)
 func (this *HttpAPI) Tags(params Params, r Responder, req *http.Request) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	tags, err := inst.ReadInstanceTags(&instanceKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	tagStrings := []string{}
@@ -1949,17 +1978,17 @@ func (this *HttpAPI) Tags(params Params, r Responder, req *http.Request) {
 func (this *HttpAPI) TagValue(params Params, r Responder, req *http.Request) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	tag, err := getTag(params, req)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	tagExists, err := inst.ReadInstanceTag(&instanceKey, tag)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if tagExists {
@@ -1974,7 +2003,7 @@ func (this *HttpAPI) Tagged(params Params, r Responder, req *http.Request) {
 	tagsString := req.URL.Query().Get("tag")
 	instanceKeyMap, err := inst.GetInstanceKeysByTags(tagsString)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -1982,16 +2011,20 @@ func (this *HttpAPI) Tagged(params Params, r Responder, req *http.Request) {
 }
 
 // Tags adds a tag to a given instance
-func (this *HttpAPI) Tag(params Params, r Responder, req *http.Request) {
+func (this *HttpAPI) Tag(params Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForAction(req, user) {
+		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
+		return
+	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	tag, err := getTag(params, req)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if orcraft.IsRaftEnabled() {
@@ -2000,7 +2033,7 @@ func (this *HttpAPI) Tag(params Params, r Responder, req *http.Request) {
 		err = inst.PutInstanceTag(&instanceKey, tag)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2008,21 +2041,25 @@ func (this *HttpAPI) Tag(params Params, r Responder, req *http.Request) {
 }
 
 // Untag removes a tag from an instance
-func (this *HttpAPI) Untag(params Params, r Responder, req *http.Request) {
+func (this *HttpAPI) Untag(params Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForAction(req, user) {
+		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
+		return
+	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	tag, err := getTag(params, req)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	untagged, err := inst.Untag(&instanceKey, tag)
+	untagged, err := untagThroughRaft(&instanceKey, tag)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2030,15 +2067,19 @@ func (this *HttpAPI) Untag(params Params, r Responder, req *http.Request) {
 }
 
 // UntagAll removes a tag from all matching instances
-func (this *HttpAPI) UntagAll(params Params, r Responder, req *http.Request) {
-	tag, err := getTag(params, req)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+func (this *HttpAPI) UntagAll(params Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForAction(req, user) {
+		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	untagged, err := inst.Untag(nil, tag)
+	tag, err := getTag(params, req)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
+		return
+	}
+	untagged, err := untagThroughRaft(nil, tag)
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2048,15 +2089,19 @@ func (this *HttpAPI) UntagAll(params Params, r Responder, req *http.Request) {
 // Write a cluster's master (or all clusters masters) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
-func (this *HttpAPI) SubmitMastersToKvStores(params Params, r Responder, req *http.Request) {
+func (this *HttpAPI) SubmitMastersToKvStores(params Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForAction(req, user) {
+		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
+		return
+	}
 	clusterName, err := getClusterNameIfExists(params)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	kvPairs, submittedCount, err := logic.SubmitMastersToKvStores(clusterName, true)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d masters", submittedCount), Details: kvPairs})
@@ -2067,7 +2112,7 @@ func (this *HttpAPI) Masters(params Params, r Responder, req *http.Request) {
 	instances, err := inst.ReadWriteableClustersMasters()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2078,13 +2123,13 @@ func (this *HttpAPI) Masters(params Params, r Responder, req *http.Request) {
 func (this *HttpAPI) ClusterMaster(params Params, r Responder, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	masters, err := inst.ReadClusterMaster(clusterName)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if len(masters) == 0 {
@@ -2099,13 +2144,13 @@ func (this *HttpAPI) ClusterMaster(params Params, r Responder, req *http.Request
 func (this *HttpAPI) Downtimed(params Params, r Responder, req *http.Request) {
 	clusterName, err := getClusterNameIfExists(params)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	instances, err := inst.ReadDowntimedInstances(clusterName)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2117,7 +2162,7 @@ func (this *HttpAPI) AllInstances(params Params, r Responder, req *http.Request)
 	instances, err := inst.SearchInstances("")
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2133,7 +2178,7 @@ func (this *HttpAPI) Search(params Params, r Responder, req *http.Request) {
 	instances, err := inst.SearchInstances(searchString)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2146,7 +2191,7 @@ func (this *HttpAPI) Problems(params Params, r Responder, req *http.Request) {
 	instances, err := inst.ReadProblemInstances(clusterName)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2167,7 +2212,7 @@ func (this *HttpAPI) Audit(params Params, r Responder, req *http.Request) {
 	audits, err := inst.ReadRecentAudit(auditedInstanceKey, page)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2179,7 +2224,7 @@ func (this *HttpAPI) HostnameResolveCache(params Params, r Responder, req *http.
 	content, err := inst.HostnameResolveCache()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2195,7 +2240,7 @@ func (this *HttpAPI) ResetHostnameResolveCache(params Params, r Responder, req *
 	err := inst.ResetHostnameResolveCache()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2222,7 +2267,7 @@ func (this *HttpAPI) DeregisterHostnameUnresolve(params Params, r Responder, req
 		err = inst.RegisterHostnameUnresolve(registration)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: "Hostname deregister unresolve completed", Details: instanceKey})
@@ -2249,7 +2294,7 @@ func (this *HttpAPI) RegisterHostnameUnresolve(params Params, r Responder, req *
 		err = inst.RegisterHostnameUnresolve(registration)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: "Hostname register unresolve completed", Details: instanceKey})
@@ -2272,7 +2317,7 @@ func (this *HttpAPI) SubmitPoolInstances(params Params, r Responder, req *http.R
 		err = inst.ApplyPoolInstances(submission)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2290,7 +2335,7 @@ func (this *HttpAPI) ReadClusterPoolInstancesMap(params Params, r Responder, req
 
 	poolInstancesMap, err := inst.ReadClusterPoolInstancesMap(clusterName, pool)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2305,14 +2350,14 @@ func (this *HttpAPI) GetHeuristicClusterPoolInstances(params Params, r Responder
 	}
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	pool := params["pool"]
 
 	instances, err := inst.GetHeuristicClusterPoolInstances(clusterName, pool)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2327,14 +2372,14 @@ func (this *HttpAPI) GetHeuristicClusterPoolInstancesLag(params Params, r Respon
 	}
 	clusterName, err := inst.ReadClusterNameByAlias(params["clusterName"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	pool := params["pool"]
 
 	lag, err := inst.GetHeuristicClusterPoolInstancesLag(clusterName, pool)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2360,7 +2405,7 @@ func (this *HttpAPI) BulkPromotionRules(params Params, r Responder, req *http.Re
 
 	promotionRules, err := inst.BulkReadCandidateDatabaseInstance()
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2376,7 +2421,7 @@ func (this *HttpAPI) BulkInstances(params Params, r Responder, req *http.Request
 
 	instances, err := inst.BulkReadInstance()
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2397,7 +2442,7 @@ func (this *HttpAPI) Agents(params Params, r Responder, req *http.Request, user 
 	agents, err := agent.ReadAgents()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2418,7 +2463,7 @@ func (this *HttpAPI) Agent(params Params, r Responder, req *http.Request, user P
 	agent, err := agent.GetAgent(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2439,7 +2484,7 @@ func (this *HttpAPI) AgentUnmount(params Params, r Responder, req *http.Request,
 	output, err := agent.Unmount(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2460,7 +2505,7 @@ func (this *HttpAPI) AgentMountLV(params Params, r Responder, req *http.Request,
 	output, err := agent.MountLV(params["host"], req.URL.Query().Get("lv"))
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2481,7 +2526,7 @@ func (this *HttpAPI) AgentCreateSnapshot(params Params, r Responder, req *http.R
 	output, err := agent.CreateSnapshot(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2502,7 +2547,7 @@ func (this *HttpAPI) AgentRemoveLV(params Params, r Responder, req *http.Request
 	output, err := agent.RemoveLV(params["host"], req.URL.Query().Get("lv"))
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2523,7 +2568,7 @@ func (this *HttpAPI) AgentMySQLStop(params Params, r Responder, req *http.Reques
 	output, err := agent.MySQLStop(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2544,7 +2589,7 @@ func (this *HttpAPI) AgentMySQLStart(params Params, r Responder, req *http.Reque
 	output, err := agent.MySQLStart(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2564,7 +2609,7 @@ func (this *HttpAPI) AgentCustomCommand(params Params, r Responder, req *http.Re
 	output, err := agent.CustomCommand(params["host"], params["command"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2586,7 +2631,7 @@ func (this *HttpAPI) AgentSeed(params Params, r Responder, req *http.Request, us
 	output, err := agent.Seed(params["targetHost"], params["sourceHost"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2607,7 +2652,7 @@ func (this *HttpAPI) AgentActiveSeeds(params Params, r Responder, req *http.Requ
 	output, err := agent.ReadActiveSeedsForHost(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2628,7 +2673,7 @@ func (this *HttpAPI) AgentRecentSeeds(params Params, r Responder, req *http.Requ
 	output, err := agent.ReadRecentCompletedSeedsForHost(params["host"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2650,7 +2695,7 @@ func (this *HttpAPI) AgentSeedDetails(params Params, r Responder, req *http.Requ
 	output, err := agent.AgentSeedDetails(seedId)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2672,7 +2717,7 @@ func (this *HttpAPI) AgentSeedStates(params Params, r Responder, req *http.Reque
 	output, err := agent.ReadSeedStates(seedId)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2693,7 +2738,7 @@ func (this *HttpAPI) Seeds(params Params, r Responder, req *http.Request, user P
 	output, err := agent.ReadRecentSeeds()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2715,7 +2760,7 @@ func (this *HttpAPI) AbortSeed(params Params, r Responder, req *http.Request, us
 	err = agent.AbortSeed(seedId)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -2820,7 +2865,7 @@ func (this *HttpAPI) ReloadConfiguration(params Params, r Responder, req *http.R
 
 // ReplicationAnalysis retuens list of issues
 func (this *HttpAPI) replicationAnalysis(clusterName string, instanceKey *inst.InstanceKey, params Params, r Responder, req *http.Request) {
-	analysis, err := inst.GetReplicationAnalysis(clusterName, &inst.ReplicationAnalysisHints{IncludeDowntimed: true})
+	analysis, err := inst.GetReplicationAnalysis(clusterName, &inst.ReplicationAnalysisHints{IncludeDowntimed: req.URL.Query().Get("includeDowntimed") != "false"})
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: %+v", err)})
 		return
@@ -2888,7 +2933,7 @@ func (this *HttpAPI) Recover(params Params, r Responder, req *http.Request, user
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	var candidateKey *inst.InstanceKey
@@ -2899,7 +2944,7 @@ func (this *HttpAPI) Recover(params Params, r Responder, req *http.Request, user
 	skipProcesses := (req.URL.Query().Get("skipProcesses") == "true") || (params["skipProcesses"] == "true")
 	recoveryAttempted, promotedInstanceKey, err := logic.CheckAndRecover(&instanceKey, candidateKey, skipProcesses)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: instanceKey})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: instanceKey})
 		return
 	}
 	if !recoveryAttempted {
@@ -2921,14 +2966,14 @@ func (this *HttpAPI) gracefulMasterTakeover(params Params, r Responder, req *htt
 	}
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	// designatedKey may be empty/invalid
 	topologyRecovery, _, err := logic.GracefulMasterTakeover(clusterName, &designatedKey, auto)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: topologyRecovery})
 		return
 	}
 	if topologyRecovery == nil || topologyRecovery.SuccessorKey == nil {
@@ -2958,12 +3003,12 @@ func (this *HttpAPI) ForceMasterFailover(params Params, r Responder, req *http.R
 	}
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	topologyRecovery, err := logic.ForceMasterFailover(clusterName)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if topologyRecovery.SuccessorKey != nil {
@@ -2981,13 +3026,13 @@ func (this *HttpAPI) ForceMasterTakeover(params Params, r Responder, req *http.R
 	}
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	designatedInstance, _, err := inst.ReadInstanceContext(req.Context(), &designatedKey)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if designatedInstance == nil {
@@ -2997,7 +3042,7 @@ func (this *HttpAPI) ForceMasterTakeover(params Params, r Responder, req *http.R
 
 	topologyRecovery, err := logic.ForceMasterTakeover(clusterName, designatedInstance)
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	if topologyRecovery.SuccessorKey != nil {
@@ -3015,12 +3060,12 @@ func (this *HttpAPI) RegisterCandidate(params Params, r Responder, req *http.Req
 	}
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	promotionRule, err := inst.ParseCandidatePromotionRule(params["promotionRule"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3033,7 +3078,7 @@ func (this *HttpAPI) RegisterCandidate(params Params, r Responder, req *http.Req
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3067,7 +3112,7 @@ func (this *HttpAPI) AuditFailureDetection(params Params, r Responder, req *http
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3080,7 +3125,7 @@ func (this *HttpAPI) AuditRecoverySteps(params Params, r Responder, req *http.Re
 	audits, err := logic.ReadTopologyRecoverySteps(recoveryUID)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3092,7 +3137,7 @@ func (this *HttpAPI) ReadReplicationAnalysisChangelog(params Params, r Responder
 	changelogs, err := inst.ReadReplicationAnalysisChangelog()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3119,7 +3164,7 @@ func (this *HttpAPI) AuditRecovery(params Params, r Responder, req *http.Request
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3131,7 +3176,7 @@ func (this *HttpAPI) ActiveClusterRecovery(params Params, r Responder, req *http
 	recoveries, err := logic.ReadActiveClusterRecovery(params["clusterName"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3143,7 +3188,7 @@ func (this *HttpAPI) RecentlyActiveClusterRecovery(params Params, r Responder, r
 	recoveries, err := logic.ReadRecentlyActiveClusterRecovery(params["clusterName"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3154,14 +3199,14 @@ func (this *HttpAPI) RecentlyActiveClusterRecovery(params Params, r Responder, r
 func (this *HttpAPI) RecentlyActiveInstanceRecovery(params Params, r Responder, req *http.Request) {
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
 	recoveries, err := logic.ReadRecentlyActiveInstanceRecovery(&instanceKey)
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3184,7 +3229,7 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params Params, r Responder, re
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3205,7 +3250,7 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params Params, r Responder, re
 		_, err = logic.AcknowledgeClusterRecoveries(clusterName, userId, comment)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3221,7 +3266,7 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params Params, r Responder, r
 
 	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3242,7 +3287,7 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params Params, r Responder, r
 		_, err = logic.AcknowledgeInstanceRecoveries(&instanceKey, userId, comment)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3265,7 +3310,7 @@ func (this *HttpAPI) AcknowledgeRecovery(params Params, r Responder, req *http.R
 		idParam = params["recoveryId"]
 		recoveryId, err = strconv.ParseInt(idParam, 10, 0)
 		if err != nil {
-			Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+			Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 			return
 		}
 	} else {
@@ -3294,7 +3339,7 @@ func (this *HttpAPI) AcknowledgeRecovery(params Params, r Responder, req *http.R
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3326,7 +3371,7 @@ func (this *HttpAPI) AcknowledgeAllRecoveries(params Params, r Responder, req *h
 		_, err = logic.AcknowledgeAllRecoveries(userId, comment)
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3338,7 +3383,7 @@ func (this *HttpAPI) BlockedRecoveries(params Params, r Responder, req *http.Req
 	blockedRecoveries, err := logic.ReadBlockedRecoveries(params["clusterName"])
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3360,7 +3405,7 @@ func (this *HttpAPI) DisableGlobalRecoveries(params Params, r Responder, req *ht
 	}
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3381,7 +3426,7 @@ func (this *HttpAPI) EnableGlobalRecoveries(params Params, r Responder, req *htt
 		err = logic.EnableRecovery()
 	}
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 
@@ -3393,7 +3438,7 @@ func (this *HttpAPI) CheckGlobalRecoveries(params Params, r Responder, req *http
 	isDisabled, err := logic.IsRecoveryDisabled()
 
 	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
 	details := "enabled"
@@ -3459,6 +3504,7 @@ func (this *HttpAPI) registerAPIMethod(m *Router, method, path string, handler H
 
 // RegisterRequests makes for the de-facto list of known API calls
 func (this *HttpAPI) RegisterRequests(m *Router) {
+	this.registerCLIRequests(m)
 	// Smart relocation:
 	this.registerAPIRequest(m, "relocate/:host/:port/:belowHost/:belowPort", this.RelocateBelow)
 	this.registerAPIRequest(m, "relocate-below/:host/:port/:belowHost/:belowPort", this.RelocateBelow)
@@ -3470,6 +3516,7 @@ func (this *HttpAPI) RegisterRequests(m *Router) {
 	this.registerAPIRequest(m, "move-up-slaves/:host/:port", this.MoveUpReplicas)
 	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
 	this.registerAPIRequest(m, "move-equivalent/:host/:port/:belowHost/:belowPort", this.MoveEquivalent)
+	this.registerAPIRequest(m, "repoint/:host/:port", this.Repoint)
 	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
 	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
 	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoMaster)

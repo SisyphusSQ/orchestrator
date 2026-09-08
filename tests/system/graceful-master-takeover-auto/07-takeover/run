@@ -1,1 +1,1 @@
-orchestrator-client -c graceful-master-takeover-auto --alias ci
+orch graceful-master-takeover-auto --alias ci

@@ -1,1 +1,1 @@
--c untag-all -tag role
+untag-all --tag role

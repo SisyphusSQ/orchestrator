@@ -19,20 +19,20 @@ deploy_and_run_orchestrator() {
   sudo systemctl start "orchestrator-$NODE_ID"
   sudo systemctl status "orchestrator-$NODE_ID"
   echo "checking if service is healthy..."
-  orchestrator-client -api "http://127.0.0.1:300$NODE_ID" -c api -path status | jq .Details.Healthy
+  orch --endpoint "http://127.0.0.1:300$NODE_ID" api status | jq .Details.Healthy
 }
 
 sudo mkdir -p /usr/local/orchestrator
 sudo cp bin/orchestrator /usr/local/orchestrator/
 sudo cp -R resources /usr/local/orchestrator/
-sudo cp resources/bin/orchestrator-client /usr/bin
+sudo cp bin/orch /usr/bin
 
 for id in 7 8 9 ; do
   deploy_and_run_orchestrator "$id"
 done
 
 echo "export PS1=\"\\[\\e[0;33m\\]\\h \\[\\e[0;97m\\]\\w\\[\\e[0;37m\\]\\\$ \"" >> /etc/bash.bashrc
-echo 'export ORCHESTRATOR_API="http://127.0.0.1:3007/api http://127.0.0.1:3008/api http://127.0.0.1:3009/api"' | sudo tee /etc/profile.d/orchestrator-client.sh
+export ORCH_ENDPOINT="http://127.0.0.1:3007/api http://127.0.0.1:3008/api http://127.0.0.1:3009/api"
 
 # wait for processes to listen, then form a new three-node cluster
 sleep 10
@@ -116,10 +116,10 @@ if ! echo "$configuration_response" | jq -e '
 fi
 
 echo ""
-echo "Here's how to invoke orchestrator-client:"
+echo "Here's how to invoke orch:"
 echo "---"
 echo ""
-echo "orchestrator-client -c api -path status | jq ."
-orchestrator-client -c api -path status | jq .
+echo "orch --endpoint http://127.0.0.1:3007 api status | jq ."
+orch --endpoint http://127.0.0.1:3007 api status | jq .
 echo "---"
 echo ""

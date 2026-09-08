@@ -147,9 +147,9 @@ There are two variations of graceful takeover:
 Invoke graceful takeover via:
 
 - Command line; examples:
-  - `orchestrator-client -c graceful-master-takeover -alias mycluster -d designated.master.to.promote:3306`: indicate designated replica; `orchestrator` does not start replication on demoted master
-  - `orchestrator-client -c graceful-master-takeover-auto -alias mycluster -d designated.master.to.promote:3306`: indicate designated replica; `orchestrator` starts replication on demoted master
-  - `orchestrator-client -c graceful-master-takeover-auto -alias mycluster`: let `orchestrator` choose replica to promote; `orchestrator` starts replication on demoted master
+  - `orch graceful-master-takeover --alias mycluster -d designated.master.to.promote:3306`: indicate designated replica; `orchestrator` does not start replication on demoted master
+  - `orch graceful-master-takeover-auto --alias mycluster -d designated.master.to.promote:3306`: indicate designated replica; `orchestrator` starts replication on demoted master
+  - `orch graceful-master-takeover-auto --alias mycluster`: let `orchestrator` choose replica to promote; `orchestrator` starts replication on demoted master
 
 - Web API; examples:
   - `/api/graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort`: gracefully promote a new master (planned failover), indicating the designated master to promote.
@@ -166,7 +166,7 @@ You may choose to ask `orchestrator` to recover a failure by providing a specifi
 This instance _must be recognized as having a failure_. It is possible to request recovery for an instance that is downtimed (as this is manual recovery it overrides automatic assumptions).
 Recover via:
 
-* Command line: `orchestrator-client -c recover -i dead.instance.com:3306 --debug`
+* Command line: `orch recover -i dead.instance.com:3306 --debug`
 * Web API: `/api/recover/dead.instance.com/:3306`
 * Web: instance is colored black; click the `Recover` button
 
@@ -178,9 +178,9 @@ TL;DR force master failover _right now_ regardless of what `orchestrator` thinks
 
 Perhaps `orchestrator` doesn't see that the instance is failed, or you have some app-logic that requires the master must change _right now_, or perhaps the type of failure is such that `orchestrator` is unsure about. You wish to kick a master failover _right now_. You will run:
 
-* Command line: `orchestrator-client -c force-master-failover --alias mycluster`
+* Command line: `orch force-master-failover --alias mycluster`
 
-  or `orchestrator-client -c force-master-failover -i instance.in.that.cluster`
+  or `orch force-master-failover -i instance.in.that.cluster`
 * Web API: `/api/force-master-failover/mycluster`
 
   or `/api/force-master-failover/instance.in.that.cluster/3306`
@@ -212,15 +212,15 @@ Running manual recoveries (see next sections):
 
 Some corresponding command line invocations:
 
-- `orchestrator-client -c recover -i some.instance:3306`
-- `orchestrator-client -c graceful-master-takeover -i some.instance.in.somecluster:3306`
-- `orchestrator-client -c graceful-master-takeover -alias somecluster`
-- `orchestrator-client -c force-master-takeover -alias somecluster`
-- `orchestrator-client -c ack-cluster-recoveries -alias somecluster`
-- `orchestrator-client -c ack-all-recoveries`
-- `orchestrator-client -c disable-global-recoveries`
-- `orchestrator-client -c enable-global-recoveries`
-- `orchestrator-client -c check-global-recoveries`
+- `orch recover -i some.instance:3306`
+- `orch graceful-master-takeover -i some.instance.in.somecluster:3306`
+- `orch graceful-master-takeover --alias somecluster`
+- `orch force-master-takeover --alias somecluster`
+- `orch ack-cluster-recoveries --alias somecluster`
+- `orch ack-all-recoveries`
+- `orch disable-global-recoveries`
+- `orch enable-global-recoveries`
+- `orch check-global-recoveries`
 
 ## Blocking, acknowledgements, anti-flapping
 
@@ -230,9 +230,9 @@ The block period is indicated by `RecoveryPeriodBlockSeconds`. It only applies t
 
 Pending recoveries are unblocked either once `RecoveryPeriodBlockSeconds` has passed or such a recovery has been _acknowledged_.
 
-Acknowledging a recovery is possible either via web API/interface (see audit/recovery page) or via command line interface (`orchestrator-client -c ack-cluster-recoveries -alias somealias`).
+Acknowledging a recovery is possible either via web API/interface (see audit/recovery page) or via command line interface (`orch ack-cluster-recoveries --alias somealias`).
 
-Note that manual recovery (e.g. `orchestrator-client -c recover` or `orchestrator-client -c force-master-failover`) ignores the blocking period.
+Note that manual recovery (e.g. `orch recover` or `orch force-master-failover`) ignores the blocking period.
 
 
 ## Adding promotion rules
@@ -248,7 +248,7 @@ Some servers are better candidate for promotion in the event of failovers. Some 
 You will announce your preference for a given server to `orchestrator` in the following way:
 
 ```
-orchestrator-client -c register-candidate -i ${::fqdn} --promotion-rule ${promotion_rule}
+orch register-candidate -i ${::fqdn} --promotion-rule ${promotion_rule}
 ```
 
 Supported promotion rules are:
@@ -261,7 +261,7 @@ Supported promotion rules are:
 Promotion rules expire after an hour. That's the dynamic nature of `orchestrator`. You will want to setup a cron job that will announce the promotion rule for a server:
 
 ```
-*/2 * * * * root "/usr/bin/perl -le 'sleep rand 10' && /usr/bin/orchestrator-client -c register-candidate -i this.hostname.com --promotion-rule prefer"
+*/2 * * * * root "/usr/bin/perl -le 'sleep rand 10' && /usr/bin/orch register-candidate -i this.hostname.com --promotion-rule prefer"
 ```
 
 This setup comes from production environments. The cron entries get updated by `puppet` to reflect the appropriate `promotion_rule`. A server may have `prefer` at this time, and `prefer_not` in 5 minutes from now. Integrate your own service discovery method, your own scripting, to provide with your up-to-date `promotion-rule`.
@@ -269,11 +269,11 @@ This setup comes from production environments. The cron entries get updated by `
 ## Downtime
 
 All failure/recovery scenarios are analyzed. However also taken into consideration is the downtime status of
-an instance. An instance can be downtimed (via `orchestrator-client -c begin-downtime`) and this is noted in the analysis summary. When considering automated recovery, downtimed servers are skipped.
+an instance. An instance can be downtimed (via `orch begin-downtime`) and this is noted in the analysis summary. When considering automated recovery, downtimed servers are skipped.
 
 Downtime was, in fact, explicitly created for this very purpose, and allows the DBA a way to suppress automated failover and a specific server.
 
-Note that manual recovery (e.g. `orchestrator-client -c recover`) overrides downtime.
+Note that manual recovery (e.g. `orch recover`) overrides downtime.
 
 ## Recovery hooks
 

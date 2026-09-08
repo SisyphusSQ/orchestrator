@@ -1,1 +1,1 @@
-orchestrator-client -c which-cluster-master -alias ci
+orch which-cluster-master --alias ci

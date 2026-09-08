@@ -30,10 +30,10 @@ Clusters' master entries are populated on:
   It follows that the periodic checks will only inject external KV _once_.
 - An actual failover: `orchestrator` overwrites existing entry with identity of new master
 - A manual request for entry population:
-  - `orchestrator-client -c submit-masters-to-kv-stores` to submit all clusters' masters to KV, or
-  - `orchestrator-client -c submit-masters-to-kv-stores -alias mycluster` to submit the master of `mycluster` to KV
+  - `orch submit-masters-to-kv-stores` to submit all clusters' masters to KV, or
+  - `orch submit-masters-to-kv-stores --alias mycluster` to submit the master of `mycluster` to KV
 
-    See [orchestrator-client.md](orchestrator-client) documentation. You may use the `orchestrator`
+    See [orch.md](orch) documentation. You may use the `orchestrator`
     command line invocation as well.
 
   Or you may directly accessing the API via:

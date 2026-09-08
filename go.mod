@@ -1,6 +1,6 @@
 module github.com/openark/orchestrator
 
-go 1.26.5
+go 1.26.8
 
 require (
 	github.com/Showmax/go-fqdn v1.0.0
@@ -18,7 +18,6 @@ require (
 	github.com/prometheus/common v0.70.1
 	github.com/sjmudd/stopwatch v0.1.1
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.9
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.46.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.68.0
@@ -85,6 +84,7 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.1 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect

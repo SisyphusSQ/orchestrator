@@ -86,4 +86,4 @@ fi
   SET GLOBAL general_log='ON';
 "
 
-orchestrator-client -c discover -i 127.0.0.1:10114 | grep -q .
+orch discover -i 127.0.0.1:10114 | grep -q .

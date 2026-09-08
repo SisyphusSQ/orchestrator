@@ -68,6 +68,8 @@ func GetRaftHttpTransport() (*http.Transport, error) {
 	}
 
 	transport := &http.Transport{
+		// API GET requests can mutate topology; never replay on a stale pooled connection.
+		DisableKeepAlives:     true,
 		TLSClientConfig:       tlsConfig,
 		Dial:                  dialTimeout,
 		ResponseHeaderTimeout: httpTimeout,

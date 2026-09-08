@@ -14,7 +14,7 @@
 # ORC_USER (default: orc_server_user): username used to login to orchestrator backend MySQL server
 # ORC_PASSWORD (default: orc_server_password): password used to login to orchestrator backend MySQL server
 
-FROM golang:1.26.5-bookworm
+FROM golang:1.26.8-bookworm
 
 RUN apt-get update
 RUN apt-get install -y ruby ruby-dev rubygems build-essential
@@ -28,7 +28,7 @@ RUN go mod download
 COPY . .
 ARG RELEASE_VERSION=
 ARG RELEASE_SUBVERSION=
-RUN make binary BINARY=build/bin/orchestrator \
+RUN make binary cli BINARY=build/bin/orchestrator CLI_BINARY=build/bin/orch \
     && bash build.sh -b -N -P
 RUN bash build.sh -R -N -i sysv
 RUN bash build.sh -R -N -i systemd

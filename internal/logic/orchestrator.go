@@ -61,7 +61,9 @@ var instancePollSecondsExceededCounter = observability.NewCounter("orchestrator_
 
 var isElectedNode int64 = 0
 
-var recentDiscoveryOperationKeys *cache.Cache
+// Manual HTTP discovery also runs when the background loop is disabled.
+// Each Add supplies the current polling interval explicitly.
+var recentDiscoveryOperationKeys = cache.New(cache.NoExpiration, time.Second)
 var pseudoGTIDPublishCache = cache.New(time.Minute, time.Second)
 var kvFoundCache = cache.New(10*time.Minute, time.Minute)
 
@@ -524,7 +526,6 @@ func ContinuousDiscovery() error {
 	}
 	continuousDiscoveryStartTime := time.Now()
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
-	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
 	recentCache := recentDiscoveryOperationKeys
 	observability.Gauge("orchestrator_discovery_recent_instances", "Recent discovery cache entries", func() int64 { return int64(recentCache.ItemCount()) })
 	var raftErrors <-chan error

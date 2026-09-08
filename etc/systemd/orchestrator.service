@@ -6,7 +6,7 @@ After=syslog.target network.target mysqld.service mysql.service
 [Service]
 Type=simple
 WorkingDirectory=/usr/local/orchestrator
-ExecStart=/usr/local/orchestrator/orchestrator http
+ExecStart=/usr/local/orchestrator/orchestrator server
 EnvironmentFile=-/etc/sysconfig/orchestrator
 ExecReload=/bin/kill -HUP $MAINPID
 LimitNOFILE=16384

@@ -2,11 +2,11 @@
 set -xeuo pipefail
 # Install orchestrator
 if [[ -e /etc/redhat-release ]]; then
-  rpm -i /tmp/orchestrator-release/orchestrator*.rpm
+  rpm -i /tmp/orchestrator-release/orchestrator*.rpm /tmp/orchestrator-release/orch-*.rpm
 fi
 
 if [[ -e /etc/debian_version ]]; then
-  dpkg -i /tmp/orchestrator-release/orchestrator*.deb
+  dpkg -i /tmp/orchestrator-release/orchestrator*.deb /tmp/orchestrator-release/orch_*.deb
 fi
 
 if [[ -e /orchestrator/vagrant/.sqlite ]]; then
@@ -27,7 +27,7 @@ elif [[ -e /etc/debian_version ]]; then
 
 fi
 
-echo '* * * * * root /usr/bin/orchestrator -c discover -i db1' > /etc/cron.d/orchestrator-discovery
+echo '* * * * * root /usr/bin/orch discover -i db1' > /etc/cron.d/orchestrator-discovery
 
 # Discover instances
-/usr/bin/orchestrator --verbose --debug --stack -c discover -i localhost
+/usr/bin/orch discover -i localhost

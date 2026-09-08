@@ -1,1 +1,1 @@
-orchestrator-client -c all-instances | sort
+orch all-instances | sort

@@ -34,29 +34,20 @@ You will need to handle, for example, the issue of adding a Galera node, or of m
 
 ### What to deploy: client
 
-To interact with orchestrator from shell/automation/scripts, you may choose to:
+Install the independent Go HTTP client [orch](orch.md) on operator and automation hosts.
+Set `ORCH_ENDPOINT` in the process environment, or pass `--endpoint`. Use one service/proxy
+URL or multiple comma-separated API endpoints for leader discovery. The client does not
+load a shell profile or server configuration and never accesses the backend database.
 
-- Directly interact with the HTTP API
-- use the [orchestrator-client](orchestrator-client.md) script.
-  - Deploy `orchestrator-client` on any box from which you wish to interact with `orchestrator`.
-  - Create and edit `/etc/profile.d/orchestrator-client.sh` on those boxes to read:
-    ```
-    ORCHESTRATOR_API="http://your.orchestrator.service.proxy:80/api"
-    ```
-    or
-    ```
-    ORCHESTRATOR_API="http://your.orchestrator.service.host1:3000/api http://your.orchestrator.service.host2:3000/api http://your.orchestrator.service.host3:3000/api"
-    ```
-    In the latter case you will provide the list of all `orchestrator` nodes, and the `orchetsrator-client` script will automatically figure out which is the leader. With this setup your automation will not need a proxy (though you may still wish to use a proxy for web interface users).
+```bash
+export ORCH_ENDPOINT="http://node1:3000/api,http://node2:3000/api,http://node3:3000/api"
+orch clusters
+orch topology --cluster my-cluster
+```
 
-    Make sure to chef/puppet/whatever the `ORCHESTRATOR_API` value such that it adapts to changes in your environment.
-
-- The [orchestrator command line](executing-via-command-line.md).
-  - Deploy the `orchestrator` binary (you may use the `orchestrator-cli` distributed package) on any box from which you wish to interact with `orchestrator`.
-  - Create `/etc/orchestrator.conf.json` on those boxes, populate with credentials. This file should generally be the same as for the `orchestrator` service boxes. If you're unsure, use exact same file content.
-  - The `orchestrator` binary will access the shared backend DB. Make sure to give it access. Typically this will be port `3306`.
-
-It is OK to run `orchestrator` CLI even while the `orchestrator` service is operating, since they will all coordinate on the same backend DB.
+Direct database business commands and the old Shell client have been removed. Both Raft
+and shared-backend deployments use HTTP. Local server maintenance remains under
+`orchestrator admin`; it must not be used as an alternative remote management interface.
 
 ### Orchestrator service
 
@@ -80,14 +71,7 @@ All nodes may:
 
 For more details about deploying multiple nodes, please read about [high availability](high-availability.md).
 
-### Orchestrator CLI
+### Go HTTP client
 
-The CLI executes to fulfill a specific operation. It may choose to probe a few servers, depending on the operation (e.g. `relocate`), or it may probe no server at all and just read data from the backend DB.
-
-### A visual example
-
-![orchestrator deployment, shared backend](images/orchestrator-deployment-shared-backend.png)
-
-In the above there are three `orchestrator` nodes running on top of a `3` node synchronous replication setup. Each `orchestrator` nodes speaks to a different `MySQL` backend, but those are replicated synchronously and all share the same picture (up to some lag).
-
-One `orchestrator` node is elected as leader, and only that node probes the MySQL topologies. It probes all known servers (the above image only shows part of the probes to avoid the spaghetti).
+The client sends commands to the service. The service performs topology queries and
+operations and owns backend database access. See [orch](orch.md).

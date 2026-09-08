@@ -1,1 +1,1 @@
--c which-cluster-master -i testhost:22295
+which-cluster-master -i testhost:22295

@@ -55,7 +55,7 @@ Only the leader is allowed to make changes.
 
 Simplest setup it to only route traffic to the leader, by setting up a `HTTP` proxy (e.g HAProxy) on top of the `orchestrator` services.
 
-> See [orchestrator-client](#orchestrator-client) section for an alternate approach
+> See [orch](#orch) section for an alternate approach
 
 - Use `/api/leader-check` as health check. At any given time at most one `orchestrator` node will reply with `HTTP 200/OK` to this check; the others will respond with `HTTP 404/Not found`.
   - Hint: you may use, for example, `/api/leader-check/503` is you explicitly wish to get a `503` response code, or similarly any other code.
@@ -100,26 +100,26 @@ You _must not access unhealthy raft members, i.e. nodes that are isolated from t
   Note that immediately following startup, and until a leader is elected, you may expect some time where all nodes report as unhealthy.
   Note that upon leader re-election you may observe a brief period where all nodes report as unhealthy.
 
-#### orchestrator-client
+#### orch
 
-An alternative to the proxy approach is to use `orchestrator-client`.
+An alternative to the proxy approach is to use `orch`.
 
-[orchestrator-client](orchestrator-client.md) is a wrapper script that accesses the `orchestrator` service via HTTP API, and provides a command line interface to the user.
+[orch](orch.md) is an independent Go client that accesses the `orchestrator` service via HTTP API, and provides a command line interface to the user.
 
-It is possible to provide `orchestrator-client` with the full listing of all orchestrator API endpoints. In such case, `orchestrator-client` will figure out which of the endpoints is the leader, and direct requests at that endpoint.
+It is possible to provide `orch` with the full listing of all orchestrator API endpoints. In such case, `orch` will figure out which of the endpoints is the leader, and direct requests at that endpoint.
 
 As example, we can set:
 
 ```shell
-export ORCHESTRATOR_API="https://orchestrator.host1:3000/api https://orchestrator.host2:3000/api https://orchestrator.host3:3000/api"
+export ORCH_ENDPOINT="https://orchestrator.host1:3000/api https://orchestrator.host2:3000/api https://orchestrator.host3:3000/api"
 ```
 
-A call to `orchestrator-client` will first check
+A call to `orch` will first check
 
-Otherwise, if you already have a proxy, it's also possible for `orchestrator-client` to work with the proxy, e.g.:
+Otherwise, if you already have a proxy, it's also possible for `orch` to work with the proxy, e.g.:
 
 ```shell
-export ORCHESTRATOR_API="https://orchestrator.proxy:80/api"
+export ORCH_ENDPOINT="https://orchestrator.proxy:80/api"
 ```
 
 ### Behavior and implications of orchestrator/raft setup
@@ -143,11 +143,11 @@ export ORCHESTRATOR_API="https://orchestrator.proxy:80/api"
 
 - All user changes must go through the leader, and in particular via the `HTTP API`. You must not manipulate the backend database directly, since such a change will not be published to the other nodes.
 
-- As result, on a `orchestrator/raft`, one may not use the `orchestrator` executable in command line mode: an attempt to run `orchestrator` cli will refuse to run when `raft` mode is enabled. Work is ongoing to allow some commands to run via cli.
+- Remote operations use `orch` through HTTP in every deployment mode. The server binary no longer provides direct business CLI commands.
 
-- A utility script, [orchestrator-client](orchestrator-client.md) is available that provides similar interface as the command line `orchestrator`, and that uses & manipulates `HTTP API` calls.
+- An independent Go client, [orch](orch.md) is available that provides similar interface as the command line `orchestrator`, and that uses & manipulates `HTTP API` calls.
 
-- You will only install the `orchestrator` binaries on `orchestrator` service nodes, and no where else. The `orchestrator-client` script can be installed wherever you wish to.
+- You will only install the `orchestrator` binaries on `orchestrator` service nodes, and no where else. The `orch` Go client can be installed wherever you wish to.
 
 - A failure of a single `orchestrator` node will not affect `orchestrator`'s availability. On a `3` node setup at most one server may fail. On a `5` node setup `2` nodes may fail.
 

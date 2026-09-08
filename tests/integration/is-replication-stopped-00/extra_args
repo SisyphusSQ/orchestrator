@@ -1,1 +1,1 @@
--c is-replication-stopped -i testhost:22293
+is-replication-stopped -i testhost:22293

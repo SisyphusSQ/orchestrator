@@ -5,7 +5,7 @@
 
  If this is a bug report, please provide a test case and the error output. Useful information:
  - your orchestrator.conf.json config file/contents
- - your topology (e.g. run `orchestrator-client -c topology -alias my-cluster`)
+ - your topology (e.g. run `orch topology --alias my-cluster`)
  - what did you do?
  - what did you expect to happen?
  - what happened?

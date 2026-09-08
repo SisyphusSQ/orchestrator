@@ -37,28 +37,20 @@ You may choose between using `MySQL` and `SQLite`. See [backend configuration](c
 
 ### What to deploy: client
 
-To interact with orchestrator from shell/automation/scripts, you may choose to:
+Install the independent Go HTTP client [orch](orch.md) on operator and automation hosts.
+Set `ORCH_ENDPOINT` in the process environment, or pass `--endpoint`. Use one service/proxy
+URL or multiple comma-separated API endpoints for leader discovery. The client does not
+load a shell profile or server configuration and never accesses the backend database.
 
-- Directly interact with the HTTP API
-  - You may only interact with the _leader_. A good way to achieve this is using a proxy.
-- Use the [orchestrator-client](orchestrator-client.md) script.
-  - Deploy `orchestrator-client` on any box from which you wish to interact with `orchestrator`.
-  - Create and edit `/etc/profile.d/orchestrator-client.sh` on those boxes to read:
-    ```
-    ORCHESTRATOR_API="http://your.orchestrator.service.proxy:80/api"
-    ```
-    or
-    ```
-    ORCHESTRATOR_API="http://your.orchestrator.service.host1:3000/api http://your.orchestrator.service.host2:3000/api http://your.orchestrator.service.host3:3000/api"
-    ```
-    In the latter case you will provide the list of all `orchestrator` nodes, and the `orchestrator-client` script will automatically figure out which is the leader. With this setup your automation will not need a proxy (though you may still wish to use a proxy for web interface users).
+```bash
+export ORCH_ENDPOINT="http://node1:3000/api,http://node2:3000/api,http://node3:3000/api"
+orch clusters
+orch topology --cluster my-cluster
+```
 
-    Make sure to chef/puppet/whatever the `ORCHESTRATOR_API` value such that it adapts to changes in your environment.
-
-- The `orchestrator` command line client will refuse to run given a raft setup, since it interacts directly with the underlying database and doesn't participate in the raft consensus, and thus cannot ensure all raft members will get visibility into it changes.
-  - Fortunately `orchestrator-client` provides an almost identical interface as the command line client.
-  - You may force the command line client to run via `--ignore-raft-setup`. This is a "I know what I'm doing" risk you take. If you do choose to use it, then it makes more sense to connect to the leader's backend DB.
-
+Direct database business commands and the old Shell client have been removed. Both Raft
+and shared-backend deployments use HTTP. Local server maintenance remains under
+`orchestrator admin`; it must not be used as an alternative remote management interface.
 
 ### Orchestrator service
 

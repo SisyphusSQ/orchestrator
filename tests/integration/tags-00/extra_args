@@ -1,1 +1,1 @@
--c tags -i testhost:22296
+tags -i testhost:22296

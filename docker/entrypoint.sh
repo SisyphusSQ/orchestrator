@@ -15,4 +15,4 @@ cat <<EOF > /etc/orchestrator.conf.json
 EOF
 fi
 
-exec /usr/local/orchestrator/orchestrator http
+exec /usr/local/orchestrator/orchestrator server

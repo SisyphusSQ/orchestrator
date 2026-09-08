@@ -1,4 +1,6 @@
 ![](https://github.com/openark/orchestrator/workflows/CI/badge.svg)
+
+当前命令入口：服务端 `orchestrator server`，独立 Go HTTP 客户端 `orch`。客户端构建使用 `make cli`，完整构建使用 `make build`；详见 [客户端说明](docs/orch.md)。旧直连 CLI 与 Shell 客户端不再提供。
 ![](https://github.com/openark/orchestrator/workflows/upgrade/badge.svg)
 ![](https://github.com/openark/orchestrator/workflows/system%20tests/badge.svg)
 [![downloads](https://img.shields.io/github/downloads/openark/orchestrator/total.svg)](https://github.com/openark/orchestrator/releases) [![release](https://img.shields.io/github/release/openark/orchestrator.svg)](https://github.com/openark/orchestrator/releases)

@@ -36,5 +36,5 @@ The [action](https://github.com/openark/orchestrator/actions?query=workflow%3ACI
   - [HAProxy](http://www.haproxy.org/)
   - [Consul](https://www.consul.io/)
   - [consul-template](https://github.com/hashicorp/consul-template)
-- Deploys `orchestrator` as a service, `orchestrator-client`
+- Deploys `orchestrator` as a service, `orch`
 - Runs a series of tests where `orchestrator` operates on the topology, e.g. refactors or fails over.

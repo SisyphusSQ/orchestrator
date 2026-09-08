@@ -1,1 +1,1 @@
--c which-master -i testhost:22295
+which-master -i testhost:22295
