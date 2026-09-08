@@ -13,8 +13,8 @@ import (
 )
 
 func raftReverseProxy(w http.ResponseWriter, r *http.Request) {
-	if !orcraft.IsRaftEnabled() {
-		// No raft, so no reverse proxy to the leader
+	if !orcraft.IsInitialized() {
+		// Local reads may report startup status; action handlers still require a verified leader.
 		return
 	}
 	if orcraft.IsLeader() {

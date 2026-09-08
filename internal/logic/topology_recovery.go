@@ -212,12 +212,10 @@ func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) e
 	}
 
 	recoveryStep := NewTopologyRecoveryStep(topologyRecovery.UID, message)
-	if orcraft.IsRaftEnabled() {
-		_, err := orcraft.PublishCommand("write-recovery-step", recoveryStep)
-		return err
-	} else {
-		return writeTopologyRecoveryStep(recoveryStep)
-	}
+
+	_, err := orcraft.PublishCommand("write-recovery-step", recoveryStep)
+	return err
+
 }
 
 func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst.Instance) error {
@@ -228,12 +226,10 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 		// Assign the current Binlog Coordinates of Successor Instance
 		topologyRecovery.SuccessorBinlogCoordinates = &successorInstance.SelfBinlogCoordinates
 	}
-	if orcraft.IsRaftEnabled() {
-		_, err := orcraft.PublishCommand("resolve-recovery", topologyRecovery)
-		return err
-	} else {
-		return writeResolveRecovery(topologyRecovery)
-	}
+
+	_, err := orcraft.PublishCommand("resolve-recovery", topologyRecovery)
+	return err
+
 }
 
 // prepareCommand replaces agreed-upon placeholders with analysis data
@@ -919,18 +915,15 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 		kvPairs := inst.GetClusterMasterKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
-		if orcraft.IsRaftEnabled() {
-			for _, kvPair := range kvPairs {
-				_, err := orcraft.PublishCommand("put-key-value", kvPair)
-				log.Errore(err)
-			}
-			// since we'll be affecting 3rd party tools here, we _prefer_ to mitigate re-applying
-			// of the put-key-value event upon startup. We _recommend_ a snapshot in the near future.
-			go orcraft.PublishCommand("async-snapshot", "")
-		} else {
-			err := kv.PutKVPairs(kvPairs)
+
+		for _, kvPair := range kvPairs {
+			_, err := orcraft.PublishCommand("put-key-value", kvPair)
 			log.Errore(err)
 		}
+		// since we'll be affecting 3rd party tools here, we _prefer_ to mitigate re-applying
+		// of the put-key-value event upon startup. We _recommend_ a snapshot in the near future.
+		go orcraft.PublishCommand("async-snapshot", "")
+
 		{
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
 			err := kv.DistributePairs(kvPairs)
@@ -1830,24 +1823,22 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 
 	// At this point we have validated there's a failure scenario for which we have a recovery path.
 
-	if orcraft.IsRaftEnabled() {
-		// with raft, all nodes can (and should) run analysis,
-		// but only the leader proceeds to execute detection hooks and then to failover.
-		if !IsLeader() {
-			log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-				"skipProcesses: %v: NOT detecting/recovering host (raft non-leader)",
-				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses)
-			return false, nil, err
-		}
+	// with raft, all nodes can (and should) run analysis,
+	// but only the leader proceeds to execute detection hooks and then to failover.
+	if !IsLeader() {
+		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
+			"skipProcesses: %v: NOT detecting/recovering host (raft non-leader)",
+			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses)
+		return false, nil, err
 	}
 
 	// Initiate detection:
 	registrationSuccess, _, err := checkAndExecuteFailureDetectionProcesses(analysisEntry, skipProcesses)
 	if registrationSuccess {
-		if orcraft.IsRaftEnabled() {
-			_, err := orcraft.PublishCommand("register-failure-detection", analysisEntry)
-			log.Errore(err)
-		}
+
+		_, err := orcraft.PublishCommand("register-failure-detection", analysisEntry)
+		log.Errore(err)
+
 	}
 	if err != nil {
 		log.Errorf("executeCheckAndRecoverFunction: error on failure detection: %+v", err)

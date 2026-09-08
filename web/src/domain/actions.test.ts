@@ -26,6 +26,8 @@ it("every Web operation resolves to a registered Go route with a POST alias", ()
         : [match[1]];
     },
   );
+  const explicitPosts = [...api.matchAll(/registerAPIMethod\(m, http\.MethodPost, "([^"]+)"/g)].map((match) => match[1]);
+  paths.push(...explicitPosts);
   const allowed = new Set(
     [...aliases.matchAll(/"([^"]+)":\s*true/g)].map((match) => match[1]),
   );
@@ -50,7 +52,7 @@ it("every Web operation resolves to a registered Go route with a POST alias", ()
       .split("?")[0]
       .slice(1);
     expect(
-      allowed.has(path.split("/")[0]),
+      allowed.has(path.split("/")[0]) || explicitPosts.includes(path),
       `${action.id} must have a POST alias`,
     ).toBe(true);
     expect(

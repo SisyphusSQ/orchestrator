@@ -372,11 +372,11 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 	if err != nil {
 		return nil, log.Errore(err)
 	}
-	if orcraft.IsRaftEnabled() {
-		if _, err := orcraft.PublishCommand("write-recovery", topologyRecovery); err != nil {
-			return nil, log.Errore(err)
-		}
+
+	if _, err := orcraft.PublishCommand("write-recovery", topologyRecovery); err != nil {
+		return nil, log.Errore(err)
 	}
+
 	return topologyRecovery, nil
 }
 

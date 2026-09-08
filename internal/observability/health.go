@@ -12,7 +12,6 @@ type Health struct {
 	AppliedIndex uint64    `json:"appliedIndex"`
 	CheckedAt    time.Time `json:"checkedAt"`
 	Backend      bool      `json:"backend"`
-	RaftEnabled  bool      `json:"raftEnabled"`
 	RaftReady    bool      `json:"raftReady"`
 	Leader       bool      `json:"leader"`
 	LeaderReady  bool      `json:"leaderReady"`
@@ -51,9 +50,7 @@ func init() {
 
 	Gauge("orchestrator_ready", "Local service readiness", func() int64 { return Bool(CurrentHealth().Ready) })
 	Gauge("orchestrator_backend_ready", "Cached backend connectivity", func() int64 { return Bool(CurrentHealth().Backend) })
-	Gauge("orchestrator_raft_enabled", "Whether this node uses Raft", func() int64 { return Bool(CurrentHealth().RaftEnabled) })
-	Gauge("orchestrator_raft_ready", "Cached local Raft readiness; only meaningful when enabled", func() int64 { return Bool(CurrentHealth().RaftReady) })
-	Gauge("orchestrator_raft_leader", "Local Raft leadership role", func() int64 { return Bool(CurrentHealth().RaftEnabled && CurrentHealth().Leader) })
+	Gauge("orchestrator_raft_ready", "Cached local Raft readiness", func() int64 { return Bool(CurrentHealth().RaftReady) })
 	Gauge("orchestrator_leader_ready", "Local node can perform leader work", func() int64 { return Bool(CurrentHealth().LeaderReady) })
 	Gauge("orchestrator_active", "Local discovery/recovery active role", func() int64 { return Bool(CurrentHealth().Active) })
 }

@@ -44,22 +44,16 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-const (
-	transferAfterUnhealthyDuration = 5 * config.HealthPollSeconds * time.Second
-	fatalAfterUnhealthyDuration    = 30 * config.HealthPollSeconds * time.Second
-)
-
 // discoveryQueue is a channel of deduplicated instanceKey-s
 // that were requested for discovery.  It can be continuously updated
 // as discovery process progresses.
 var discoveryQueue *discovery.Queue
 var deadInstancesDiscoveryQueue *discovery.Queue
+var discoveryRunning atomic.Bool
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
 
 var instancePollSecondsExceededCounter = observability.NewCounter("orchestrator_discoveries_instance_poll_seconds_exceeded_total", "discoveries.instance_poll_seconds_exceeded events")
-
-var isElectedNode int64 = 0
 
 // Manual HTTP discovery also runs when the background loop is disabled.
 // Each Add supplies the current polling interval explicitly.
@@ -72,19 +66,9 @@ func init() {
 
 }
 
-func IsLeader() bool {
-	if orcraft.IsRaftEnabled() {
-		return orcraft.IsLeaderReady()
-	}
-	return atomic.LoadInt64(&isElectedNode) == 1
-}
+func IsLeader() bool { return orcraft.IsLeaderReady() }
 
-func IsLeaderOrActive() bool {
-	if orcraft.IsRaftEnabled() {
-		return orcraft.IsReady()
-	}
-	return atomic.LoadInt64(&isElectedNode) == 1
-}
+func IsLeaderOrActive() bool { return orcraft.IsReady() }
 
 // used in several places
 func instancePollSecondsDuration() time.Duration {
@@ -278,9 +262,8 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 		return
 	}
 
-	if !IsLeaderOrActive() {
-		// Maybe this node was elected before, but isn't elected anymore.
-		// If not elected, stop drilling up/down the topology
+	if !IsLeaderOrActive() || !discoveryRunning.Load() {
+		// Manual or replicated discovery still updates this instance when background crawling is off.
 		return
 	}
 
@@ -328,40 +311,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 func onHealthTick() {
 	wasAlreadyElected := IsLeader()
 
-	if orcraft.IsRaftEnabled() {
-		if orcraft.IsLeader() {
-			atomic.StoreInt64(&isElectedNode, 1)
-		} else {
-			atomic.StoreInt64(&isElectedNode, 0)
-		}
-		if orcraft.IsLeader() && process.SinceLastGoodHealthCheck() > transferAfterUnhealthyDuration {
-			log.Errorf("Health test is failing for over %+v seconds. transferring raft leadership", transferAfterUnhealthyDuration.Seconds())
-			if err := orcraft.TransferLeadership("", ""); err != nil {
-				log.Errore(err)
-			}
-		}
-		if process.SinceLastGoodHealthCheck() > fatalAfterUnhealthyDuration {
-			orcraft.FatalRaftError(fmt.Errorf("Node is unable to register health. Please check database connnectivity and/or time synchronisation."))
-		}
-	}
-	if !orcraft.IsRaftEnabled() {
-		myIsElectedNode, err := process.AttemptElection()
-		if err != nil {
-			log.Errore(err)
-		}
-		if myIsElectedNode {
-			atomic.StoreInt64(&isElectedNode, 1)
-		} else {
-			atomic.StoreInt64(&isElectedNode, 0)
-		}
-		if !myIsElectedNode {
-			if electedNode, _, err := process.ElectedNode(); err == nil {
-				log.Infof("Not elected as active node; active node: %v; polling", electedNode.Hostname)
-			} else {
-				log.Infof("Not elected as active node; active node: Unable to determine: %v; polling", err)
-			}
-		}
-	}
 	if !IsLeaderOrActive() {
 		return
 	}
@@ -435,16 +384,14 @@ func InjectPseudoGTIDOnWriters() error {
 		go func() {
 			if injected, _ := inst.CheckAndInjectPseudoGTIDOnWriter(instance); injected {
 				clusterName := instance.ClusterName
-				if orcraft.IsRaftEnabled() {
-					// We prefer not saturating our raft communication. Pseudo-GTID information is
-					// OK to be cached for a while.
-					if _, found := pseudoGTIDPublishCache.Get(clusterName); !found {
-						pseudoGTIDPublishCache.Set(clusterName, true, cache.DefaultExpiration)
-						orcraft.PublishCommand("injected-pseudo-gtid", clusterName)
-					}
-				} else {
-					inst.RegisterInjectedPseudoGTID(clusterName)
+
+				// We prefer not saturating our raft communication. Pseudo-GTID information is
+				// OK to be cached for a while.
+				if _, found := pseudoGTIDPublishCache.Get(clusterName); !found {
+					pseudoGTIDPublishCache.Set(clusterName, true, cache.DefaultExpiration)
+					orcraft.PublishCommand("injected-pseudo-gtid", clusterName)
 				}
+
 			}
 		}()
 	}
@@ -480,23 +427,16 @@ func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVP
 		submitKvPairs = append(submitKvPairs, kvPair)
 	}
 	log.Debugf("kv.SubmitMastersToKvStores: submitKvPairs: %+v", len(submitKvPairs))
-	if orcraft.IsRaftEnabled() {
-		for _, kvPair := range submitKvPairs {
-			_, err := orcraft.PublishCommand("put-key-value", kvPair)
-			if err == nil {
-				submittedCount++
-			} else {
-				selectedError = err
-			}
-		}
-	} else {
-		err := kv.PutKVPairs(submitKvPairs)
+
+	for _, kvPair := range submitKvPairs {
+		_, err := orcraft.PublishCommand("put-key-value", kvPair)
 		if err == nil {
-			submittedCount += len(submitKvPairs)
+			submittedCount++
 		} else {
 			selectedError = err
 		}
 	}
+
 	if distributeErr := kv.DistributePairs(kvPairs); distributeErr != nil {
 		selectedError = errors.Join(selectedError, distributeErr)
 	}
@@ -519,7 +459,7 @@ func injectSeeds(seedOnce *sync.Once) {
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-func ContinuousDiscovery() error {
+func ContinuousDiscovery(ctx context.Context) error {
 	log.Infof("continuous discovery: setting up")
 	if err := kv.InitKVStores(); err != nil {
 		return fmt.Errorf("initialize KV stores: %w", err)
@@ -528,20 +468,11 @@ func ContinuousDiscovery() error {
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentCache := recentDiscoveryOperationKeys
 	observability.Gauge("orchestrator_discovery_recent_instances", "Recent discovery cache entries", func() int64 { return int64(recentCache.ItemCount()) })
-	var raftErrors <-chan error
-	if config.Config.RaftEnabled {
-		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
-			return fmt.Errorf("set up raft runtime: %w", err)
-		}
-		errors := make(chan error, 1)
-		go func() {
-			errors <- orcraft.Monitor()
-		}()
-		raftErrors = errors
-	}
 
 	inst.LoadHostnameResolveCache()
-	go handleDiscoveryRequests()
+	handleDiscoveryRequests()
+	discoveryRunning.Store(true)
+	defer discoveryRunning.Store(false)
 
 	healthTicker := time.NewTicker(config.HealthPollSeconds * time.Second)
 	instancePollTicker := time.NewTicker(instancePollSecondsDuration())
@@ -572,18 +503,11 @@ func ContinuousDiscovery() error {
 
 	AcceptSignals()
 
-	if *config.RuntimeCLIFlags.GrabElection {
-		process.GrabElection()
-	}
-
 	log.Infof("continuous discovery: starting")
 	for {
 		select {
-		case err := <-raftErrors:
-			if err == nil {
-				return fmt.Errorf("raft monitor stopped without an error")
-			}
-			return fmt.Errorf("monitor raft runtime: %w", err)
+		case <-ctx.Done():
+			return nil
 		case <-healthTicker.C:
 			go func() {
 				onHealthTick()
@@ -645,7 +569,7 @@ func ContinuousDiscovery() error {
 				}
 			}()
 		case <-raftCaretakingTicker.C:
-			if orcraft.IsRaftEnabled() && IsLeader() {
+			if IsLeader() {
 				go publishDiscoverMasters()
 			}
 		case <-recoveryTicker.C:

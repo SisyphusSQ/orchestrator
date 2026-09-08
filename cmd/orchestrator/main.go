@@ -38,6 +38,7 @@ var AppVersion, GitCommit string
 
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
+	log.RegisterCloseHook(app.CloseRaftRuntime)
 	log.RegisterCloseHook(app.CloseHealthMonitor)
 	registerProcessCloseHooks(log.RegisterCloseHook, inst.CloseAuditSyslog, db.Close)
 	exitCode := run()
@@ -142,8 +143,6 @@ func runCommand(options *commandOptions, command string) error {
 		return nil
 	}
 	switch command {
-	case "continuous":
-		return logic.ContinuousDiscovery()
 	case "dump-config":
 		fmt.Println(config.Config.ToJSONString())
 		return nil

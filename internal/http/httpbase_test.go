@@ -60,15 +60,24 @@ func TestAuthorizationModesPreservePrincipalContracts(t *testing.T) {
 			if tc.prepare != nil {
 				tc.prepare()
 			}
-			if got := isAuthorizedForAction(request, tc.principal); got != tc.want {
-				t.Fatalf("isAuthorizedForAction() = %t, want %t", got, tc.want)
+			if got := isAuthorizedForWrite(request, tc.principal); got != tc.want {
+				t.Fatalf("isAuthorizedForWrite() = %t, want %t", got, tc.want)
 			}
 		})
 	}
 
 	config.Config.ReadOnly = true
 	config.Config.AuthenticationMethod = "basic"
-	if isAuthorizedForAction(request, "writer") {
+	if isAuthorizedForWrite(request, "writer") {
 		t.Fatal("read-only configuration allowed a mutating action")
+	}
+}
+
+func TestUninitializedRaftNeverAuthorizesBusinessWrites(t *testing.T) {
+	previous := config.Config.ReadOnly
+	config.Config.ReadOnly = false
+	t.Cleanup(func() { config.Config.ReadOnly = previous })
+	if isAuthorizedForAction(httptest.NewRequest("POST", "/api/discover/db/3306", nil), "writer") {
+		t.Fatal("uninitialized Raft authorized a topology write")
 	}
 }

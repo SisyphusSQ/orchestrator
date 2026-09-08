@@ -71,7 +71,7 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 		return cmd
 	}
 	nodes := []node{}
-	for i := range 3 {
+	for i := range 4 {
 		data := filepath.Join(dir, fmt.Sprint(i))
 		if err := os.Mkdir(data, 0700); err != nil {
 			t.Fatal(err)
@@ -96,6 +96,8 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 			t.Fatalf("isolated node %d SQL: %v", index, err)
 		}
 	}
+	// The fourth MySQL is a private orchestrator backend, outside the managed replication topology.
+	sqlExec(3, "CREATE DATABASE orchestrator_backend")
 	sqlExec(0, "CREATE DATABASE orch_e2e")
 	sqlExec(0, "CREATE TABLE orch_e2e.marker (id INT PRIMARY KEY)")
 	sqlExec(0, "INSERT INTO orch_e2e.marker VALUES (1)")
@@ -109,7 +111,7 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 		})
 	}
 	httpPort := freePort(t)
-	config := map[string]any{"BackendDB": "sqlite", "SQLite3DataFile": filepath.Join(dir, "backend.db"), "ListenAddress": fmt.Sprintf("127.0.0.1:%d", httpPort), "HostnameResolveMethod": "none", "MySQLHostnameResolveMethod": "none", "MySQLTopologyUser": "root", "MySQLConnectTimeoutSeconds": 1, "DiscoverByShowSlaveHosts": true, "Debug": false, "EnableSyslog": false, "AuditToSyslog": false, "RaftEnabled": false, "ApplyMySQLPromotionAfterMasterFailover": true, "RecoverMasterClusterFilters": []string{"*"}, "RecoveryPeriodBlockSeconds": 1, "InstancePollSeconds": 1}
+	config := map[string]any{"BackendDB": "mysql", "MySQLOrchestratorHost": "127.0.0.1", "MySQLOrchestratorPort": nodes[3].port, "MySQLOrchestratorUser": "root", "MySQLOrchestratorDatabase": "orchestrator_backend", "ListenAddress": fmt.Sprintf("127.0.0.1:%d", httpPort), "HostnameResolveMethod": "none", "MySQLHostnameResolveMethod": "none", "MySQLTopologyUser": "root", "MySQLConnectTimeoutSeconds": 1, "DiscoverByShowSlaveHosts": true, "Debug": false, "EnableSyslog": false, "AuditToSyslog": false, "RaftNodeID": "topology-e2e", "RaftDataDir": filepath.Join(dir, "raft"), "RaftBind": fmt.Sprintf("127.0.0.1:%d", freePort(t)), "ApplyMySQLPromotionAfterMasterFailover": true, "RecoverMasterClusterFilters": []string{"*"}, "RecoveryPeriodBlockSeconds": 1, "InstancePollSeconds": 1}
 	configPath := filepath.Join(dir, "server.json")
 	raw, err := json.Marshal(config)
 	if err != nil {
@@ -138,8 +140,13 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 		return out
 	}
 	eventually(t, 15*time.Second, func() bool { _, err := invoke("api", "lb-check"); return err == nil })
+	if out, err := invoke("register-candidate", "-i", "127.0.0.1:19999", "--promotion-rule", "prefer"); err == nil {
+		t.Fatalf("write before bootstrap succeeded: %s", out)
+	}
+	orch("raft-bootstrap")
+	eventually(t, 10*time.Second, func() bool { _, err := invoke("api", "leader-check"); return err == nil })
 	instance := func(i int) string { return net.JoinHostPort("127.0.0.1", strconv.Itoa(nodes[i].port)) }
-	for i := range nodes {
+	for i := range 3 {
 		orch("discover", "-i", instance(i))
 	}
 	orch("begin-maintenance", "-i", instance(2), "--owner", "e2e", "--reason", "isolated / + % test", "--duration", "1h")
@@ -181,7 +188,7 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 	eventually(t, 15*time.Second, func() bool { return replicaSourcePort(t, nodes[2].db) == nodes[1].port })
 	orch("discover", "-i", instance(1))
 	orch("which-cluster-master", "--cluster", instance(1))
-	t.Log("independent HTTP client: discovery, maintenance, tags, GTID relocation, replication data readback and forced failover passed")
+	t.Log("independent MySQL backend and single-node Raft: discovery, maintenance, tags, GTID relocation, replication data readback and forced failover passed")
 }
 func freePort(t *testing.T) int {
 	t.Helper()

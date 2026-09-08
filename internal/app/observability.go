@@ -5,9 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/db"
-	"github.com/openark/orchestrator/internal/logic"
 	"github.com/openark/orchestrator/internal/observability"
 	orcraft "github.com/openark/orchestrator/internal/raft"
 )
@@ -38,24 +36,19 @@ func startHealthMonitor() func() error {
 func sampleHealth(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
-	h := observability.Health{RaftEnabled: config.Config.RaftEnabled}
+	h := observability.Health{}
 	database, err := db.OpenOrchestratorContext(ctx)
 	if err == nil {
 		err = database.PingContext(ctx)
 	}
 	h.Backend = err == nil
-	if h.RaftEnabled {
-		raftStatus := orcraft.ObservabilityStatus()
-		h.LastIndex, h.CommitIndex, h.AppliedIndex = orcraft.LogProgress()
-		h.RaftReady = raftStatus.Ready
-		h.Leader = raftStatus.IsLeader
-		h.LeaderReady = h.Backend && raftStatus.LeaderVerified
-		h.Active = h.LeaderReady
-	} else {
-		h.Active = logic.IsLeader()
-		h.LeaderReady = h.Backend && h.Active
-	}
-	h.Ready = h.Backend && (!h.RaftEnabled || h.RaftReady)
+	raftStatus := orcraft.ObservabilityStatus()
+	h.LastIndex, h.CommitIndex, h.AppliedIndex = orcraft.LogProgress()
+	h.RaftReady = raftStatus.Ready
+	h.Leader = raftStatus.IsLeader
+	h.LeaderReady = h.Backend && raftStatus.LeaderVerified
+	h.Active = h.Backend && h.RaftReady
+	h.Ready = h.Backend && h.RaftReady
 	h.CheckedAt = time.Now()
 	observability.SetHealth(h)
 }

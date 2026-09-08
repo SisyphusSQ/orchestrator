@@ -102,7 +102,7 @@ func isAuthorizedForAction(req *http.Request, user Principal) bool {
 	if !isAuthorizedForWrite(req, user) {
 		return false
 	}
-	if orcraft.IsRaftEnabled() && !orcraft.IsLeaderReady() {
+	if !orcraft.IsLeaderReady() {
 		// A leader without verified quorum must not perform topology writes.
 		return false
 	}

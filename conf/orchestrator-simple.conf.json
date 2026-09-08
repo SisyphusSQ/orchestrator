@@ -1,4 +1,7 @@
 {
+  "RaftNodeID": "node-1",
+  "RaftDataDir": "/var/lib/orchestrator/raft",
+  "RaftBind": "127.0.0.1:10008",
   "#": "-----",
   "#": "this is a comment. See further comment hints below.",
   "#": "-----",

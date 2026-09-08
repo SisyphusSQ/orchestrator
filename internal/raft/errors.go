@@ -14,7 +14,7 @@ type Class string
 
 const (
 	ClassInvalidArgument Class = "invalid_argument"
-	ClassDisabled        Class = "raft_disabled"
+	ClassUnavailable     Class = "raft_unavailable"
 	ClassNotBootstrapped Class = "not_bootstrapped"
 	ClassNotLeader       Class = "not_leader"
 	ClassConflict        Class = "conflict"
@@ -70,7 +70,7 @@ func wrapError(class Class, message string, err error) *Error {
 }
 
 var (
-	ErrNotEnabled              = newError(ClassDisabled, "raft is not configured/running")
+	ErrNotRunning              = newError(ClassUnavailable, "raft runtime is not initialized")
 	ErrNotLeader               = newError(ClassNotLeader, "not leader")
 	ErrNotBootstrapped         = newError(ClassNotBootstrapped, "raft cluster is not bootstrapped")
 	ErrAlreadyBootstrapped     = newError(ClassConflict, "raft cluster already has state or configuration")
@@ -83,7 +83,7 @@ var (
 	ErrTimeout                 = newError(ClassIndeterminate, "raft future timed out")
 
 	// RaftNotRunning is the historical alias used by existing call sites.
-	RaftNotRunning = ErrNotEnabled
+	RaftNotRunning = ErrNotRunning
 )
 
 func invalidArgument(format string, args ...interface{}) *Error {

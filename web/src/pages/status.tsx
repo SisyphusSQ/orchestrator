@@ -26,6 +26,9 @@ interface Health {
   RaftNodeID: string;
   RaftMembers: string[];
   IsRaftLeader: boolean;
+  RaftState: string;
+  RaftReady: boolean;
+  RaftInConfiguration: boolean;
 }
 export function StatusPage() {
   const data = useQuery<Health>("/health");
@@ -90,13 +93,16 @@ export function StatusPage() {
           ]}
         />
       </Card>
-      {health?.RaftLeader && (
+      {health && (
         <Card className="section-gap" title="Raft 集群">
           <Descriptions
             column={1}
             items={[
               { key: "id", label: "当前节点", children: health.RaftNodeID },
-              { key: "leader", label: "Leader", children: health.RaftLeader },
+              { key: "state", label: "Raft 状态", children: health.RaftState || "尚未初始化" },
+              { key: "ready", label: "节点就绪", children: health.RaftReady ? "已就绪" : "未就绪" },
+              { key: "joined", label: "成员状态", children: health.RaftInConfiguration ? "已加入" : "待 bootstrap 或加入集群" },
+              { key: "leader", label: "Leader", children: health.RaftLeader || "暂无 Leader" },
               {
                 key: "uri",
                 label: "Leader 地址",
@@ -128,7 +134,7 @@ export function StatusPage() {
           {[
             ["reload-configuration", "重新加载配置"],
             ["reset-hostname-resolve-cache", "清空主机解析缓存"],
-            ["reelect", "重新选举活动节点"],
+            ["raft-transfer-leadership", "转移 Raft 领导权"],
           ].map(([id, label]) => (
             <Button
               key={id}

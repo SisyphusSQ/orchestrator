@@ -6,7 +6,7 @@ import (
 )
 
 func TestServerCommandBoundaries(t *testing.T) {
-	for _, args := range [][]string{{"clusters"}, {"-c", "clusters"}, {"http"}, {"cli"}, {"server", "-config", "server.json"}, {"server", "-discovery"}, {"--ignore-raft-setup"}, {"admin", "access-token"}} {
+	for _, args := range [][]string{{"continuous"}, {"server", "--grab-election"}, {"clusters"}, {"-c", "clusters"}, {"http"}, {"cli"}, {"server", "-config", "server.json"}, {"server", "-discovery"}, {"--ignore-raft-setup"}, {"admin", "access-token"}} {
 		var output bytes.Buffer
 		called := false
 		err := execute(args, &output, &output, func(*commandOptions, string) error { called = true; return nil })

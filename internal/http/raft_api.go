@@ -28,13 +28,13 @@ type raftRemoveBody struct {
 
 func raftHTTPStatus(err error) int {
 	switch orcraft.ClassOf(err) {
-	case orcraft.ClassInvalidArgument, orcraft.ClassDisabled:
+	case orcraft.ClassInvalidArgument:
 		return http.StatusBadRequest
 	case orcraft.ClassNotFound:
 		return http.StatusNotFound
 	case orcraft.ClassNotBootstrapped, orcraft.ClassNotLeader, orcraft.ClassConflict:
 		return http.StatusConflict
-	case orcraft.ClassIndeterminate:
+	case orcraft.ClassIndeterminate, orcraft.ClassUnavailable:
 		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
@@ -196,7 +196,7 @@ func (this *HttpAPI) RaftSnapshot(params Params, r Responder, req *http.Request,
 }
 
 func (this *HttpAPI) RaftState(params Params, r Responder, req *http.Request, user Principal) {
-	if !orcraft.IsRaftEnabled() {
+	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.RaftNotRunning, "", nil)
 		return
 	}
@@ -204,7 +204,7 @@ func (this *HttpAPI) RaftState(params Params, r Responder, req *http.Request, us
 }
 
 func (this *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, user Principal) {
-	if !orcraft.IsRaftEnabled() {
+	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.RaftNotRunning, "", nil)
 		return
 	}
@@ -215,7 +215,7 @@ func (this *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, u
 }
 
 func (this *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, user Principal) {
-	if !orcraft.IsRaftEnabled() {
+	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.RaftNotRunning, "", nil)
 		return
 	}
@@ -228,7 +228,7 @@ func (this *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, u
 }
 
 func (this *HttpAPI) RaftStatus(params Params, r Responder, req *http.Request, user Principal) {
-	if !orcraft.IsRaftEnabled() {
+	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.RaftNotRunning, "", nil)
 		return
 	}

@@ -21,7 +21,6 @@ type CLIFlags struct {
 	Noop                 *bool
 	SkipUnresolve        *bool
 	SkipUnresolveCheck   *bool
-	GrabElection         *bool
 	ConfiguredVersion    string
 	SkipBinlogSearch     *bool
 	EnableDatabaseUpdate *bool

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - raft
+  - 将 Raft 收敛为唯一服务端运行模式，保留单节点与多节点部署，以及各节点独立的 MySQL/SQLite 元数据库；移除共享数据库选主、`RaftEnabled`、`continuous`、`--grab-election` 和旧选主 API。升级配置与新集群 bootstrap 步骤见 `docs/upgrading.md`。
+  - 让 Raft 生命周期独立于自动发现，关闭 discovery 后仍支持成员管理、状态复制和领导权转移；补齐运行时关闭、配置重载、就绪状态和 Web 操作入口。
   - Replace the 2017 openark Raft fork with official `github.com/hashicorp/raft` v1.7.3 and `github.com/hashicorp/raft-boltdb/v2` v2.3.1 for newly created clusters.
   - Require a durable `RaftNodeID` independent of bind/advertise/DNS, bootstrap a single seed voter, and manage membership through ID-aware HTTP APIs (`/api/raft/configuration`, `/bootstrap`, `/members`, `/leadership/transfer`, `/snapshot`).
   - Use official FileSnapshotStore plus one Bolt store for logs and stable state, remove Yield/peer/health-report control paths, and report readiness from VerifyLeader, configuration suffrage, and last-contact.

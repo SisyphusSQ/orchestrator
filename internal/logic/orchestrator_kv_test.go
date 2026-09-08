@@ -19,13 +19,12 @@ func TestContinuousDiscoveryReturnsKVInitError(t *testing.T) {
 	config.Config.ConsulAddress = "https://127.0.0.1:8501"
 	config.Config.ConsulScheme = "https"
 	config.Config.ConsulTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
-	config.Config.RaftEnabled = false
 
-	err := ContinuousDiscovery()
+	err := ContinuousDiscovery(t.Context())
 	if err == nil {
-		t.Fatal("ContinuousDiscovery() returned nil for a Consul TLS initialization failure")
+		t.Fatal("ContinuousDiscovery(t.Context()) returned nil for a Consul TLS initialization failure")
 	}
 	if !strings.Contains(err.Error(), "initialize KV stores") {
-		t.Fatalf("ContinuousDiscovery() error = %q; want initialize KV stores", err)
+		t.Fatalf("ContinuousDiscovery(t.Context()) error = %q; want initialize KV stores", err)
 	}
 }

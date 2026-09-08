@@ -152,7 +152,7 @@
 
 | 原能力 | 新入口 | 运行边界 |
 | --- | --- | --- |
-| `continuous` | `orchestrator continuous` | 服务端后台发现，读取服务配置 |
+| `continuous` | 已移除，使用 `orchestrator server` | Raft 与 HTTP 管理统一启动，默认启用后台发现 |
 | `dump-config` | `orchestrator admin dump-config` | 仅本地输出服务配置，可能包含凭据 |
 | `redeploy-internal-db` | `orchestrator admin redeploy-internal-db` | 仅本地部署内部库结构 |
 | `access-token` | `orchestrator admin access-token --owner` | 仅本地签发访问凭据 |

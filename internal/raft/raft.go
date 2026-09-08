@@ -17,6 +17,7 @@
 package orcraft
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -33,6 +34,11 @@ import (
 const asyncSnapshotTimeframe = 1 * time.Minute
 
 var store *Store
+var runtimeMu sync.RWMutex
+var lifecycleMu sync.Mutex
+var runtimeCalls sync.WaitGroup
+var runtimeDone chan struct{}
+var leaderDone chan struct{}
 var raftSetupComplete int64
 var ThisHostname string
 
@@ -64,8 +70,21 @@ func (luri *leaderURI) IsThisLeaderURI() bool {
 	return luri.uri == thisLeaderURI
 }
 
-func IsRaftEnabled() bool {
-	return store != nil && store.raft != nil
+// acquireStore pins the runtime until a call finishes, without holding a lock while FSM callbacks run.
+func acquireStore() (*Store, func()) {
+	runtimeMu.RLock()
+	defer runtimeMu.RUnlock()
+	if store == nil {
+		return nil, func() {}
+	}
+	runtimeCalls.Add(1)
+	return store, runtimeCalls.Done
+}
+
+func IsInitialized() bool {
+	runtimeMu.RLock()
+	defer runtimeMu.RUnlock()
+	return store != nil
 }
 
 func FatalRaftError(err error) error {
@@ -106,6 +125,13 @@ func computeLeaderURI() (uri string, err error) {
 
 // Setup creates the raft runtime. New clusters are not auto-bootstrapped.
 func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier, thisHostname string) error {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
+	if store != nil {
+		return fmt.Errorf("raft runtime is already initialized")
+	}
 	log.Debugf("Setting up raft")
 	ThisHostname = thisHostname
 	created := NewStore(config.Config.RaftDataDir, config.Config.RaftBind, config.Config.RaftAdvertise, config.Config.RaftNodeID, applier, snapshotCreatorApplier)
@@ -120,38 +146,58 @@ func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier
 		return FatalRaftError(err)
 	}
 	thisLeaderURI = uri
+	if err := setupHttpClient(); err != nil {
+		_ = created.Close()
+		return fmt.Errorf("set up raft HTTP client: %w", err)
+	}
 
 	store = created
 	leaderCh := store.raft.LeaderCh()
+	runtimeDone = make(chan struct{})
+	leaderDone = make(chan struct{})
+	done, exited := runtimeDone, leaderDone
 	go func() {
-		for isTurnedLeader := range leaderCh {
-			if isTurnedLeader {
-				PublishCommand("leader-uri", thisLeaderURI)
+		defer close(exited)
+		for {
+			select {
+			case <-done:
+				return
+			case isTurnedLeader := <-leaderCh:
+				if isTurnedLeader {
+					if _, err := PublishCommand("leader-uri", uri); err != nil {
+						log.Errore(err)
+					}
+				}
 			}
 		}
 	}()
 
-	setupHttpClient()
 	atomic.StoreInt64(&raftSetupComplete, 1)
 	return nil
 }
 
 func Shutdown() error {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+	runtimeMu.Lock()
 	atomic.StoreInt64(&raftSetupComplete, 0)
 	if store == nil {
+		runtimeMu.Unlock()
 		return nil
 	}
-	err := store.Close()
+	close(runtimeDone)
+	exited, current := leaderDone, store
 	store = nil
+	runtimeMu.Unlock()
+	runtimeCalls.Wait()
+	err := current.Close()
+	<-exited
+	LeaderURI.Set("")
 	return err
 }
 
 func isRaftSetupComplete() bool {
 	return atomic.LoadInt64(&raftSetupComplete) == 1
-}
-
-func getRaft() *raft.Raft {
-	return store.raft
 }
 
 func normalizeRaftNode(node string) (string, error) {
@@ -164,44 +210,56 @@ func IsPartOfQuorum() bool {
 }
 
 func IsLeader() bool {
-	if !IsRaftEnabled() || !isRaftSetupComplete() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return false
 	}
-	return GetState() == raft.Leader
+	return store.raft.State() == raft.Leader
 }
 
 func IsLeaderReady() bool {
-	if !IsRaftEnabled() || !isRaftSetupComplete() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return false
 	}
 	return store.leaderVerified()
 }
 
 func IsReady() bool {
-	if !IsRaftEnabled() || !isRaftSetupComplete() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return false
 	}
 	return store.Status().Ready
 }
 
 func GetLeader() string {
-	if !isRaftSetupComplete() || !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return ""
 	}
-	_, id := getRaft().LeaderWithID()
+	_, id := store.raft.LeaderWithID()
 	return string(id)
 }
 
 func GetLeaderAddress() string {
-	if !isRaftSetupComplete() || !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return ""
 	}
-	addr, _ := getRaft().LeaderWithID()
+	addr, _ := store.raft.LeaderWithID()
 	return string(addr)
 }
 
 func QuorumSize() (int, error) {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return 0, RaftNotRunning
 	}
 	voters, err := store.voterCount()
@@ -212,10 +270,12 @@ func QuorumSize() (int, error) {
 }
 
 func GetState() raft.RaftState {
-	if !isRaftSetupComplete() || !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return raft.Shutdown
 	}
-	return getRaft().State()
+	return store.raft.State()
 }
 
 func IsHealthy() bool {
@@ -223,7 +283,9 @@ func IsHealthy() bool {
 }
 
 func Snapshot() error {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return RaftNotRunning
 	}
 	return store.Snapshot()
@@ -238,6 +300,8 @@ func AsyncSnapshot() error {
 }
 
 func GetRaftBind() string {
+	store, release := acquireStore()
+	defer release()
 	if store == nil {
 		return ""
 	}
@@ -245,6 +309,8 @@ func GetRaftBind() string {
 }
 
 func GetRaftAdvertise() string {
+	store, release := acquireStore()
+	defer release()
 	if store == nil {
 		return ""
 	}
@@ -252,6 +318,8 @@ func GetRaftAdvertise() string {
 }
 
 func GetRaftNodeID() string {
+	store, release := acquireStore()
+	defer release()
 	if store == nil {
 		return ""
 	}
@@ -259,28 +327,36 @@ func GetRaftNodeID() string {
 }
 
 func GetClusterView() (ClusterView, error) {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return ClusterView{}, RaftNotRunning
 	}
 	return store.GetClusterView()
 }
 
 func GetStatus() NodeStatus {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return NodeStatus{}
 	}
 	return store.Status()
 }
 
 func Bootstrap() (ConfigurationView, error) {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return ConfigurationView{}, RaftNotRunning
 	}
 	return store.Bootstrap()
 }
 
 func AddMember(req MemberRequest) (ConfigurationView, error) {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return ConfigurationView{}, RaftNotRunning
 	}
 	if req.Address != "" {
@@ -294,14 +370,18 @@ func AddMember(req MemberRequest) (ConfigurationView, error) {
 }
 
 func RemoveMember(id string, expectedIndex *uint64) (ConfigurationView, error) {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return ConfigurationView{}, RaftNotRunning
 	}
 	return store.RemoveMember(id, expectedIndex)
 }
 
 func TransferLeadership(id, address string) error {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return RaftNotRunning
 	}
 	if address != "" {
@@ -315,7 +395,9 @@ func TransferLeadership(id, address string) error {
 }
 
 func PublishCommand(op string, value interface{}) (response interface{}, err error) {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return nil, RaftNotRunning
 	}
 	b, err := json.Marshal(value)
@@ -328,7 +410,9 @@ func PublishCommand(op string, value interface{}) (response interface{}, err err
 // Members returns IDs from the latest Raft configuration. It does not claim
 // that every configured member is currently reachable or healthy.
 func Members() []string {
-	if !IsRaftEnabled() {
+	store, release := acquireStore()
+	defer release()
+	if store == nil {
 		return nil
 	}
 	view, err := store.GetClusterView()
@@ -343,17 +427,19 @@ func Members() []string {
 }
 
 // Monitor observes leadership state until the Raft runtime reports a fatal error.
-func Monitor() error {
+func Monitor(ctx context.Context) error {
 	tick := time.NewTicker(5 * time.Second)
 	heartbeat := time.NewTicker(1 * time.Minute)
 	defer tick.Stop()
 	defer heartbeat.Stop()
-	return monitor(tick.C, heartbeat.C, fatalRaftErrorChan)
+	return monitor(ctx, tick.C, heartbeat.C, fatalRaftErrorChan)
 }
 
-func monitor(tick, heartbeat <-chan time.Time, fatalErrors <-chan error) error {
+func monitor(ctx context.Context, tick, heartbeat <-chan time.Time, fatalErrors <-chan error) error {
 	for {
 		select {
+		case <-ctx.Done():
+			return nil
 		case <-tick:
 			leaderHint := GetLeader()
 			if IsLeader() {

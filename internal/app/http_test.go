@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -20,7 +21,7 @@ func TestStandardHTTPReturnsInvalidMultiAuthConfiguration(t *testing.T) {
 		config.Config.HTTPAuthUser = previousUser
 	})
 
-	err := standardHttp(false, nil)
+	err := standardHttp(context.Background(), false, nil)
 	if err == nil {
 		t.Fatal("standardHttp() returned nil for multi auth without HTTPAuthUser")
 	}
@@ -94,7 +95,7 @@ func TestStandardHTTPReturnsUnixListenerError(t *testing.T) {
 		config.Config.UseSSL = previousUseSSL
 	})
 
-	err := standardHttp(false, nil)
+	err := standardHttp(context.Background(), false, nil)
 	if err == nil {
 		t.Fatal("standardHttp() returned nil for an unavailable unix socket path")
 	}

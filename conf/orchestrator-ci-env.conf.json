@@ -81,7 +81,6 @@
   "MasterFailoverDetachReplicaMasterHost": false,
   "MasterFailoverLostInstancesDowntimeMinutes": 0,
   "PostponeReplicaRecoveryOnLagMinutes": 0,
-  "RaftEnabled": true,
   "RaftNodeID": "ci-node-1",
   "RaftDataDir": "/tmp/orchestrator-ci-raft",
   "RaftBind": "127.0.0.1",

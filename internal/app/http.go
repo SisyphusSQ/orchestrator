@@ -17,6 +17,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net"
@@ -40,19 +42,32 @@ var sslPEMPassword []byte
 var agentSSLPEMPassword []byte
 
 // Http starts serving
-func Http(continuousDiscovery bool) error {
+func Http(continuousDiscovery bool) (resultErr error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := config.Config.ValidateRaft(); err != nil {
+		return fmt.Errorf("validate raft configuration: %w", err)
+	}
 	if err := kv.InitKVStores(); err != nil {
 		return fmt.Errorf("initialize KV stores: %w", err)
 	}
+	if err := startRaftRuntime(); err != nil {
+		return err
+	}
+	defer func() {
+		cancel()
+		resultErr = errors.Join(resultErr, CloseRaftRuntime())
+	}()
 	logic.AcceptSignals()
 	promptForSSLPasswords()
 	closeMonitor := startHealthMonitor()
 	defer closeMonitor()
 	process.ContinuousRegistration(process.OrchestratorExecutionHttpMode, "")
 
-	runtimeErrors := make(chan error, 3)
+	runtimeErrors := make(chan error, 4)
+	go reportRuntimeError(runtimeErrors, "raft runtime", func() error { return monitorRaft(ctx) })
 	go reportRuntimeError(runtimeErrors, "standard HTTP server", func() error {
-		return standardHttp(continuousDiscovery, runtimeErrors)
+		return standardHttp(ctx, continuousDiscovery, runtimeErrors)
 	})
 	if config.Config.ServeAgentsHttp {
 		go reportRuntimeError(runtimeErrors, "agent HTTP server", agentsHttp)
@@ -84,7 +99,7 @@ func promptForSSLPasswords() {
 }
 
 // standardHttp starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
-func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
+func standardHttp(ctx context.Context, continuousDiscovery bool, runtimeErrors chan<- error) error {
 	m, err := newStandardHTTPRouter()
 	if err != nil {
 		return err
@@ -95,7 +110,7 @@ func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
 	if continuousDiscovery {
 
 		log.Info("Starting Discovery")
-		go reportRuntimeError(runtimeErrors, "continuous discovery", logic.ContinuousDiscovery)
+		go reportRuntimeError(runtimeErrors, "continuous discovery", func() error { return logic.ContinuousDiscovery(ctx) })
 	}
 
 	log.Info("Registering endpoints")

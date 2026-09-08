@@ -129,29 +129,23 @@ func HealthTest() (health *HealthStatus, err error) {
 		health.Healthy = healthy
 	}
 
-	if orcraft.IsRaftEnabled() {
-		status := orcraft.GetStatus()
-		health.ActiveNode.Hostname = status.LeaderID
-		health.IsActiveNode = status.LeaderVerified
-		health.RaftLeader = status.LeaderID
-		health.RaftLeaderAddress = status.LeaderAddress
-		health.RaftNodeID = status.NodeID
-		health.RaftLeaderURI = orcraft.LeaderURI.Get()
-		health.IsRaftLeader = status.LeaderVerified
-		health.RaftAdvertise = status.Address
-		health.RaftState = status.State
-		health.RaftReady = status.Ready
-		health.RaftInConfiguration = status.InConfiguration
-		health.RaftIsVoter = status.IsVoter
-		health.RaftConfigurationIndex = status.ConfigurationIndex
-		health.RaftConfigurationCommitted = status.ConfigurationCommitted
-		health.RaftMembers = orcraft.Members()
-	} else {
-		if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
-			health.Error = err
-			return health, log.Errore(err)
-		}
-	}
+	status := orcraft.GetStatus()
+	health.ActiveNode.Hostname = status.LeaderID
+	health.IsActiveNode = status.LeaderVerified
+	health.RaftLeader = status.LeaderID
+	health.RaftLeaderAddress = status.LeaderAddress
+	health.RaftNodeID = status.NodeID
+	health.RaftLeaderURI = orcraft.LeaderURI.Get()
+	health.IsRaftLeader = status.LeaderVerified
+	health.RaftAdvertise = status.Address
+	health.RaftState = status.State
+	health.RaftReady = status.Ready
+	health.RaftInConfiguration = status.InConfiguration
+	health.RaftIsVoter = status.IsVoter
+	health.RaftConfigurationIndex = status.ConfigurationIndex
+	health.RaftConfigurationCommitted = status.ConfigurationCommitted
+	health.RaftMembers = orcraft.Members()
+
 	health.AvailableNodes, err = ReadAvailableNodes(true)
 
 	return health, nil

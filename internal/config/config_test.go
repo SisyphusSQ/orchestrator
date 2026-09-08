@@ -51,6 +51,31 @@ func TestForceReadRejectsRemovedZkAddress(t *testing.T) {
 	}
 }
 
+func TestForceReadRejectsRemovedRaftSwitch(t *testing.T) {
+	for _, content := range []string{`{"RaftEnabled":true}`, `{"RaftEnabled":false}`, `{"raftenabled":null}`} {
+		if _, err := ForceRead(writeConfigFixture(t, content)); err == nil || !strings.Contains(err.Error(), "only Raft is supported") {
+			t.Fatalf("removed mode switch %s: %v", content, err)
+		}
+	}
+}
+
+func TestRunningRaftRejectsIdentityReloadWithoutPartialChanges(t *testing.T) {
+	previous, locked := *Config, raftConfigurationLocked
+	t.Cleanup(func() { *Config = previous; raftConfigurationLocked = locked })
+	Config.RaftNodeID = "existing-node"
+	Config.RaftDataDir = t.TempDir()
+	if err := Config.ValidateRaft(); err != nil {
+		t.Fatal(err)
+	}
+	LockRaftConfiguration()
+	if _, err := ForceRead(writeConfigFixture(t, `{"RaftNodeID":"replacement-node","Debug":false}`)); err == nil || !strings.Contains(err.Error(), "restart") {
+		t.Fatalf("identity reload: %v", err)
+	}
+	if Config.RaftNodeID != "existing-node" || Config.Debug != previous.Debug {
+		t.Fatal("invalid reload partially changed running configuration")
+	}
+}
+
 func TestForceReadAllowsOtherUnknownFields(t *testing.T) {
 	previous := *Config
 	previousReadFileNames := append([]string(nil), readFileNames...)
@@ -263,74 +288,68 @@ func TestRaft(t *testing.T) {
 	{
 		c := newConfiguration()
 		c.RaftBind = "1.2.3.4:1008"
+		c.RaftNodeID = "node-1"
 		c.RaftDataDir = "/path/to/somewhere"
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.RaftAdvertise, c.RaftBind)
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
 		c.RaftNodeID = "node-1"
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.RaftAdvertise, c.RaftBind)
 		test.S(t).ExpectEquals(c.RaftNodeID, "node-1")
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
 		c.RaftNodeID = "node-1"
 		c.RaftBind = ""
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
 		c.RaftNodeID = "node-1"
 		c.RaftBind = "127.0.0.1"
 		c.DefaultRaftPort = 10008
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.RaftBind, "127.0.0.1:10008")
 		test.S(t).ExpectEquals(c.RaftAdvertise, "127.0.0.1:10008")
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
 		c.RaftNodeID = "node-1"
 		c.RaftBind = "127.0.0.1:10008"
 		c.RaftAdvertise = "10.0.0.1"
 		c.DefaultRaftPort = 10008
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.RaftAdvertise, "10.0.0.1:10008")
 		test.S(t).ExpectEquals(c.RaftNodeID, "node-1")
 	}
 	{
 		c := newConfiguration()
-		c.RaftEnabled = true
 		c.RaftDataDir = "/path/to/somewhere"
 		c.RaftNodeID = "node 1"
-		err := c.postReadAdjustments()
+		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 }

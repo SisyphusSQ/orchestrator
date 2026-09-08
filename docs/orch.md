@@ -73,7 +73,6 @@ GET 也可能修改拓扑。客户端按命令的业务副作用标记风险；�
 ```bash
 orchestrator server --config /etc/orchestrator.conf.json
 orchestrator server --discovery=false --config /etc/orchestrator.conf.json
-orchestrator continuous --config /etc/orchestrator.conf.json
 orchestrator admin dump-config --config /etc/orchestrator.conf.json
 orchestrator admin redeploy-internal-db --config /etc/orchestrator.conf.json
 orchestrator admin access-token --owner operator --config /etc/orchestrator.conf.json

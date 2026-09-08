@@ -149,3 +149,35 @@ func TestWebPostActionsRejectCrossOriginAndReadonlyBeforeExecution(t *testing.T)
 		t.Fatalf("mutating handler ran %d times, want one", calls)
 	}
 }
+
+func TestRaftLeadershipTransferRejectsCrossSiteBeforeExecution(t *testing.T) {
+	previous := config.Config
+	copy := *previous
+	config.Config = &copy
+	config.Config.AuthenticationMethod = ""
+	config.Config.ReadOnly = false
+	t.Cleanup(func() { config.Config = previous })
+	calls := 0
+	router := mustRouter(t, RouterOptions{})
+	api := HttpAPI{}
+	api.registerAPIMethod(router, http.MethodPost, "raft/leadership/transfer", func(_ Params, r Responder) {
+		calls++
+		r.JSON(http.StatusOK, "transferred")
+	}, true)
+	for _, origin := range []string{"https://other.example", "http://example.com"} {
+		request := httptest.NewRequest(http.MethodPost, "http://example.com/api/raft/leadership/transfer", nil)
+		request.Header.Set("Origin", origin)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		want := http.StatusOK
+		if origin == "https://other.example" {
+			want = http.StatusForbidden
+		}
+		if response.Code != want {
+			t.Fatalf("origin=%s status=%d want=%d body=%s", origin, response.Code, want, response.Body.String())
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("leadership transfer handler ran %d times, want one", calls)
+	}
+}
