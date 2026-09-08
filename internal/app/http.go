@@ -18,6 +18,7 @@ package app
 
 import (
 	"fmt"
+	"io/fs"
 	"net"
 	nethttp "net/http"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/openark/orchestrator/internal/logic"
 	"github.com/openark/orchestrator/internal/process"
 	"github.com/openark/orchestrator/internal/ssl"
+	webassets "github.com/openark/orchestrator/web"
 
 	"github.com/openark/orchestrator/internal/golib/log"
 )
@@ -181,11 +183,6 @@ func newStandardHTTPRouter() (*http.Router, error) {
 			Password: config.Config.HTTPAuthPassword,
 		},
 		EnableGzip: true,
-		Templates: &http.TemplateOptions{
-			Directory:       "resources",
-			Layout:          "templates/layout",
-			HTMLContentType: "text/html",
-		},
 	}
 	if config.Config.UseMutualTLS {
 		options.VerifyRequest = ssl.VerifyOUs(config.Config.SSLValidOUs)
@@ -195,9 +192,11 @@ func newStandardHTTPRouter() (*http.Router, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, directory := range []string{"bootstrap", "css", "images", "js"} {
-		router.Static(config.Config.URLPrefix+"/"+directory, "resources/public/"+directory)
+	assets, err := fs.Sub(webassets.Files(), "assets")
+	if err != nil {
+		return nil, fmt.Errorf("open embedded web assets: %w", err)
 	}
+	router.StaticFS(config.Config.URLPrefix+"/web/assets", nethttp.FS(assets))
 
 	http.API.URLPrefix = config.Config.URLPrefix
 	http.Web.URLPrefix = config.Config.URLPrefix

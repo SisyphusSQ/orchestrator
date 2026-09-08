@@ -149,7 +149,7 @@ function copy_resource_artifacts() {
   prefix="$3"
 
   cd  $basedir
-  rsync -qa ./resources $build_path/orchestrator${prefix}/orchestrator/
+  rsync -qa --exclude=public --exclude=templates --exclude=web ./resources $build_path/orchestrator${prefix}/orchestrator/
   rsync -qa ./conf/orchestrator-sample*.conf.json $build_path/orchestrator${prefix}/orchestrator/
 
   case $init_system in
@@ -205,8 +205,8 @@ package_linux() {
   [ $do_tar -eq 1 ] && COPYFILE_DISABLE=1 tar -C $build_path/orch -czf $release_base_path/orch-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
 
   debug "Creating Distro full packages"
-  [ $do_rpm -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1 -f -s dir -n orchestrator -m shlomi-noach --description "MySQL replication topology management and HA" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator --prefix=/ --config-files /usr/local/orchestrator/resources/public/css/custom.css --config-files /usr/local/orchestrator/resources/public/js/custom.js --depends 'jq >= 1.5' -t rpm .
-  [ $do_deb -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1 -f -s dir -n orchestrator -m shlomi-noach --description "MySQL replication topology management and HA" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator --prefix=/ --config-files /usr/local/orchestrator/resources/public/css/custom.css --config-files /usr/local/orchestrator/resources/public/js/custom.js --depends 'jq >= 1.5' -t deb --deb-no-default-config-files .
+  [ $do_rpm -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1 -f -s dir -n orchestrator -m shlomi-noach --description "MySQL replication topology management and HA" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator --prefix=/ --depends 'jq >= 1.5' -t rpm .
+  [ $do_deb -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1 -f -s dir -n orchestrator -m shlomi-noach --description "MySQL replication topology management and HA" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator --prefix=/ --depends 'jq >= 1.5' -t deb --deb-no-default-config-files .
 
   debug "Creating Distro cli packages"
   # orch packaging -- executable only

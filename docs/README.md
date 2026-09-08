@@ -38,6 +38,7 @@
 #### Developers
 - [Understanding CI](ci.md)
 - [Building and testing](build.md)
+- [Web 控制台开发](web.md)
 - [HTTP transport](http-transport.md)
 - [System test environment](ci-env.md)
 - [Docker](docker.md)

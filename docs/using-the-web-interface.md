@@ -1,103 +1,31 @@
-# Using the Web interface
+# 使用 Web 控制台
 
-The following assumes you have [Executed as web/API service](#executing-as-webapi-service).
-Open your browser and direct it at `http://your.host:3000`. If all went well, you should see
-the following welcome page:
+启动服务后访问 `http://your.host:3000/web/clusters`。配置 `URLPrefix` 时在路径前加上前缀。源码启动需要先生成 Web 资源，参见 [构建说明](build.md) 和 [Web 开发说明](web.md)。
 
-![Orchestrator screenshot](images/orchestrator-about.png)
+## 发现与查看
 
-If this is your first time using _orchestrator_, then you should begin by teaching it.
-`orchestrator` needs to know what replication topologies you have. The web interface
-provides this via the `discover` page.
+在“发现实例”输入主机和端口，确认后提交。Orchestrator 使用服务端配置的拓扑账号探测上下游。暂时不可连接的实例可单独添加；已发现的实例即使延迟、停止复制或连接失败，仍保留在拓扑中，直至达到配置的遗忘时间。
 
-From each replication topology, pick one server (this could be master or replica) and let
-`orchestrator` know which hostname & port this server listens on. `Orchestrator` will
-recursively drill up and down replication to map the entire topology. This may take a couple
-minutes, during which `orchestrator` connects the servers it encounters into sub-topologies and
-eventually into the final topology.
+“集群总览”支持名称、别名、域名搜索与状态筛选，优先展示异常集群。主库和中间主库恢复策略分别显示，页头全局开关与集群策略共同决定自动恢复行为。
 
-You may manually enter as many servers as you like (inside or outside the topology).
-The first time `orchestrator` investigates, it can only reach those replicas that are
-_currently replicating_. So if you know you have some replicas which are temporarily down, you'll need
-to add them manually, or, if you like to see automation in work, just wait until they're up, at which
-time `orchestrator` will automatically find them.
+## 拓扑与实例
 
-> Once `orchestrator` is familiar with a server, it doesn't care if the server is lagging, not replicating
-> or inaccessible. The server is still part of the topology it was last seen in. There is a timeout for
-> that: if a server is not seen by `UnseenInstanceForgetHours` hours, it is automatically forgotten
-> (presumed dead). Again, if it suddenly comes back to life, and connects to a known topology, it is
-> automatically re-discovered.
+点击集群进入拓扑，可缩放、平移、小地图导航、折叠下游，也可切换实例表格。显示选项包括紧凑、机房颜色、匿名主机名与实例别名。搜索实例会切换到列表。
 
-`Orchestrator` resolves the `CNAME` of every input it gets, either from the user or from the replication
-topology itself. This is for avoiding ambiguities or implicit duplicates.
+点击节点名称打开详情，查看复制线程、延迟、位点、GTID、半同步、错误、标签、维护和近期恢复。读取在后台刷新，保持抽屉和标签页。失败或过期状态会明确提示。
 
-![Orchestrator screenshot](images/orchestrator-discover.png)
+拖动节点到另一个节点提出复制关系调整。智能、经典、GTID、Pseudo-GTID 模式分别选择相应操作。前端检查明显的环路、复制状态和目标条件，服务端执行最终校验。主库拖向直接副本可提出双主操作。
 
-Once `orchestrator` is familiar with a topology, you can view and manipulate it via the `cluster` page.
-Click the `clusters` drop down on navigation bar to see available clusters.
+## 执行操作
 
-> Each topology is associated with a _cluster name_, which is (currently) named after the topology's master.
+实例菜单按实例管理、拓扑调整、恢复与切换、高级操作分组。批量调整提供目标和可选下游正则筛选；维护、停机填写负责人、原因和持续时间。集群菜单提供别名、资源池、在线变更候选副本和恢复记录确认。
 
-The `cluster` page is where most fun happens. `Orchestrator` presents the cluster in an easy to follow
-tree infographic, based on a D3 widget. Sub trees are collapsible.
+写操作显示对象和参数，确认后只提交一次，执行中禁止重复提交。失败显示原因及详细结果；连接中断或确认不明确时显示“操作结果未知”。此时先重新读取拓扑、实例和审计，再决定下一步。只读用户可以查看诊断数据，写入口不可用。
 
-Each node in the tree presents a single MySQL instance, listing its fully qualified name, its version,
-binary log format and replication lag.
+## 故障、审计与 Agent
 
-![Orchestrator screenshot](images/orchestrator-simple.png)
+故障分析显示复制和结构问题、有效副本与阻塞恢复；集群页链接当前和近期恢复。操作审计、故障检测、恢复记录提供分页、对象定位、检测历史、恢复步骤、参与实例、错误和确认记录。原集群、别名、实例、ID、UID 深链继续可用。
 
-Note that each server has a _settings_ icon to the right. Clicking this icon opens a modal with some
-extra info on that server as well as operations to be performed.
+启用 `ServeAgentsHttp` 后显示 Agent 和数据恢复导航。主机详情提供逻辑卷、挂载、快照、MySQL 启停和 Seed 操作；恢复详情展示步骤并允许确认中止任务。
 
-The modal allows you to begin/terminate maintenance mode on an instance; perform an immediate refresh
-(by default instances are polled once per minute - this is configurable); stop/start replication; forget
-the instance (may be rediscovered a minute later if still connected to the topology).
-
-![Orchestrator screenshot](images/orchestrator-instance-modal.png)
-
-The topology can be refactored: replicas can be moved around via _drag and drop_. Start dragging an instance:
-all possible _droppable_ targets are immediately colored green. You may turn your instance to be the replica of
-all _droppable_ targets.
-
-Master-master topologies can be created by dragging a _master_ onto one of its replicas, making both co-masters.
-
-Complex refactoring is done by performing multiple such steps. You may need to drag and drop your
-instance three or four times to put it in a "remote" location.
-
-`Orchestrator` will keep you safe by disallowing dropping your instance when either your instance or its
-target master have problems (lag too much, do not replicate etc.). It may allow the drop and still abort
-the operation if it finds a deeper block, such as the target not having binary logs.
-
-Begin dragging: possible targets colored green
-
-![Orchestrator screenshot](images/orchestrator-simple-drag.png)
-
-Move over your target and drop:
-
-![Orchestrator screenshot](images/orchestrator-simple-drag-hover.png)
-
-Topology refactored:
-
-![Orchestrator screenshot](images/orchestrator-simple-dropped.png)
-
-Dragging a master over its replica makes for a co-masters (master-master) topology:
-
-![Orchestrator screenshot](images/orchestator-cm-simple-drag-master.png)
-
-A co-master topology:
-
-![Orchestrator screenshot](images/orchestator-cm-co-masters.png)
-
-`Orchestrator` visually indicates replication & accessibility related problems: replica lag, replication not working,
-instance not accessed for long time, instance access failure, instance under maintenance.
-
-![Orchestrator screenshot](images/orchestrator-simple-with-problems.png)
-
-_Problems_ drop down is available on all pages, and indicates all currently known issues across all topologies:
-
-![Orchestrator screenshot](images/orchestrator-problems.png)
-
-The `Audit` page presents with all actions taken via `orchestrator`: replica move, detection, maintenance etc.
-(`START SLAVE` and `STOP SLAVE` are currently not audited).
-
-![Orchestrator screenshot](images/orchestrator-audit-small.png)
+系统状态显示服务健康与 Raft 信息。认证参见 [配置说明](configuration.md)，恢复规则参见 [拓扑恢复](topology-recovery.md)。

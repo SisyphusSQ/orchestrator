@@ -1,6 +1,8 @@
 ![](https://github.com/openark/orchestrator/workflows/CI/badge.svg)
 
 当前命令入口：服务端 `orchestrator server`，独立 Go HTTP 客户端 `orch`。客户端构建使用 `make cli`，完整构建使用 `make build`；详见 [客户端说明](docs/orch.md)。旧直连 CLI 与 Shell 客户端不再提供。
+
+前端源码位于 `web/`，使用 React、TypeScript 与 Ant Design。`make web-deps && make binary` 构建包含页面和 API 的单个 `orchestrator` 二进制；运行时无需外置前端资源或 Node。`make storybook` 启动组件与业务状态预览，详见 [Web 开发与 Storybook](docs/web.md)。
 ![](https://github.com/openark/orchestrator/workflows/upgrade/badge.svg)
 ![](https://github.com/openark/orchestrator/workflows/system%20tests/badge.svg)
 [![downloads](https://img.shields.io/github/downloads/openark/orchestrator/total.svg)](https://github.com/openark/orchestrator/releases) [![release](https://img.shields.io/github/release/openark/orchestrator.svg)](https://github.com/openark/orchestrator/releases)

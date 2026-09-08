@@ -5,6 +5,8 @@ SHELL := /bin/bash
 GO ?= go
 GIT ?= git
 DOCKER ?= docker
+PNPM ?= pnpm
+WEB_PREBUILT ?= 0
 
 BINARY ?= bin/orchestrator
 CLI_BINARY ?= bin/orch
@@ -76,21 +78,50 @@ deps: check-go ## 下载并校验服务端与 CLI 模块依赖
 	cd tools/orch-cli && $(GO) mod download && $(GO) mod verify && $(GO) mod tidy -diff
 
 fmt-check: check-go ## 只读检查 Go 源码格式，不修改工作区
-	@unformatted="$$(gofmt -s -l cmd internal tools/orch-cli tests/cli)"; \
+	@unformatted="$$(gofmt -s -l cmd internal tools/orch-cli tests/cli web/*.go)"; \
 	if [[ -n "$$unformatted" ]]; then \
 		echo "The following files need gofmt -s:" >&2; \
 		echo "$$unformatted" >&2; \
 		exit 1; \
 	fi
 
-binary: check-build-tools ## 仅构建 orchestrator 二进制
+binary: check-build-tools web-build ## 构建包含前端的 orchestrator 单文件二进制
 	@mkdir -p "$(dir $(BINARY))"
 	$(GO_ENV) $(GO) build $(RACE_FLAG) -mod=readonly \
 		-ldflags "-X main.AppVersion=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" \
 		-o "$(BINARY)" ./cmd/orchestrator
 
-build: binary cli ## 构建二进制并同步运行时资源到 bin/
-	rsync -qa --delete ./resources/ "$(dir $(BINARY))resources/"
+build: binary cli ## 构建服务端与独立 HTTP CLI
+
+.PHONY: web-deps web-build web-dev test-web
+web-deps: ## 安装锁定的前端依赖
+	$(PNPM) --dir web install --frozen-lockfile
+
+web-build: ## 构建前端并准备 Go 内嵌资源；容器可使用预构建产物
+ifeq ($(WEB_PREBUILT),1)
+	@test -s web/assets/index.html || { echo "prebuilt web assets are missing" >&2; exit 1; }
+else
+	$(PNPM) --dir web build
+	@mkdir -p web/assets
+	rsync -qa --delete --exclude=.keep web/dist/ web/assets/
+endif
+
+.PHONY: storybook storybook-build test-storybook
+storybook: ## 启动组件与业务状态预览
+	$(PNPM) --dir web storybook
+
+storybook-build: ## 构建可独立部署的 Storybook 静态站点
+	$(PNPM) --dir web build-storybook
+
+test-storybook: ## 浏览器验证全部 Storybook 场景与交互
+	$(PNPM) --dir web test:storybook
+
+web-dev: ## 启动回环地址的 Vite 前端开发服务
+	$(PNPM) --dir web dev
+
+test-web: ## 执行前端类型检查与单元测试
+	$(PNPM) --dir web typecheck
+	$(PNPM) --dir web test
 
 test-build: build ## 验证构建入口
 

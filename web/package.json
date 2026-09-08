@@ -1,0 +1,56 @@
+{
+  "name": "orchestrator-web",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "preview": "vite preview --host 127.0.0.1",
+    "storybook": "storybook dev --host 127.0.0.1 --port 6006 --ci --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry",
+    "test:storybook": "playwright test --config playwright.storybook.config.ts",
+    "preview-storybook": "vite preview --config .storybook/vite.config.ts --outDir storybook-static --host 127.0.0.1 --port 6006 --strictPort"
+  },
+  "dependencies": {
+    "@ant-design/icons": "6.3.4",
+    "@dagrejs/dagre": "3.1.1",
+    "@xyflow/react": "12.11.6",
+    "antd": "6.6.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@storybook/addon-docs": "10.6.0",
+    "@storybook/react-vite": "10.6.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/dagre": "0.7.54",
+    "@types/node": "26.5.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "30.0.1",
+    "msw": "2.15.0",
+    "msw-storybook-addon": "3.0.0",
+    "prettier": "3.9.6",
+    "storybook": "10.6.0",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
+  },
+  "msw": {
+    "workerDirectory": [
+      ".storybook/public"
+    ]
+  }
+}

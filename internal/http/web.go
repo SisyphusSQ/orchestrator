@@ -1,382 +1,89 @@
-/*
-   Copyright 2014 Outbrain Inc.
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
-
 package http
 
 import (
+	"bytes"
 	"expvar"
 	"fmt"
+	"html"
+	"io/fs"
 	"net/http"
 	"net/http/pprof"
-	"strconv"
-	"text/template"
 
 	"github.com/openark/orchestrator/internal/config"
-	"github.com/openark/orchestrator/internal/inst"
+	webassets "github.com/openark/orchestrator/web"
 )
 
-// HttpWeb is the web requests server, mapping each request to a web page
+// HttpWeb serves the React control plane while preserving the existing Web URLs.
 type HttpWeb struct {
 	URLPrefix string
+	assets    fs.FS
 }
 
-var Web HttpWeb = HttpWeb{}
+var Web HttpWeb
 
-func (this *HttpWeb) getInstanceKey(host string, port string) (inst.InstanceKey, error) {
-	instanceKey := inst.InstanceKey{Hostname: host}
-	var err error
-
-	if instanceKey.Port, err = strconv.Atoi(port); err != nil {
-		return instanceKey, fmt.Errorf("Invalid port: %s", port)
-	}
-	return instanceKey, err
+// webConfig contains only public UI capabilities, never server credentials.
+type webConfig struct {
+	URLPrefix                     string `json:"urlPrefix"`
+	UserID                        string `json:"userId"`
+	AuthorizedForAction           bool   `json:"authorizedForAction"`
+	AgentsEnabled                 bool   `json:"agentsEnabled"`
+	PseudoGTIDEnabled             bool   `json:"pseudoGTIDEnabled"`
+	RemoveTextFromHostnameDisplay string `json:"removeTextFromHostnameDisplay"`
+	WebMessage                    string `json:"webMessage"`
+	AuditPageSize                 int    `json:"auditPageSize"`
+	AuditEnabled                  bool   `json:"auditEnabled"`
 }
 
-func (this *HttpWeb) AccessToken(params Params, r Responder, req *http.Request, resp http.ResponseWriter, user Principal) {
-	publicToken := template.JSEscapeString(req.URL.Query().Get("publicToken"))
-	err := authenticateToken(publicToken, resp)
-	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+func (web *HttpWeb) AccessToken(_ Params, r Responder, req *http.Request, resp http.ResponseWriter, _ Principal) {
+	if err := authenticateToken(req.URL.Query().Get("publicToken"), resp); err != nil {
+		r.JSON(http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	r.Redirect(this.URLPrefix + "/")
+	r.Redirect(web.URLPrefix + "/")
 }
 
-func (this *HttpWeb) Index(params Params, r Responder, req *http.Request, user Principal) {
-	// Redirect index so that all web URLs begin with "/web/".
-	// We also redirect /web/ to /web/clusters so that
-	// the Clusters page has a single canonical URL.
-	r.Redirect(this.URLPrefix + "/web/clusters")
+func (web *HttpWeb) Index(_ Params, r Responder) {
+	r.Redirect(web.URLPrefix + "/web/clusters")
 }
 
-func (this *HttpWeb) Clusters(params Params, r Responder, req *http.Request, user Principal) {
-	r.HTML(200, "templates/clusters", map[string]interface{}{
-		"agentsHttpActive":              config.Config.ServeAgentsHttp,
-		"title":                         "clusters",
-		"autoshow_problems":             false,
-		"authorizedForAction":           isAuthorizedForAction(req, user),
-		"userId":                        getUserId(req, user),
-		"removeTextFromHostnameDisplay": config.Config.RemoveTextFromHostnameDisplay,
-		"prefix":                        this.URLPrefix,
-		"webMessage":                    config.Config.WebMessage,
+// Bootstrap is refreshed with the data so leader readiness and permissions do not
+// remain frozen at the time the page was opened. API handlers remain authoritative.
+func (web *HttpWeb) Bootstrap(_ Params, r Responder, req *http.Request, resp http.ResponseWriter, user Principal) {
+	resp.Header().Set("Cache-Control", "no-store")
+	r.JSON(http.StatusOK, webConfig{
+		URLPrefix:                     web.URLPrefix,
+		UserID:                        getUserId(req, user),
+		AuthorizedForAction:           isAuthorizedForAction(req, user),
+		AgentsEnabled:                 config.Config.ServeAgentsHttp,
+		PseudoGTIDEnabled:             config.Config.PseudoGTIDPattern != "",
+		RemoveTextFromHostnameDisplay: config.Config.RemoveTextFromHostnameDisplay,
+		WebMessage:                    config.Config.WebMessage,
+		AuditPageSize:                 config.AuditPageSize,
+		AuditEnabled:                  config.Config.AuditToBackendDB,
 	})
 }
 
-func (this *HttpWeb) ClustersAnalysis(params Params, r Responder, req *http.Request, user Principal) {
-	r.HTML(200, "templates/clusters_analysis", map[string]interface{}{
-		"agentsHttpActive":              config.Config.ServeAgentsHttp,
-		"title":                         "clusters",
-		"autoshow_problems":             false,
-		"authorizedForAction":           isAuthorizedForAction(req, user),
-		"userId":                        getUserId(req, user),
-		"removeTextFromHostnameDisplay": config.Config.RemoveTextFromHostnameDisplay,
-		"prefix":                        this.URLPrefix,
-		"webMessage":                    config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Cluster(params Params, r Responder, req *http.Request, user Principal) {
-	clusterName, _ := figureClusterName(params["clusterName"])
-
-	r.HTML(200, "templates/cluster", map[string]interface{}{
-		"agentsHttpActive":              config.Config.ServeAgentsHttp,
-		"title":                         "cluster",
-		"clusterName":                   clusterName,
-		"autoshow_problems":             true,
-		"contextMenuVisible":            true,
-		"pseudoGTIDModeEnabled":         (config.Config.PseudoGTIDPattern != ""),
-		"authorizedForAction":           isAuthorizedForAction(req, user),
-		"userId":                        getUserId(req, user),
-		"removeTextFromHostnameDisplay": config.Config.RemoveTextFromHostnameDisplay,
-		"compactDisplay":                template.JSEscapeString(req.URL.Query().Get("compact")),
-		"prefix":                        this.URLPrefix,
-		"webMessage":                    config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) ClusterByAlias(params Params, r Responder, req *http.Request, user Principal) {
-	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
-	// Willing to accept the case of multiple clusters; we just present one
-	if clusterName == "" && err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+// Page serves only explicitly registered page routes. Unknown API and asset paths
+// continue to return 404 instead of accidentally returning an HTML document.
+func (web *HttpWeb) Page(resp http.ResponseWriter, req *http.Request) {
+	assets := web.assets
+	if assets == nil {
+		assets = webassets.Files()
+	}
+	page, err := fs.ReadFile(assets, "index.html")
+	if err != nil {
+		http.Error(resp, "embedded web assets unavailable; rebuild with make binary", http.StatusServiceUnavailable)
 		return
 	}
-
-	params["clusterName"] = clusterName
-	this.Cluster(params, r, req, user)
-}
-
-func (this *HttpWeb) ClusterByInstance(params Params, r Responder, req *http.Request, user Principal) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
-	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: err.Error()})
-		return
+	base := []byte(`<base href="` + html.EscapeString(web.URLPrefix+"/web/") + `">`)
+	page = bytes.Replace(page, []byte("<!--ORCHESTRATOR_BASE-->"), base, 1)
+	resp.Header().Set("Content-Type", "text/html; charset=UTF-8")
+	resp.Header().Set("Cache-Control", "no-store")
+	resp.Header().Set("X-Content-Type-Options", "nosniff")
+	resp.WriteHeader(http.StatusOK)
+	if req.Method != http.MethodHead {
+		_, _ = resp.Write(page)
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
-	if (!found) || (err != nil) {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
-		return
-	}
-
-	// Willing to accept the case of multiple clusters; we just present one
-	if instance.ClusterName == "" && err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-
-	params["clusterName"] = instance.ClusterName
-	this.Cluster(params, r, req, user)
-}
-
-func (this *HttpWeb) ClusterPools(params Params, r Responder, req *http.Request, user Principal) {
-	clusterName, _ := figureClusterName(params["clusterName"])
-	r.HTML(200, "templates/cluster_pools", map[string]interface{}{
-		"agentsHttpActive":              config.Config.ServeAgentsHttp,
-		"title":                         "cluster pools",
-		"clusterName":                   clusterName,
-		"autoshow_problems":             false, // because pool screen by default expands all hosts
-		"contextMenuVisible":            true,
-		"pseudoGTIDModeEnabled":         (config.Config.PseudoGTIDPattern != ""),
-		"authorizedForAction":           isAuthorizedForAction(req, user),
-		"userId":                        getUserId(req, user),
-		"removeTextFromHostnameDisplay": config.Config.RemoveTextFromHostnameDisplay,
-		"compactDisplay":                template.JSEscapeString(req.URL.Query().Get("compact")),
-		"prefix":                        this.URLPrefix,
-		"webMessage":                    config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Search(params Params, r Responder, req *http.Request, user Principal) {
-	searchString := params["searchString"]
-	if searchString == "" {
-		searchString = req.URL.Query().Get("s")
-	}
-	searchString = template.JSEscapeString(searchString)
-	r.HTML(200, "templates/search", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "search",
-		"searchString":        searchString,
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Discover(params Params, r Responder, req *http.Request, user Principal) {
-
-	r.HTML(200, "templates/discover", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "discover",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Audit(params Params, r Responder, req *http.Request, user Principal) {
-	page, err := strconv.Atoi(params["page"])
-	if err != nil {
-		page = 0
-	}
-
-	r.HTML(200, "templates/audit", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "audit",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"page":                page,
-		"auditHostname":       params["host"],
-		"auditPort":           params["port"],
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) AuditRecovery(params Params, r Responder, req *http.Request, user Principal) {
-	page, err := strconv.Atoi(params["page"])
-	if err != nil {
-		page = 0
-	}
-	recoveryId, err := strconv.ParseInt(params["id"], 10, 0)
-	if err != nil {
-		recoveryId = 0
-	}
-	recoveryUid := params["uid"]
-	clusterAlias := params["clusterAlias"]
-
-	clusterName, _ := figureClusterName(params["clusterName"])
-	r.HTML(200, "templates/audit_recovery", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "audit-recovery",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"page":                page,
-		"clusterName":         clusterName,
-		"clusterAlias":        clusterAlias,
-		"recoveryId":          recoveryId,
-		"recoveryUid":         recoveryUid,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) AuditFailureDetection(params Params, r Responder, req *http.Request, user Principal) {
-	page, err := strconv.Atoi(params["page"])
-	if err != nil {
-		page = 0
-	}
-	detectionId, err := strconv.ParseInt(params["id"], 10, 0)
-	if err != nil {
-		detectionId = 0
-	}
-	clusterAlias := params["clusterAlias"]
-
-	r.HTML(200, "templates/audit_failure_detection", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "audit-failure-detection",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"page":                page,
-		"detectionId":         detectionId,
-		"clusterAlias":        clusterAlias,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Agents(params Params, r Responder, req *http.Request, user Principal) {
-	r.HTML(200, "templates/agents", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "agents",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Agent(params Params, r Responder, req *http.Request, user Principal) {
-	r.HTML(200, "templates/agent", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "agent",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"agentHost":           params["host"],
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) AgentSeedDetails(params Params, r Responder, req *http.Request, user Principal) {
-	r.HTML(200, "templates/agent_seed_details", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "agent seed details",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"seedId":              params["seedId"],
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Seeds(params Params, r Responder, req *http.Request, user Principal) {
-	r.HTML(200, "templates/seeds", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "seeds",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Home(params Params, r Responder, req *http.Request, user Principal) {
-
-	r.HTML(200, "templates/home", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "home",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) About(params Params, r Responder, req *http.Request, user Principal) {
-
-	r.HTML(200, "templates/about", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "about",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) KeepCalm(params Params, r Responder, req *http.Request, user Principal) {
-
-	r.HTML(200, "templates/keep-calm", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "Keep Calm",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) FAQ(params Params, r Responder, req *http.Request, user Principal) {
-
-	r.HTML(200, "templates/faq", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "FAQ",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
-}
-
-func (this *HttpWeb) Status(params Params, r Responder, req *http.Request, user Principal) {
-
-	r.HTML(200, "templates/status", map[string]interface{}{
-		"agentsHttpActive":    config.Config.ServeAgentsHttp,
-		"title":               "status",
-		"authorizedForAction": isAuthorizedForAction(req, user),
-		"userId":              getUserId(req, user),
-		"autoshow_problems":   false,
-		"prefix":              this.URLPrefix,
-		"webMessage":          config.Config.WebMessage,
-	})
 }
 
 func (this *HttpWeb) registerWebRequest(m *Router, path string, handler Handler) {
@@ -397,42 +104,48 @@ func (this *HttpWeb) RegisterRequests(m *Router) {
 	this.registerWebRequest(m, "access-token", this.AccessToken)
 	this.registerWebRequest(m, "", this.Index)
 	this.registerWebRequest(m, "/", this.Index)
-	this.registerWebRequest(m, "home", this.About)
-	this.registerWebRequest(m, "about", this.About)
-	this.registerWebRequest(m, "keep-calm", this.KeepCalm)
-	this.registerWebRequest(m, "faq", this.FAQ)
-	this.registerWebRequest(m, "status", this.Status)
-	this.registerWebRequest(m, "clusters", this.Clusters)
-	this.registerWebRequest(m, "clusters-analysis", this.ClustersAnalysis)
-	this.registerWebRequest(m, "cluster/:clusterName", this.Cluster)
-	this.registerWebRequest(m, "cluster/alias/:clusterAlias", this.ClusterByAlias)
-	this.registerWebRequest(m, "cluster/instance/:host/:port", this.ClusterByInstance)
-	this.registerWebRequest(m, "cluster-pools/:clusterName", this.ClusterPools)
-	this.registerWebRequest(m, "search/:searchString", this.Search)
-	this.registerWebRequest(m, "search", this.Search)
-	this.registerWebRequest(m, "discover", this.Discover)
-	this.registerWebRequest(m, "audit", this.Audit)
-	this.registerWebRequest(m, "audit/:page", this.Audit)
-	this.registerWebRequest(m, "audit/instance/:host/:port", this.Audit)
-	this.registerWebRequest(m, "audit/instance/:host/:port/:page", this.Audit)
-	this.registerWebRequest(m, "audit-recovery", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/:page", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/id/:id", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/uid/:uid", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/cluster/:clusterName", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/cluster/:clusterName/:page", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/alias/:clusterAlias", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-recovery/alias/:clusterAlias/:page", this.AuditRecovery)
-	this.registerWebRequest(m, "audit-failure-detection", this.AuditFailureDetection)
-	this.registerWebRequest(m, "audit-failure-detection/:page", this.AuditFailureDetection)
-	this.registerWebRequest(m, "audit-failure-detection/id/:id", this.AuditFailureDetection)
-	this.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias", this.AuditFailureDetection)
-	this.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias/:page", this.AuditFailureDetection)
-	this.registerWebRequest(m, "audit-recovery-steps/:uid", this.AuditRecovery)
-	this.registerWebRequest(m, "agents", this.Agents)
-	this.registerWebRequest(m, "agent/:host", this.Agent)
-	this.registerWebRequest(m, "seed-details/:seedId", this.AgentSeedDetails)
-	this.registerWebRequest(m, "seeds", this.Seeds)
+	this.registerWebRequest(m, "home", this.Page)
+	this.registerWebRequest(m, "about", this.Page)
+	this.registerWebRequest(m, "keep-calm", this.Page)
+	this.registerWebRequest(m, "faq", this.Page)
+	this.registerWebRequest(m, "status", this.Page)
+	this.registerWebRequest(m, "clusters", this.Page)
+	this.registerWebRequest(m, "clusters-analysis", this.Page)
+	this.registerWebRequest(m, "cluster/:clusterName", this.Page)
+	this.registerWebRequest(m, "cluster/alias/:clusterAlias", this.Page)
+	this.registerWebRequest(m, "cluster/instance/:host/:port", this.Page)
+	this.registerWebRequest(m, "cluster-pools/:clusterName", this.Page)
+	this.registerWebRequest(m, "search/:searchString", this.Page)
+	this.registerWebRequest(m, "search", this.Page)
+	this.registerWebRequest(m, "discover", this.Page)
+	this.registerWebRequest(m, "audit", this.Page)
+	this.registerWebRequest(m, "audit/:page", this.Page)
+	this.registerWebRequest(m, "audit/instance/:host/:port", this.Page)
+	this.registerWebRequest(m, "audit/instance/:host/:port/:page", this.Page)
+	this.registerWebRequest(m, "audit-recovery", this.Page)
+	this.registerWebRequest(m, "audit-recovery/:page", this.Page)
+	this.registerWebRequest(m, "audit-recovery/id/:id", this.Page)
+	this.registerWebRequest(m, "audit-recovery/uid/:uid", this.Page)
+	this.registerWebRequest(m, "audit-recovery/cluster/:clusterName", this.Page)
+	this.registerWebRequest(m, "audit-recovery/cluster/:clusterName/:page", this.Page)
+	this.registerWebRequest(m, "audit-recovery/alias/:clusterAlias", this.Page)
+	this.registerWebRequest(m, "audit-recovery/alias/:clusterAlias/:page", this.Page)
+	this.registerWebRequest(m, "audit-failure-detection", this.Page)
+	this.registerWebRequest(m, "audit-failure-detection/:page", this.Page)
+	this.registerWebRequest(m, "audit-failure-detection/id/:id", this.Page)
+	this.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias", this.Page)
+	this.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias/:page", this.Page)
+	this.registerWebRequest(m, "audit-recovery-steps/:uid", this.Page)
+	this.registerWebRequest(m, "agents", this.Page)
+	this.registerWebRequest(m, "agent/:host", this.Page)
+	this.registerWebRequest(m, "seed-details/:seedId", this.Page)
+	this.registerWebRequest(m, "seeds", this.Page)
+
+	handlers := []Handler{this.Bootstrap}
+	if config.Config.RaftEnabled {
+		handlers = []Handler{raftReverseProxy, this.Bootstrap}
+	}
+	m.Get(this.URLPrefix+"/api/web-config", handlers...)
 
 	this.RegisterDebug(m)
 }

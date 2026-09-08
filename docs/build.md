@@ -14,6 +14,7 @@ Developers have multiple ways to build and test `orchestrator`.
 
 - `cmd/orchestrator/`：服务启动与本地维护入口；远程业务命令位于独立模块 `tools/orch-cli/`，只通过 HTTP 访问服务端。
 - `internal/`：应用内部包，保留现有业务包边界。
+- `web/`：React、TypeScript 和 Ant Design 控制台；详见 [Web 开发说明](web.md)。
 - `internal/golib/`：项目维护的日志和辅助实现，包含在根模块测试中。
 - `conf/`、`resources/`、`etc/`：配置示例、运行资源和服务安装文件。
 - `script/`、`tests/`、`docker/`：兼容脚本、集成与系统测试、容器构建定义。
@@ -55,6 +56,7 @@ Requirements:
 - `go` development setup matching the version declared in `go.mod`
 - `git`
 - `gcc` (required to build `SQLite` as part of the `orchestrator` binary)
+- Node.js 22.22.2 或更新版本、pnpm 10.33.2（完整构建包含 Web）
 - Linux, BSD or MacOS
 
 Run:
@@ -70,6 +72,7 @@ Download and verify the modules declared in `go.mod` and `go.sum`:
 
 ```shell
 make deps
+make web-deps
 ```
 
 Build via:
@@ -79,6 +82,7 @@ make build
 ```
 
 The build uses Go Modules directly and does not require a repository-local `GOPATH` or `vendor/` tree.
+`make binary` 和 `make build` 都先构建前端并通过 `go:embed` 编入 `bin/orchestrator`。页面与 API 在同一个二进制中提供，无需外置 Web 资源或 Node。CI 在临时空目录启动复制后的二进制，检查页面与接口，并构建和验证 Storybook。组件预览使用 `make storybook`；详见 [Web 开发说明](web.md)。
 Run `make help` to list the supported local and containerized workflows. The
 legacy commands under `script/` remain compatibility entrypoints and delegate
 to the same Make targets.
@@ -86,6 +90,7 @@ to the same Make targets.
 Alternatively, if you like and if your Go environment is setup, you may run:
 
 ```shell
+make web-build
 go build -mod=readonly -o bin/orchestrator ./cmd/orchestrator
 ```
 
