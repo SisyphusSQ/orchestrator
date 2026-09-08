@@ -32,6 +32,7 @@
 
 #### Operation
 - [Status Checks](status-checks.md)
+- [Observability](observability.md): Prometheus, OpenTelemetry, Grafana and migration.
 - [Tags](tags.md)
 
 #### Developers

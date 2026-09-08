@@ -135,7 +135,4 @@
   "MasterFailoverDetachSlaveMasterHost": true,
   "PostponeSlaveRecoveryOnLagMinutes": 0,
   "OSCIgnoreHostnameFilters": [],
-  "GraphiteAddr": "",
-  "GraphitePath": "",
-  "GraphiteConvertHostnameDotsToUnderscores": true
 }

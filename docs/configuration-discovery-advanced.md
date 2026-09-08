@@ -60,20 +60,11 @@ There is no separate discovery queue for dead instances, no dedicated go workers
 `DeadInstancePollSecondsMax` (default: 300) - Controls the maximum time for backoff mechanism. If the backoff calculation goes beyond this value, it is considered as saturated and stays at `DeadInstancePollSecondsMax`
 
 ## Diagnostics
-Orchestrator provides `debug/metrics` web endpoint for diagnostics.
-
-`discoveries.dead_instances` - provides the number of instances currently registered as dead.\
-`discoveries.dead_instances_queue_length` - provides the current length of the queue dedicate for dead instances. Note this is valid only when `DeadInstanceDiscoveryMaxConcurrency > 0`, so when a separate queue is used. In other cases it is always zero.
-
-Other diagnostics endpoints:
-
-`api/discovery-queue-metrics-raw/:seconds` - provides the raw metrics for a given time for the `DEFAULT` discovery queue.\
-`api/discovery-queue-metrics-raw/:queue/:seconds` - provides the raw metrics for a given time for the supplied (`DEFAULT` or `DEADINSTANCES`) discovery queue.\
-`discovery-queue-metrics-aggregated/:seconds` - provides aggregated metrics for a given time for the `DEFAULT` discovery queue.\
-`discovery-queue-metrics-aggregated/:queue/:seconds` - provides aggregated metrics for a given time for the supplied (`DEFAULT` or `DEADINSTANCES`) discovery queue.
-
-
-Note that `DEADINSTANCES` queue is available only if `DeadInstanceDiscoveryMaxConcurrency > 0`
+Orchestrator exposes current queue state through `/metrics` using
+`orchestrator_discovery_queue_items{queue="DEFAULT|DEADINSTANCES",state="queued|active"}`
+and `orchestrator_dead_instances`. The dead-instance queue exists only when
+`DeadInstanceDiscoveryMaxConcurrency > 0`. Historical raw/aggregated endpoints
+have been removed; use [Prometheus and Grafana](observability.md).
 
 ## Logging
 Logging of dead instances discovery process is controlled vial `DeadInstanceDiscoveryLogsEnabled` bool parameter. It is disabled by default.

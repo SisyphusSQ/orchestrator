@@ -27,29 +27,28 @@ package discovery
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/inst"
-)
 
-// QueueMetric contains the queue's active and queued sizes
-type QueueMetric struct {
-	Active int
-	Queued int
-}
+	"github.com/openark/orchestrator/go/observability"
+	"go.opentelemetry.io/otel/attribute"
+)
 
 // Queue contains information for managing discovery requests
 type Queue struct {
 	sync.Mutex
 
-	name         string
-	done         chan struct{}
+	name string
+
 	queue        chan inst.InstanceKey
 	queuedKeys   map[inst.InstanceKey]time.Time
 	consumedKeys map[inst.InstanceKey]time.Time
-	metrics      []QueueMetric
+	queuedItems  atomic.Int64
+	activeItems  atomic.Int64
 }
 
 // DiscoveryQueue contains the discovery queue which can then be accessed via an API call for monitoring.
@@ -60,13 +59,6 @@ var dcLock sync.Mutex
 
 func init() {
 	discoveryQueue = make(map[string](*Queue))
-}
-
-// StopMonitoring stops monitoring all the queues
-func StopMonitoring() {
-	for _, q := range discoveryQueue {
-		q.stopMonitoring()
-	}
 }
 
 func ReturnQueue(name string) *Queue {
@@ -93,52 +85,20 @@ func CreateOrReturnQueue(name string) *Queue {
 		consumedKeys: make(map[inst.InstanceKey]time.Time),
 		queue:        make(chan inst.InstanceKey, config.Config.DiscoveryQueueCapacity),
 	}
-	go q.startMonitoring()
+	observability.Gauge("orchestrator_discovery_queue_items", "Current deduplicated queue entries", q.queuedItems.Load, attribute.String("queue", name), attribute.String("state", "queued"))
+	observability.Gauge("orchestrator_discovery_queue_items", "Current deduplicated queue entries", q.activeItems.Load, attribute.String("queue", name), attribute.String("state", "active"))
 
 	discoveryQueue[name] = q
 
 	return q
 }
 
-// monitoring queue sizes until we are told to stop
-func (q *Queue) startMonitoring() {
-	log.Debugf("Queue.startMonitoring(%s)", q.name)
-	ticker := time.NewTicker(time.Second) // hard-coded at every second
-
-	for {
-		select {
-		case <-ticker.C: // do the periodic expiry
-			q.collectStatistics()
-		case <-q.done:
-			return
-		}
-	}
-}
-
-// Stop monitoring the queue
-func (q *Queue) stopMonitoring() {
-	q.done <- struct{}{}
-}
-
-// do a check of the entries in the queue, both those active and queued
-func (q *Queue) collectStatistics() {
-	q.Lock()
-	defer q.Unlock()
-
-	q.metrics = append(q.metrics, QueueMetric{Queued: len(q.queuedKeys), Active: len(q.consumedKeys)})
-
-	// remove old entries if we get too big
-	if len(q.metrics) > config.Config.DiscoveryQueueMaxStatisticsSize {
-		q.metrics = q.metrics[len(q.metrics)-config.Config.DiscoveryQueueMaxStatisticsSize:]
-	}
-}
-
-// QueueLen returns the length of the queue (channel size + queued size)
+// QueueLen returns pending keys; channel entries are the same keys and must not be counted twice.
 func (q *Queue) QueueLen() int {
 	q.Lock()
 	defer q.Unlock()
 
-	return len(q.queue) + len(q.queuedKeys)
+	return len(q.queuedKeys)
 }
 
 // Push enqueues a key if it is not on a queue and is not being
@@ -158,6 +118,7 @@ func (q *Queue) Push(key inst.InstanceKey) {
 	}
 
 	q.queuedKeys[key] = time.Now()
+	q.queuedItems.Store(int64(len(q.queuedKeys)))
 	q.queue <- key
 }
 
@@ -182,6 +143,8 @@ func (q *Queue) Consume() inst.InstanceKey {
 	q.consumedKeys[key] = q.queuedKeys[key]
 
 	delete(q.queuedKeys, key)
+	q.queuedItems.Store(int64(len(q.queuedKeys)))
+	q.activeItems.Store(int64(len(q.consumedKeys)))
 
 	return key
 }
@@ -193,4 +156,5 @@ func (q *Queue) Release(key inst.InstanceKey) {
 	defer q.Unlock()
 
 	delete(q.consumedKeys, key)
+	q.activeItems.Store(int64(len(q.consumedKeys)))
 }

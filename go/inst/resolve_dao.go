@@ -22,21 +22,17 @@ import (
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
-	"github.com/rcrowley/go-metrics"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
-var writeResolvedHostnameCounter = metrics.NewCounter()
-var writeUnresolvedHostnameCounter = metrics.NewCounter()
-var readResolvedHostnameCounter = metrics.NewCounter()
-var readUnresolvedHostnameCounter = metrics.NewCounter()
-var readAllResolvedHostnamesCounter = metrics.NewCounter()
+var writeResolvedHostnameCounter = observability.NewCounter("orchestrator_resolve_write_resolved_total", "resolve.write_resolved events")
+var writeUnresolvedHostnameCounter = observability.NewCounter("orchestrator_resolve_write_unresolved_total", "resolve.write_unresolved events")
+var readResolvedHostnameCounter = observability.NewCounter("orchestrator_resolve_read_resolved_total", "resolve.read_resolved events")
+var readUnresolvedHostnameCounter = observability.NewCounter("orchestrator_resolve_read_unresolved_total", "resolve.read_unresolved events")
+var readAllResolvedHostnamesCounter = observability.NewCounter("orchestrator_resolve_read_resolved_all_total", "resolve.read_resolved_all events")
 
 func init() {
-	metrics.Register("resolve.write_resolved", writeResolvedHostnameCounter)
-	metrics.Register("resolve.write_unresolved", writeUnresolvedHostnameCounter)
-	metrics.Register("resolve.read_resolved", readResolvedHostnameCounter)
-	metrics.Register("resolve.read_unresolved", readUnresolvedHostnameCounter)
-	metrics.Register("resolve.read_resolved_all", readAllResolvedHostnamesCounter)
 }
 
 // WriteResolvedHostname stores a hostname and the resolved hostname to backend database
@@ -70,7 +66,7 @@ func WriteResolvedHostname(hostname string, resolvedHostname string) error {
 				hostname,
 				resolvedHostname)
 		}
-		writeResolvedHostnameCounter.Inc(1)
+		writeResolvedHostnameCounter.Add(context.Background(), 1)
 		return nil
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -96,7 +92,7 @@ func ReadResolvedHostname(hostname string) (string, error) {
 	if err == nil && len(rows) > 0 {
 		resolvedHostname = rows[0].ResolvedHostname
 	}
-	readResolvedHostnameCounter.Inc(1)
+	readResolvedHostnameCounter.Add(context.Background(), 1)
 
 	if err != nil {
 		log.Errore(err)
@@ -121,7 +117,7 @@ func ReadAllHostnameResolves() ([]HostnameResolve, error) {
 	for _, row := range rows {
 		res = append(res, HostnameResolve{hostname: row.Hostname, resolvedHostname: row.ResolvedHostname})
 	}
-	readAllResolvedHostnamesCounter.Inc(1)
+	readAllResolvedHostnamesCounter.Add(context.Background(), 1)
 
 	if err != nil {
 		log.Errore(err)
@@ -185,7 +181,7 @@ func readUnresolvedHostname(hostname string) (string, error) {
 	if err == nil && len(rows) > 0 {
 		unresolvedHostname = rows[0].UnresolvedHostname
 	}
-	readUnresolvedHostnameCounter.Inc(1)
+	readUnresolvedHostnameCounter.Add(context.Background(), 1)
 
 	if err != nil {
 		log.Errore(err)
@@ -249,7 +245,7 @@ func WriteHostnameUnresolve(instanceKey *InstanceKey, unresolvedHostname string)
         	values (?, ?, NOW())
 				`, instanceKey.Hostname, unresolvedHostname,
 		)
-		writeUnresolvedHostnameCounter.Inc(1)
+		writeUnresolvedHostnameCounter.Add(context.Background(), 1)
 		return nil
 	}
 	return ExecDBWriteFunc(writeFunc)

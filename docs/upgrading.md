@@ -4,6 +4,17 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### Observability replaces Graphite and raw metric APIs
+
+Graphite and the in-memory raw/aggregated metrics APIs are removed. Delete the
+six obsolete Graphite/Collection configuration fields before upgrading; old
+fields are rejected even when empty. Scrape each node's `/metrics` endpoint and
+import the Prometheus Grafana dashboard. See [Observability](observability.md)
+for the complete removal list, authentication, sampling, restart-only trace
+configuration and rollback instructions. This change adds no schema or Raft
+format migration.
+
+
 ### HTTP routing now uses Gin behind a compatibility adapter
 
 The standard Web/API listener and the agent listener now use Gin v1.12.0

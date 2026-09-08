@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 const DateTimeFormat = "2006-01-02 15:04:05.999999"
@@ -191,6 +193,8 @@ func queryNamedResultDataContext(ctx context.Context, database *sql.DB, query st
 	if database == nil {
 		return result, errors.New("dynamic query database is nil")
 	}
+	begin := time.Now()
+	defer func() { observability.RecordSQL(ctx, "dynamic", begin, returnErr) }()
 	rows, err := database.QueryContext(ctx, query, args...)
 	if err != nil {
 		return result, fmt.Errorf("query dynamic result: %w", err)
@@ -225,6 +229,8 @@ func QueryDynamicRowsContext(ctx context.Context, database *sql.DB, query string
 	if onRow == nil {
 		return errors.New("dynamic row callback is nil")
 	}
+	begin := time.Now()
+	defer func() { observability.RecordSQL(ctx, "dynamic", begin, returnErr) }()
 	rows, err := database.QueryContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("query dynamic rows: %w", err)

@@ -190,3 +190,8 @@ raft: check-docker ## 构建并运行三节点 Raft 演示环境
 	$(DOCKER) build . -f docker/Dockerfile.raft -t "$(RAFT_IMAGE)"
 	$(DOCKER) run --rm $(DOCKER_TTY) -p 3007:3007 -p 3008:3008 -p 3009:3009 \
 		$(DOCKER_EXTRA_ARGS) "$(RAFT_IMAGE):latest"
+
+.PHONY: test-observability
+test-observability: ## 验证监控告警语法及触发恢复；需要 promtool
+	promtool check rules resources/metrics/alerts.yml
+	promtool test rules resources/metrics/alerts.test.yml

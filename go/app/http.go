@@ -21,10 +21,8 @@ import (
 	"net"
 	nethttp "net/http"
 	"strings"
-	"time"
 
 	"github.com/openark/orchestrator/go/agent"
-	"github.com/openark/orchestrator/go/collection"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/http"
 	"github.com/openark/orchestrator/go/inst"
@@ -35,15 +33,15 @@ import (
 	"github.com/openark/golib/log"
 )
 
-const discoveryMetricsName = "DISCOVERY_METRICS"
-
 var sslPEMPassword []byte
 var agentSSLPEMPassword []byte
-var discoveryMetrics *collection.Collection
 
 // Http starts serving
 func Http(continuousDiscovery bool) error {
+	logic.AcceptSignals()
 	promptForSSLPasswords()
+	closeMonitor := startHealthMonitor()
+	defer closeMonitor()
 	process.ContinuousRegistration(process.OrchestratorExecutionHttpMode, "")
 
 	runtimeErrors := make(chan error, 3)
@@ -89,9 +87,6 @@ func standardHttp(continuousDiscovery bool, runtimeErrors chan<- error) error {
 	inst.SetMaintenanceOwner(process.ThisHostname)
 
 	if continuousDiscovery {
-		// start to expire metric collection info
-		discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
-		discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 
 		log.Info("Starting Discovery")
 		go reportRuntimeError(runtimeErrors, "continuous discovery", logic.ContinuousDiscovery)
@@ -202,6 +197,7 @@ func newStandardHTTPRouter() (*http.Router, error) {
 
 	http.API.URLPrefix = config.Config.URLPrefix
 	http.Web.URLPrefix = config.Config.URLPrefix
+	http.RegisterObservability(router, config.Config.URLPrefix)
 	http.API.RegisterRequests(router)
 	http.Web.RegisterRequests(router)
 	return router, nil

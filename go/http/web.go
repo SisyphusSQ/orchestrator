@@ -24,9 +24,6 @@ import (
 	"strconv"
 	"text/template"
 
-	"github.com/rcrowley/go-metrics"
-	"github.com/rcrowley/go-metrics/exp"
-
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/inst"
 )
@@ -468,6 +465,4 @@ func (this *HttpWeb) RegisterDebug(m *Router) {
 	m.Get(this.URLPrefix+"/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
 	m.Get(this.URLPrefix+"/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
 
-	// go-metrics
-	m.Get(this.URLPrefix+"/debug/metrics", exp.ExpHandler(metrics.DefaultRegistry))
 }

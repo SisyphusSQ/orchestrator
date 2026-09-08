@@ -64,9 +64,9 @@ func TestCliWrapperReturnsRaftConfigurationError(t *testing.T) {
 }
 
 func TestCliReturnsKVInitError(t *testing.T) {
-	previous := *config.Config
+	previousAddress, previousScheme, previousCA := config.Config.ConsulAddress, config.Config.ConsulScheme, config.Config.ConsulTLSCAFile
 	t.Cleanup(func() {
-		*config.Config = previous
+		config.Config.ConsulAddress, config.Config.ConsulScheme, config.Config.ConsulTLSCAFile = previousAddress, previousScheme, previousCA
 		kv.ResetKVStoresForTest()
 	})
 	kv.ResetKVStoresForTest()

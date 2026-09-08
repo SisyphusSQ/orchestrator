@@ -6,7 +6,8 @@ import (
 
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
-	"github.com/rcrowley/go-metrics"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 // The behavior depends on settings:
@@ -42,10 +43,12 @@ type deadInstancesFilter struct {
 
 var DeadInstancesFilter deadInstancesFilter
 
-var deadInstancesCounter = metrics.NewCounter()
-
 func init() {
-	metrics.Register("discoveries.dead_instances", deadInstancesCounter)
+	observability.Gauge("orchestrator_dead_instances", "Current dead instances in the discovery filter", func() int64 {
+		DeadInstancesFilter.deadInstancesMutex.RLock()
+		defer DeadInstancesFilter.deadInstancesMutex.RUnlock()
+		return int64(len(DeadInstancesFilter.deadInstances))
+	})
 	DeadInstancesFilter.deadInstances = make(map[InstanceKey]deadInstance)
 	DeadInstancesFilter.deadInstancesMutex = sync.RWMutex{}
 }
@@ -67,8 +70,6 @@ func (f *deadInstancesFilter) RegisterInstance(instanceKey *InstanceKey) {
 	if exists {
 		delayFactor = config.Config.DeadInstancePollSecondsMultiplyFactor * instance.DelayFactor
 		previousTry = instance.TryCnt
-	} else {
-		deadInstancesCounter.Inc(1)
 	}
 
 	maxDelay := time.Duration(config.Config.DeadInstancePollSecondsMax) * time.Second
@@ -108,7 +109,6 @@ func (f *deadInstancesFilter) UnregisterInstance(instanceKey *InstanceKey) {
 			log.Debugf("Dead instance unregistered: %v:%v after iteration: %v",
 				instanceKey.Hostname, instanceKey.Port, instance.TryCnt)
 		}
-		deadInstancesCounter.Dec(1)
 		delete(f.deadInstances, *instanceKey)
 	}
 }

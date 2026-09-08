@@ -31,11 +31,12 @@ import (
 
 	"github.com/openark/golib/log"
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
-var analysisChangeWriteAttemptCounter = metrics.NewCounter()
-var analysisChangeWriteCounter = metrics.NewCounter()
+var analysisChangeWriteAttemptCounter = observability.NewCounter("orchestrator_analysis_change_write_attempt_total", "analysis.change.write.attempt events")
+var analysisChangeWriteCounter = observability.NewCounter("orchestrator_analysis_change_write_total", "analysis.change.write events")
 
 var recentInstantAnalysis *cache.Cache
 
@@ -102,8 +103,6 @@ func nullInt64AsUint(value sql.NullInt64) uint {
 }
 
 func init() {
-	metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
-	metrics.Register("analysis.change.write", analysisChangeWriteCounter)
 
 	go initializeAnalysisDaoPostConfiguration()
 }
@@ -844,7 +843,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 	// Passed the cache; but does database agree that there's a change? Here's a persistent cache; this comes here
 	// to verify no two orchestrator services are doing this without coordinating (namely, one dies, the other taking its place
 	// and has no familiarity of the former's cache)
-	analysisChangeWriteAttemptCounter.Inc(1)
+	analysisChangeWriteAttemptCounter.Add(context.Background(), 1)
 
 	lastAnalysisChanged := false
 	{
@@ -897,7 +896,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 		instanceKey.Hostname, instanceKey.Port, string(analysisCode),
 	)
 	if err == nil {
-		analysisChangeWriteCounter.Inc(1)
+		analysisChangeWriteCounter.Add(context.Background(), 1)
 	}
 	return log.Errore(err)
 }

@@ -28,7 +28,8 @@ import (
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
-	"github.com/rcrowley/go-metrics"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 // syslogWriter is optional, and defaults to nil (disabled).
@@ -40,10 +41,9 @@ type auditSyslogSink interface {
 	Close() error
 }
 
-var auditOperationCounter = metrics.NewCounter()
+var auditOperationCounter = observability.NewCounter("orchestrator_audit_write_total", "audit.write events")
 
 func init() {
-	metrics.Register("audit.write", auditOperationCounter)
 }
 
 // EnableSyslogWriter enables, if possible, writes to syslog. These will execute _in addition_ to normal logging
@@ -122,7 +122,7 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 	if !auditWritten {
 		log.Infof("%s", logMessage)
 	}
-	auditOperationCounter.Inc(1)
+	auditOperationCounter.Add(context.Background(), 1)
 
 	return nil
 }
