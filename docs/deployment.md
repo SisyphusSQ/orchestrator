@@ -26,12 +26,12 @@ However, how does `orchestrator` discover completely new topologies?
 - Or you may choose to just let `orchestrator` know about any single production server you have, routinely. Set up a cronjob on any production `MySQL` server to read:
 
   ```
-  0 0 * * * root "/usr/bin/perl -le 'sleep rand 600' && /usr/bin/orchestrator-client -c discover -i this.hostname.com"
+  0 0 * * * root "/usr/bin/perl -le 'sleep rand 600' && /usr/bin/orch discover -i this.hostname.com"
   ```
 
   In the above, each host lets `orchestrator` know about itself once per day; newly bootstrapped hosts are discovered the next midnight. The `sleep` in introduced to avoid storming `orchestrator` by all servers at the same time.
 
-  The above uses [orchestrator-client](orchestrator-client.md), but you may use the [orchestrator cli](executing-via-command-line.md) if running on a shared-backend setup.
+  The above uses [orch](orch.md), which is also the management entry point for shared-backend deployments.
 
 ### Adding promotion rules
 
@@ -46,7 +46,7 @@ Some servers are better candidate for promotion in the event of failovers. Some 
 You will announce your preference for a given server to `orchestrator` in the following way:
 
 ```
-orchestrator -c register-candidate -i ${::fqdn} --promotion-rule ${promotion_rule}
+orch register-candidate -i ${::fqdn} --promotion-rule ${promotion_rule}
 ```
 
 Supported promotion rules are:
@@ -59,7 +59,7 @@ Supported promotion rules are:
 Promotion rules expire after an hour. That's the dynamic nature of `orchestrator`. You will want to setup a cron job that will announce the promotion rule for a server:
 
 ```
-*/2 * * * * root "/usr/bin/perl -le 'sleep rand 10' && /usr/bin/orchestrator-client -c register-candidate -i this.hostname.com --promotion-rule prefer"
+*/2 * * * * root "/usr/bin/perl -le 'sleep rand 10' && /usr/bin/orch register-candidate -i this.hostname.com --promotion-rule prefer"
 ```
 
 This setup comes from production environments. The cron entries get updated by `puppet` to reflect the appropriate `promotion_rule`. A server may have `prefer` at this time, and `prefer_not` in 5 minutes from now. Integrate your own service discovery method, your own scripting, to provide with your up-to-date `promotion-rule`.
@@ -78,18 +78,18 @@ You may _downtime_ a server such that:
 Downtiming takes place via:
 
 ```
-orchestrator-client -c begin-downtime -duration 30m -reason "testing" -owner myself
+orch begin-downtime --duration 30m --reason "testing" --owner myself
 ```
 
-Some servers may be known to be routinely broken; for example, auto-restore servers; dev boxes; testing boxes. For such servers you may want to have _continuous_ downtime. One way to achieve that it to set so large `-duration 240000h`. But then you need to remember to `end-downtime` if something changes about the box. Continuing the dynamic approach, consider:
+Some servers may be known to be routinely broken; for example, auto-restore servers; dev boxes; testing boxes. For such servers you may want to have _continuous_ downtime. One way to achieve that it to set so large `--duration 240000h`. But then you need to remember to `end-downtime` if something changes about the box. Continuing the dynamic approach, consider:
 
 ```
-*/2 * * * * root "/usr/bin/perl -le 'sleep rand 10' && /data/orchestrator/current/bin/orchestrator -c begin-downtime -i ${::fqdn} --duration=5m --owner=cron --reason=continuous_downtime"
+*/2 * * * * root "/usr/bin/perl -le 'sleep rand 10' && /data/orchestrator/current/bin/orch begin-downtime -i ${::fqdn} --duration=5m --owner=cron --reason=continuous_downtime"
 ```
 
 Every `2` minutes, downtime for `5` minutes; this means that as we cancel the cronjob, _downtime_ will expire within `5` minutes.
 
-Shown above are uses for both `orchestrator-client` and the `orchestrator` command line interface. For completeness, this is how to operate the same via direct API call:
+Shown above are uses for both `orch` and the `orchestrator` command line interface. For completeness, this is how to operate the same via direct API call:
 
 ```shell
 $ curl -s "http://my.orchestrator.service:80/api/begin-downtime/my.hostname/3306/wallace/experimenting+failover/45m"
@@ -97,7 +97,7 @@ $ curl -s "http://my.orchestrator.service:80/api/begin-downtime/my.hostname/3306
 `45m` is duration of time in minutes the host will be marked under downtime.
 If the duration time is not specified, the default value of 10 minutes will be applied.
 
-The `orchestrator-client` script runs this very API call, wrapping it up and encoding the URL path. It can also automatically detect the leader, in case you don't want to run through a proxy.
+The `orch` Go client runs this very API call, wrapping it up and encoding the URL path. It can also automatically detect the leader, in case you don't want to run through a proxy.
 
 ### Pseudo-GTID
 

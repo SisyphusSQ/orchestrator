@@ -7,6 +7,7 @@ GIT ?= git
 DOCKER ?= docker
 
 BINARY ?= bin/orchestrator
+CLI_BINARY ?= bin/orch
 TOOLS_BIN ?= bin/tools
 RELEASE_VERSION_FILE := $(shell sed -n '1p' RELEASE_VERSION)
 RELEASE_VERSION ?=
@@ -67,14 +68,15 @@ check-build-tools: check-go
 check-docker:
 	@command -v "$(DOCKER)" >/dev/null 2>&1 || { echo "docker binary not found in PATH" >&2; exit 1; }
 
-deps: check-go ## 下载并校验根模块依赖
+deps: check-go ## 下载并校验服务端与 CLI 模块依赖
 	@test ! -d vendor || { echo "vendor directory must not be committed; use go.mod and go.sum" >&2; exit 1; }
 	$(GO) mod download
 	$(GO) mod verify
 	$(GO) mod tidy -diff
+	cd tools/orch-cli && $(GO) mod download && $(GO) mod verify && $(GO) mod tidy -diff
 
 fmt-check: check-go ## 只读检查 Go 源码格式，不修改工作区
-	@unformatted="$$(gofmt -s -l cmd internal)"; \
+	@unformatted="$$(gofmt -s -l cmd internal tools/orch-cli tests/cli)"; \
 	if [[ -n "$$unformatted" ]]; then \
 		echo "The following files need gofmt -s:" >&2; \
 		echo "$$unformatted" >&2; \
@@ -87,13 +89,14 @@ binary: check-build-tools ## 仅构建 orchestrator 二进制
 		-ldflags "-X main.AppVersion=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" \
 		-o "$(BINARY)" ./cmd/orchestrator
 
-build: binary ## 构建二进制并同步运行时资源到 bin/
+build: binary cli ## 构建二进制并同步运行时资源到 bin/
 	rsync -qa --delete ./resources/ "$(dir $(BINARY))resources/"
 
 test-build: build ## 验证构建入口
 
 test-unit: check-go ## 运行全部 Go 包单元测试
-	$(GO) test -mod=readonly ./...
+	$(GO) test $(RACE_FLAG) -mod=readonly ./...
+	$(MAKE) test-cli
 
 test-integration: check-go ## 运行核心集成测试；可通过 INTEGRATION_ARGS 过滤
 	./tests/integration/test.sh $(INTEGRATION_ARGS)
@@ -130,6 +133,7 @@ install-govulncheck: $(GOVULNCHECK) ## 安装固定版本的 govulncheck 到 bin
 
 cve: $(GOVULNCHECK) ## 使用固定版本 govulncheck 检查已知漏洞
 	GOVULNCHECK="$(abspath $(GOVULNCHECK))" ./script/test-cve
+	cd tools/orch-cli && GOVULNCHECK="$(abspath $(GOVULNCHECK))" ../../script/test-cve
 
 image: check-docker ## 构建最小运行时镜像
 	$(DOCKER) build . -f docker/Dockerfile -t "$(RUNTIME_IMAGE)"
@@ -191,3 +195,21 @@ raft: check-docker ## 构建并运行三节点 Raft 演示环境
 test-observability: ## 验证监控告警语法及触发恢复；需要 promtool
 	promtool check rules resources/metrics/alerts.yml
 	promtool test rules resources/metrics/alerts.test.yml
+
+.PHONY: cli test-cli cli-platforms
+cli: check-go ## 独立构建 HTTP 客户端 orch，无服务端依赖
+	@mkdir -p "$(dir $(CLI_BINARY))"
+	cd tools/orch-cli && $(GO_ENV) CGO_ENABLED=0 $(GO) build -mod=readonly -ldflags "-X main.AppVersion=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" -o "$(abspath $(CLI_BINARY))" .
+
+test-cli: check-go ## 验证独立 HTTP 客户端模块
+	cd tools/orch-cli && $(GO) test $(RACE_FLAG) -mod=readonly ./...
+
+cli-platforms: check-go ## 交叉构建 Linux/macOS/Windows 客户端
+	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do \
+	  os=$${target%/*}; arch=$${target#*/}; suffix=; [[ $$os != windows ]] || suffix=.exe; \
+	  $(MAKE) cli GOOS=$$os GOARCH=$$arch CLI_BINARY=bin/platforms/$$os-$$arch/orch$$suffix || exit $$?; \
+	done
+
+.PHONY: test-cli-e2e
+test-cli-e2e: build ## 临时回环 MySQL 主从的 HTTP CLI 验收；需要已有 mysqld
+	ORCH_E2E=1 $(GO) test -mod=readonly -count=1 -v -timeout=5m ./tests/cli

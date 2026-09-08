@@ -18,7 +18,7 @@ MYSQL=(mysql -uci -pci -h127.0.0.1)
 
 "${MYSQL[@]}" --port=10114 -e "TRUNCATE TABLE mysql.general_log;"
 
-orchestrator-client -c change-master-credentials -i 127.0.0.1:10114 >/dev/null
+orch change-master-credentials -i 127.0.0.1:10114 >/dev/null
 
 change_stmt=$("${MYSQL[@]}" --port=10114 -sN -e "
   SELECT argument FROM mysql.general_log

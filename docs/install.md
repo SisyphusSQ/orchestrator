@@ -1,9 +1,15 @@
 # Installation
 
+当前命令入口：服务端 `orchestrator server`，独立 Go HTTP 客户端 `orch`。客户端构建使用 `make cli`，完整构建使用 `make build`；详见 [客户端说明](orch.md)。旧直连 CLI 与 Shell 客户端不再提供。
+
 For production deployments, see [Orchestrator deployment](deployment.md). The following text walks you through the manual way of installation and the necessary configuration to make it work.
 
 The following assumes you will be using the same machine for both the `orchestrator` binary and the MySQL backend.
 If not, replace `127.0.0.1` with appropriate host name. Replace `orch_backend_password` with your own super secret password.
+
+#### 安装独立客户端
+
+仅需要命令行管理时，安装对应平台的 `orch` 二进制或 `orch` 的 RPM/DEB/TAR 包，将它放入 PATH。包内只包含 `/usr/bin/orch`；无需本机 MySQL、服务端配置和静态资源。配置 `ORCH_ENDPOINT` 后执行 `orch clusters`。以下数据库和服务部署步骤仅适用于服务端机器。
 
 #### Extract orchestrator binary and files
 
@@ -80,6 +86,6 @@ Replace `orch_host` with hostname or orchestrator machine (or do your wildcards 
 
 Consider moving `conf/orchestrator.conf.json` to `/etc/orchestrator.conf.json` (both locations are valid)
 
-To execute `orchestrator` in command line mode or in HTTP API only, all you need is the `orchestrator` binary.
+Remote command-line operations use the independent `orch` binary; only service hosts need the `orchestrator` binary and configuration.
 To enjoy the rich web interface, including topology visualizations and drag-and-drop topology changes, you will need
 the `resources` directory and all that is underneath it. If you're unsure, don't touch; things are already in place.

@@ -10,7 +10,7 @@ basedir=$(cd "$(dirname "$0")" && pwd)
 GIT_COMMIT=$(git rev-parse HEAD)
 RELEASE_VERSION=${RELEASE_VERSION:-""}
 RELEASE_SUBVERSION=${RELEASE_SUBVERSION:-""}
-release_base_path=/tmp/orchestrator-release
+release_base_path=${RELEASE_BASE_PATH:-/tmp/orchestrator-release}
 export RELEASE_VERSION release_base_path
 
 binary_build_path="build"
@@ -31,7 +31,7 @@ usage() {
   echo "-a (amd64|386) Arch Default:(amd64)"
   echo "-d debug output"
   echo "-b build only, do not generate packages"
-  echo "-N do not build; use existing ./build/bin/orchestrator binary"
+  echo "-N do not build; use existing ./build/bin/orchestrator and ./build/bin/orch binaries"
   echo "-P create build/deployment paths"
   echo "-R retain existing build/deployment paths"
   echo "-p build prefix Default:(/usr/local)"
@@ -109,13 +109,13 @@ build_binary() {
   debug "Building via $(go version)"
   race=0
   [ -n "$opt_race" ] && race=1
-  make -C "$basedir" binary \
+  make -C "$basedir" binary cli CLI_BINARY=build/bin/orch \
     BINARY="$binary_artifact" \
     GOOS="$os" \
     GOARCH="$arch" \
     VERSION="$RELEASE_VERSION" \
     GIT_COMMIT="$GIT_COMMIT" \
-    RACE="$race"
+    RACE="$race" || fail "Failed to build server and orch"
   find "$basedir/$binary_artifact" -type f || fail "Failed to generate orchestrator binary"
 }
 
@@ -123,10 +123,10 @@ copy_binary_artifacts() {
   build_path="$1"
   prefix="$2"
 
-  for dest in "orchestrator-cli/usr/bin" "orchestrator$prefix/orchestrator" ; do
+  cp "$basedir/build/bin/orch" "$build_path/orch/usr/bin/orch" || fail "Failed to copy orch"
+  for dest in "orchestrator$prefix/orchestrator" ; do
     cp $binary_artifact $build_path/$dest && debug "binary copied to $build_path/$dest" || fail "Failed to copy orchestrator binary to $build_path/$dest"
   done
-  cp $build_path/orchestrator${prefix}/orchestrator/resources/bin/orchestrator-client $build_path/orchestrator-client/usr/bin && debug "orchestrator-client copied to orchestrator-client/" || fail "Failed to copy orchestrator-client to orchestrator-client/"
 }
 
 setup_artifact_paths() {
@@ -136,8 +136,7 @@ setup_artifact_paths() {
 
   mkdir -p $build_path/orchestrator
   mkdir -p $build_path/orchestrator${prefix}/orchestrator/
-  mkdir -p $build_path/orchestrator-cli/usr/bin
-  mkdir -p $build_path/orchestrator-client/usr/bin
+  mkdir -p $build_path/orch/usr/bin
   [ "$init_system" == "sysv" ] && mkdir -p $build_path/orchestrator/etc/init.d
   [ "$init_system" == "systemd" ] && mkdir -p $build_path/orchestrator/etc/systemd/system
   ln -s $build_path $release_base_path/build
@@ -201,21 +200,19 @@ package_linux() {
   cd $tmp_build_path
 
   debug "Creating Linux Tar package"
-  [ $do_tar -eq 1 ] && tar -C $build_path/orchestrator -czf $release_base_path/orchestrator-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
+  [ $do_tar -eq 1 ] && COPYFILE_DISABLE=1 tar -C $build_path/orchestrator -czf $release_base_path/orchestrator-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
+
+  [ $do_tar -eq 1 ] && COPYFILE_DISABLE=1 tar -C $build_path/orch -czf $release_base_path/orch-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
 
   debug "Creating Distro full packages"
   [ $do_rpm -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1 -f -s dir -n orchestrator -m shlomi-noach --description "MySQL replication topology management and HA" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator --prefix=/ --config-files /usr/local/orchestrator/resources/public/css/custom.css --config-files /usr/local/orchestrator/resources/public/js/custom.js --depends 'jq >= 1.5' -t rpm .
   [ $do_deb -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1 -f -s dir -n orchestrator -m shlomi-noach --description "MySQL replication topology management and HA" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator --prefix=/ --config-files /usr/local/orchestrator/resources/public/css/custom.css --config-files /usr/local/orchestrator/resources/public/js/custom.js --depends 'jq >= 1.5' -t deb --deb-no-default-config-files .
 
   debug "Creating Distro cli packages"
-  # orchestrator-cli packaging -- executable only
-  [ $do_rpm -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1  -f -s dir -n orchestrator-cli -m shlomi-noach --description "MySQL replication topology management and HA: binary only" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator-cli --prefix=/ --depends 'jq >= 1.5' -t rpm .
-  [ $do_deb -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1  -f -s dir -n orchestrator-cli -m shlomi-noach --description "MySQL replication topology management and HA: binary only" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator-cli --prefix=/ --depends 'jq >= 1.5' -t deb --deb-no-default-config-files .
+  # orch packaging -- executable only
+  [ $do_rpm -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1  -f -s dir -n orch -m shlomi-noach --description "MySQL replication topology management and HA: Go HTTP client" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orch --prefix=/ -t rpm .
+  [ $do_deb -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1  -f -s dir -n orch -m shlomi-noach --description "MySQL replication topology management and HA: Go HTTP client" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orch --prefix=/ -t deb --deb-no-default-config-files .
 
-  debug "Creating Distro orchestrator-client packages"
-  # orchestrator-client packaging -- shell script only
-  [ $do_rpm -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1  -f -s dir -n orchestrator-client -m shlomi-noach --description "MySQL replication topology management and HA: client script" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator-client --prefix=/ --depends 'jq >= 1.5' -t rpm .
-  [ $do_deb -eq 1 ] && fpm -v "${RELEASE_VERSION}" --epoch 1  -f -s dir -n orchestrator-client -m shlomi-noach --description "MySQL replication topology management and HA: client script" --url "https://github.com/openark/orchestrator" --vendor "GitHub" --license "Apache 2.0" -C $build_path/orchestrator-client --prefix=/ --depends 'jq >= 1.5' -t deb --deb-no-default-config-files .
 
   if [ -n "$package_name_extra" ] ; then
     # Strip version core out of sting like "3.2.6-pre123+g1234567" to "3.2.6".
@@ -240,11 +237,9 @@ package_darwin() {
 
   cd $release_base_path
   debug "Creating Darwin full Package"
-  tar -C $build_path/orchestrator -czf $release_base_path/orchestrator-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
+  COPYFILE_DISABLE=1 tar -C $build_path/orchestrator -czf $release_base_path/orchestrator-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
   debug "Creating Darwin cli Package"
-  tar -C $build_path/orchestrator-cli -czf $release_base_path/orchestrator-cli-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
-  debug "Creating Darwin orchestrator-client Package"
-  tar -C $build_path/orchestrator-client -czf $release_base_path/orchestrator-client-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
+  COPYFILE_DISABLE=1 tar -C $build_path/orch -czf $release_base_path/orch-"${RELEASE_VERSION}"-$target-$arch.tar.gz ./
 }
 
 package() {
@@ -316,6 +311,7 @@ while getopts "a:t:i:p:s:v:dbNPRhr" flag; do
   N)
     debug "skipping build"
     [ -f "$binary_artifact" ] || fail "cannot find $binary_artifact"
+    [ -f "build/bin/orch" ] || fail "cannot find build/bin/orch"
     skip_build="true"
     ;;
   P)

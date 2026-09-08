@@ -8,7 +8,7 @@ sudo cp etc/systemd/orchestrator.service /etc/systemd/system/
 sudo mkdir -p /usr/local/orchestrator
 sudo cp bin/orchestrator /usr/local/orchestrator/
 sudo cp -R resources /usr/local/orchestrator/
-sudo cp resources/bin/orchestrator-client /usr/bin
+sudo cp bin/orch /usr/bin
 sudo cp tests/system/orchestrator-ci-system.conf.json /etc/orchestrator.conf.json
 
 echo "starting orchestrator service..."
@@ -56,7 +56,7 @@ if [ -z "$raft_configuration_confirmed" ]; then
 fi
 
 echo "checking if service is healthy..."
-orchestrator-client -c api -path status | jq .Details.Healthy
+orch api status | jq .Details.Healthy
 
 echo "Sleeping gracefully to let orchestrator detect the topology..."
 sleep 20
@@ -72,12 +72,12 @@ echo "- There is a MySQL cluster named 'ci' up and running."
 echo "  MySQL nodes are accessible with username 'ci', password 'ci' at ports :10111-:10114"
 echo "- HAProxy routes traffic to MySQL master on port :13306"
 echo ""
-echo "Here's how to invoke orchestrator-client:"
+echo "Here's how to invoke orch:"
 echo "---"
 echo ""
-echo "orchestrator-client -c clusters-alias"
-orchestrator-client -c clusters-alias
-echo "orchestrator-client -c topology-tabulated -alias ci"
-orchestrator-client -c topology-tabulated -alias ci
+echo "orch clusters-alias"
+orch clusters-alias
+echo "orch topology-tabulated --alias ci"
+orch topology-tabulated --alias ci
 echo "---"
 echo ""

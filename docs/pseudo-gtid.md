@@ -51,7 +51,7 @@ Via web:
 Via command line:
 
 ```
-orchestrator-client -c relocate -i some.server.to.relocate -d under.some.other.server
+orch relocate -i some.server.to.relocate -d under.some.other.server
 ```
 
 The `relocate` command will auto-identify that Pseudo-GTID is enabled.

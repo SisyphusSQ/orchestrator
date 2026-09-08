@@ -47,6 +47,7 @@ func TestAuthorizationModesPreservePrincipalContracts(t *testing.T) {
 			want: true,
 		},
 		{name: "token without cookie", method: "token", want: false},
+		{name: "malformed token", method: "token", prepare: func() { request.Header.Set("Cookie", "access-token=missing-secret") }, want: false},
 		{name: "oauth", method: "oauth", want: false},
 	}
 

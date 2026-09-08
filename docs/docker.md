@@ -98,4 +98,4 @@ This will spin three `orchestrator` services:
 2. Listens on `http://127.0.0.1:3008`, advertising raft on `127.0.0.1:10008`
 3. Listens on `http://127.0.0.1:3009`, advertising raft on `127.0.0.1:10009`
 
-`orchestrator-client` is configured to connect to any of the nodes.
+`orch` is configured to connect to any of the nodes.

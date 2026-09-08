@@ -16,7 +16,7 @@
 - [Executing via command line](executing-via-command-line.md)
 - [Using the web interface](using-the-web-interface.md)
 - [Using the web API](using-the-web-api.md): achieving automation via HTTP GET requests
-- [Using orchestrator-client](orchestrator-client.md): a no binary/config needed script that wraps API calls
+- [Using orch](orch.md): 独立 Go HTTP 客户端
 - [Scripting samples](script-samples.md)
 
 #### Deployment
@@ -61,3 +61,7 @@
 
 - [FAQ](faq.md)
 - [First steps](first-steps.md), a quick introduction to `orchestrator`
+
+- [orch 能力映射](orch-commands.md)
+
+- [TOO-426 本地验证报告](orch-validation.md)

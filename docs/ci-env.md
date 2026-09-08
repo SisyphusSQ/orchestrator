@@ -47,7 +47,7 @@ Docker will expose these ports:
 
 Assuming `orchestrator` is built into `bin/orchestrator` (`make build` if not):
 ```shell
-$ bin/orchestrator --config=conf/orchestrator-ci-env.conf.json --debug http
+$ bin/orchestrator --config=conf/orchestrator-ci-env.conf.json --debug server
 ```
 
 This configuration enables a new single-node Raft cluster. After the HTTP

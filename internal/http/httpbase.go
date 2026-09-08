@@ -77,8 +77,10 @@ func isAuthorizedForWrite(req *http.Request, user Principal) bool {
 				return false
 			}
 
-			publicToken := strings.Split(cookie.Value, ":")[0]
-			secretToken := strings.Split(cookie.Value, ":")[1]
+			publicToken, secretToken, ok := strings.Cut(cookie.Value, ":")
+			if !ok || publicToken == "" || secretToken == "" {
+				return false
+			}
 			result, _ := process.TokenIsValid(publicToken, secretToken)
 			return result
 		}
@@ -100,8 +102,8 @@ func isAuthorizedForAction(req *http.Request, user Principal) bool {
 	if !isAuthorizedForWrite(req, user) {
 		return false
 	}
-	if orcraft.IsRaftEnabled() && !orcraft.IsLeader() {
-		// A raft member that is not a leader is unauthorized.
+	if orcraft.IsRaftEnabled() && !orcraft.IsLeaderReady() {
+		// A leader without verified quorum must not perform topology writes.
 		return false
 	}
 	return true

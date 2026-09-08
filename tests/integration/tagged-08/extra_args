@@ -1,1 +1,1 @@
--c tagged -tag role=delayed,candidate
+tagged --tag role=delayed,candidate

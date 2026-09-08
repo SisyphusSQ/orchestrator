@@ -14,7 +14,7 @@
 # ORC_USER (default: orc_server_user): username used to login to orchestrator backend MySQL server
 # ORC_PASSWORD (default: orc_server_password): password used to login to orchestrator backend MySQL server
 
-FROM golang:1.26.5-alpine3.23 as build
+FROM golang:1.26.8-alpine3.23 as build
 
 RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git make
 
@@ -31,7 +31,7 @@ RUN apk --no-cache add bash curl jq
 EXPOSE 3000
 
 COPY --from=build /orchestrator/bin/ /usr/local/orchestrator/
-COPY --from=build /orchestrator/bin/resources/bin/orchestrator-client /usr/bin/orchestrator-client
+COPY --from=build /orchestrator/bin/orch /usr/bin/orch
 COPY --from=build /orchestrator/conf/orchestrator-sample*.conf.json /usr/local/orchestrator/
 COPY --from=build /orchestrator/conf/orchestrator-sample-sqlite.conf.json /etc/orchestrator.conf.json
 

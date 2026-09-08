@@ -1,1 +1,1 @@
--c tag -i testhost:22294 -tag priority=low
+tag -i testhost:22294 --tag priority=low

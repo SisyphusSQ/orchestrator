@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	nethttp "net/http"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -91,6 +92,9 @@ func NewRouter(options RouterOptions) (*Router, error) {
 	engine.RedirectFixedPath = false
 	engine.HandleMethodNotAllowed = false
 	engine.RemoveExtraSlash = false
+	// Match encoded segments before decoding; path parameters may contain / or +.
+	engine.UseRawPath = true
+	engine.UnescapePathValues = false
 	engine.Use(func(ctx *gin.Context) {
 		request, finish := observability.BeginHTTP(ctx.Request, ctx.FullPath())
 		ctx.Request = request
@@ -124,6 +128,9 @@ func NewRouter(options RouterOptions) (*Router, error) {
 
 // ServeHTTP implements net/http.Handler.
 func (router *Router) ServeHTTP(writer nethttp.ResponseWriter, request *nethttp.Request) {
+	// Go may leave RawPath empty even when Path contains a literal percent.
+	// Always route the encoded path, then decode each captured parameter exactly once.
+	request.URL.RawPath = request.URL.EscapedPath()
 	router.engine.ServeHTTP(writer, request)
 }
 
@@ -224,7 +231,12 @@ func (router *Router) dispatch(handlers []Handler, parameterNames map[string]str
 	return func(ctx *gin.Context) {
 		params := make(Params, len(ctx.Params))
 		for _, param := range ctx.Params {
-			params[parameterNames[param.Key]] = param.Value
+			value, err := url.PathUnescape(param.Value)
+			if err != nil {
+				ctx.AbortWithStatus(nethttp.StatusBadRequest)
+				return
+			}
+			params[parameterNames[param.Key]] = value
 		}
 
 		tracker := &commitTrackingWriter{ResponseWriter: ctx.Writer}

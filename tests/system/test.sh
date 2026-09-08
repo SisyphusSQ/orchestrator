@@ -46,14 +46,14 @@ check_environment() {
     echo "ERROR: unable to write to $tests_failed_file"
     exit 1
   fi
-  echo "checking orchestrator-client"
-  if ! which orchestrator-client ; then
+  echo "checking orch"
+  if ! which orch ; then
     echo "+ not found in PATH"
-    if [ -f resources/bin/orchestrator-client ] ; then
-      echo "found in resources/bin. Updating PATH"
-      export PATH="$PATH:$(pwd)/resources/bin"
+    if [ -f bin/orch ] ; then
+      echo "found in bin. Updating PATH"
+      export PATH="$PATH:$(pwd)/bin"
     else
-      echo "orchestrator-client not found"
+      echo "orch not found"
       exit 1
     fi
   fi
@@ -96,7 +96,7 @@ test_step() {
   if [ -f $test_path/config.json ] ; then
     echo "- applying configuration: $test_path/config.json"
     real_config_path="$(realpath $test_path/config.json)"
-    orchestrator-client -c api -path "reload-configuration?config=$real_config_path" | jq -r '.Code'
+    orch api "reload-configuration?config=$real_config_path" | jq -r '.Code'
   fi
 
   if [ -f $test_path/setup ] ; then

@@ -29,6 +29,7 @@ import (
 	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/inst"
+	"github.com/openark/orchestrator/internal/logic"
 	"github.com/openark/orchestrator/internal/observability"
 	"github.com/openark/orchestrator/internal/process"
 )
@@ -134,15 +135,56 @@ func runCommand(options *commandOptions, command string) error {
 	log.RegisterCloseHook(telemetry.Close)
 	config.MarkConfigurationLoaded()
 
-	if command == "http" {
+	if command == "server" {
 		if err := app.Http(options.discovery); err != nil {
 			return fmt.Errorf("run HTTP services: %w", err)
 		}
 		return nil
 	}
-	return runCLIWrapper(command, options.strict, options.instance, options.destination,
-		options.owner, options.reason, options.duration, options.pattern, options.clusterAlias,
-		options.pool, options.hostnameFlag)
+	switch command {
+	case "continuous":
+		return logic.ContinuousDiscovery()
+	case "dump-config":
+		fmt.Println(config.Config.ToJSONString())
+		return nil
+	case "redeploy-internal-db":
+		config.RuntimeCLIFlags.ConfiguredVersion = ""
+		_, err := inst.ReadClusters()
+		return err
+	case "access-token":
+		token, err := process.GenerateAccessToken(options.owner)
+		if err != nil {
+			return err
+		}
+		fmt.Println(token)
+		return nil
+	case "suggest-promoted-replacement":
+		key, err := inst.ParseRawInstanceKey(options.instance)
+		if err != nil {
+			return err
+		}
+		destination, err := inst.ParseRawInstanceKey(options.destination)
+		if err != nil {
+			return err
+		}
+		instance, found, err := inst.ReadInstance(destination)
+		if err != nil {
+			return err
+		}
+		if !found || instance == nil {
+			return fmt.Errorf("destination not found")
+		}
+		result, _, err := logic.SuggestReplacementForPromotedReplica(&logic.TopologyRecovery{}, key, instance, nil)
+		if err != nil {
+			return err
+		}
+		if result == nil {
+			return fmt.Errorf("replacement not found")
+		}
+		fmt.Println(result.Key.DisplayString())
+		return nil
+	}
+	return fmt.Errorf("unknown server operation")
 }
 
 func configureSyslog(enabled bool, enable func(string) error) error {

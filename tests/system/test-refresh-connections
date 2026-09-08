@@ -1,7 +1,9 @@
 #!/bin/bash
 echo "# refreshing connections"
+instances=$(orch all-instances) || exit 1
 result=0
-orchestrator-client -c all-instances | while read i ; do
-  test-retry orchestrator-client -c flush-binary-logs -i $i > /dev/null 2>&1 || result=1
-done
-exit $result
+while IFS= read -r i; do
+  [ -z "$i" ] && continue
+  orch flush-binary-logs -i "$i" > /dev/null 2>&1 || result=1
+done <<< "$instances"
+exit "$result"

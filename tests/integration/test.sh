@@ -8,16 +8,20 @@
 # By default, runs all tests. Given filter, will only run tests matching given regep
 
 tests_path=$(dirname $0)
-test_logfile=/tmp/orchestrator-test.log
-test_outfile=/tmp/orchestrator-test.out
-test_diff_file=/tmp/orchestrator-test.diff
-test_query_file=/tmp/orchestrator-test.sql
-test_config_file=/tmp/orchestrator.conf.json
-orchestrator_binary=/tmp/orchestrator-test
-exec_command_file=/tmp/orchestrator-test.bash
-test_mysql_defaults_file=/tmp/orchestrator-test-my.cnf
+task_tmp=$(mktemp -d /tmp/orch-integration.XXXXXX)
+server_pid=
+trap '[ -z "$server_pid" ] || kill "$server_pid" 2>/dev/null; rm -rf "$task_tmp"' EXIT
+cli_binary="$task_tmp/orch"
+test_logfile=${task_tmp}/orchestrator-test.log
+test_outfile=${task_tmp}/orchestrator-test.out
+test_diff_file=${task_tmp}/orchestrator-test.diff
+test_query_file=${task_tmp}/orchestrator-test.sql
+test_config_file=${task_tmp}/orchestrator.conf.json
+orchestrator_binary=${task_tmp}/orchestrator-test
+exec_command_file=${task_tmp}/orchestrator-test.bash
+test_mysql_defaults_file=${task_tmp}/orchestrator-test-my.cnf
 db_type=""
-sqlite_file="/tmp/orchestrator.db"
+sqlite_file="${task_tmp}/orchestrator.db"
 mysql_args="--defaults-extra-file=${test_mysql_defaults_file} --default-character-set=utf8mb4 -s -s"
 
 function run_queries() {
@@ -56,7 +60,7 @@ setup_mysql() {
 
   echo "mysql args: $mysql_args"
   echo "mysql config (${test_mysql_defaults_file})"
-  cat $test_mysql_defaults_file
+  # Credentials remain in the test-owned defaults file.
   mysql $mysql_args -e "create database if not exists test"
 }
 
@@ -108,7 +112,7 @@ test_single() {
     # so we need to provide a single JSON file.
     # Let's merge the base config file with the provided one.
     echo "- applying configuration: $tests_path/$test_name/config.json"
-    merged_config_path="/tmp/config_final.json"
+    merged_config_path="$task_tmp/config_final.json"
     real_config_path="$(realpath "$tests_path/$test_name/config.json")"
 
     python3 - <<EOF
@@ -129,18 +133,32 @@ EOF
     test_config_file="$merged_config_path"
   fi
 
-  #
-  cmd="$orchestrator_binary \
-    --config=${test_config_file}
-    --debug \
-    --stack \
-    ${extra_args[@]}"
-  echo_dot
-  echo $cmd > $exec_command_file
-  echo_dot
-  bash $exec_command_file 1> $test_outfile 2> $test_logfile
-
+  if [[ "$extra_args" == admin* ]]; then
+    cmd="$orchestrator_binary --config=${test_config_file} ${extra_args}"
+  else
+    # 每个 fixture 独立启动服务端，禁止自动发现改写预置拓扑。
+    listen_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+    python3 - "$test_config_file" "$task_tmp/server.json" "$listen_port" <<'PYCONFIG'
+import json,sys
+with open(sys.argv[1]) as f: config=json.load(f)
+config.update(ListenAddress="127.0.0.1:"+sys.argv[3],HostnameResolveMethod="none",Debug=False,AuditLogFile="",RaftEnabled=False)
+with open(sys.argv[2],"w") as f: json.dump(config,f)
+PYCONFIG
+    "$orchestrator_binary" server --config="$task_tmp/server.json" --discovery=false >"$task_tmp/server.log" 2>&1 &
+    server_pid=$!
+    ready=
+    for attempt in $(seq 1 100); do
+      if "$cli_binary" --endpoint="http://127.0.0.1:$listen_port" api lb-check >/dev/null 2>&1; then ready=1; break; fi
+      kill -0 "$server_pid" 2>/dev/null || break
+      sleep 0.1
+    done
+    if [ -z "$ready" ]; then cat "$task_tmp/server.log"; return 1; fi
+    cmd="$cli_binary --endpoint=http://127.0.0.1:$listen_port ${extra_args}"
+  fi
+  echo "$cmd" > "$exec_command_file"
+  bash "$exec_command_file" > "$test_outfile" 2> "$test_logfile"
   execution_result=$?
+  if [ -n "$server_pid" ]; then kill "$server_pid"; wait "$server_pid" 2>/dev/null; server_pid=; fi
 
   # restore the original config
   if [ "$test_config_file" != "$test_config_file_save" ] ; then
@@ -174,7 +192,8 @@ EOF
 
   if [ $execution_result -ne 0 ] ; then
     echo
-    echo "ERROR $test_name execution failure. cat $test_logfile"
+    echo "ERROR $test_name execution failure"
+    cat "$test_logfile"
     return 1
   fi
 
@@ -197,7 +216,7 @@ EOF
 
 build_binary() {
   echo "Building"
-  go build -mod=readonly -o $orchestrator_binary ./cmd/orchestrator
+  make binary cli BINARY="$orchestrator_binary" CLI_BINARY="$cli_binary"
 }
 
 
@@ -207,7 +226,7 @@ deploy_internal_db() {
     --config=${test_config_file}
     --debug \
     --stack \
-    -c redeploy-internal-db"
+    admin redeploy-internal-db"
   echo_dot
   echo $cmd > $exec_command_file
   echo_dot
@@ -221,7 +240,13 @@ deploy_internal_db() {
 }
 
 generate_config_file() {
-  cp ${tests_path}/orchestrator.conf.json ${test_config_file}
+  python3 - "$tests_path/orchestrator.conf.json" "$test_config_file" "$test_mysql_defaults_file" <<'PYCONFIG'
+import json,re,sys
+text=open(sys.argv[1]).read(); config=json.loads(re.sub(r",\s*([}\]])",r"\1",text))
+config["MySQLOrchestratorCredentialsConfigFile"]=sys.argv[3]
+config["AuditLogFile"]=""
+with open(sys.argv[2],"w") as f: json.dump(config,f)
+PYCONFIG
   sed -i -e "s/backend-db-placeholder/${db_type}/g" ${test_config_file}
   sed -i -e "s^sqlite-data-file-placeholder^${sqlite_file}^g" ${test_config_file}
   touch "$test_mysql_defaults_file" # required even for sqlite because config file references the my.cnf cgf file
@@ -237,7 +262,11 @@ test_all() {
   echo "- deploy_internal_db OK"
 
   test_pattern="${1:-.}"
-  find $tests_path -mindepth 1 -maxdepth 1 ! -path . -type d | xargs ls -d1 | cut -d "/" -f 4 | egrep "$test_pattern" | while read test_name ; do
+  local matched=0
+  for test_dir in "$tests_path"/*/; do
+    test_name=$(basename "$test_dir")
+    [[ "$test_name" =~ $test_pattern ]] || continue
+    matched=$((matched + 1))
     test_single "$test_name"
     if [ $? -ne 0 ] ; then
       echo "+ FAIL"
@@ -247,6 +276,7 @@ test_all() {
       echo "+ pass"
     fi
   done
+  if [ "$matched" -eq 0 ]; then echo "No fixtures match: $test_pattern"; return 1; fi
 }
 
 test_db() {

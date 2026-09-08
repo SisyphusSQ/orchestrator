@@ -1,20 +1,15 @@
 # Upgrading orchestrator
 
+## 独立 Go HTTP 客户端（TOO-426）
+
+一次性移除旧 Shell 客户端、直连业务 CLI、`-c`/`cli`、旧参数别名和环境变量。安装 `orch` 并使用 `ORCH_ENDPOINT` 等新配置。服务启动从 `http` 改为 `server`；本地维护迁入 `orchestrator admin`。不需要迁移数据库数据；不能仅替换二进制而保留旧启动脚本。回滚需同时恢复上一版本的服务端、客户端、启动配置及脚本。新 `set-general-attribute`、`delete-all-instance-tags` 及标签删除结果契约要求集群节点使用同一新版本，首次使用前完成全节点升级；本卡不承诺旧节点混跑。
+
+详见 [orch](orch.md) 和 [完整能力映射](orch-commands.md)。
+
 Review the breaking changes on this page before replacing an existing `orchestrator` binary. Unreleased changes remain listed here until they are included in a release.
 
 ## Unreleased breaking changes
 
-### Cobra 命令行与旧调用兼容
-
-Go 二进制新增 `orchestrator <command>` 原生子命令；原有 `-c <command>`、
-`cli` 模式、旧命令别名及已注册的单横线长参数继续支持。不要同时指定
-原生操作子命令与 `-c`；多余位置参数和未知帮助主题现在会明确报错。
-参数可放在子命令前后；字符串参数值仍保持原样，布尔值使用 `=false` 关闭。
-
-帮助改由 Cobra 生成并写入 stdout；无参数、帮助、版本和补全不再加载配置或
-初始化数据库、KV、遥测。依赖旧帮助文本、stderr 帮助输出或忽略多余参数行为
-的脚本需要调整。版本仍按版本号和 Git commit 输出两行，业务命令输出不变。
-详见[命令行兼容说明](executing-via-command-line.md#commands-help-and-compatibility)。
 
 ### Go 源码迁移到 cmd 与 internal
 

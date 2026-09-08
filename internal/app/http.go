@@ -26,6 +26,7 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/http"
 	"github.com/openark/orchestrator/internal/inst"
+	"github.com/openark/orchestrator/internal/kv"
 	"github.com/openark/orchestrator/internal/logic"
 	"github.com/openark/orchestrator/internal/process"
 	"github.com/openark/orchestrator/internal/ssl"
@@ -38,6 +39,9 @@ var agentSSLPEMPassword []byte
 
 // Http starts serving
 func Http(continuousDiscovery bool) error {
+	if err := kv.InitKVStores(); err != nil {
+		return fmt.Errorf("initialize KV stores: %w", err)
+	}
 	logic.AcceptSignals()
 	promptForSSLPasswords()
 	closeMonitor := startHealthMonitor()

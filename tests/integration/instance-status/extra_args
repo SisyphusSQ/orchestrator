@@ -1,1 +1,1 @@
--c instance-status -i testhost:22294
+instance-status -i testhost:22294

@@ -8,15 +8,15 @@ Tagging is provided as a service to the user and is not used internally by `orch
 
 The following commands are supported. A breakdown follows:
 
-- `orchestrator-client -c tag -i some.instance --tag name=value`
-- `orchestrator-client -c tag -i some.instance --tag name`
-- `orchestrator-client -c untag -i some.instance -t name`
-- `orchestrator-client -c untag-all -t name=value`
-- `orchestrator-client -c tags -i some.instance`
-- `orchestrator-client -c tag-value -i some.instance -t name`
-- `orchestrator-client -c tagged -t name`
-- `orchestrator-client -c tagged -t name=value`
-- `orchestrator-client -c tagged -t name=`
+- `orch tag -i some.instance --tag name=value`
+- `orch tag -i some.instance --tag name`
+- `orch untag -i some.instance -t name`
+- `orch untag-all -t name=value`
+- `orch tags -i some.instance`
+- `orch tag-value -i some.instance -t name`
+- `orch tagged -t name`
+- `orch tagged -t name=value`
+- `orch tagged -t name=`
 
 and these API endpoints:
 
@@ -51,7 +51,7 @@ Though not strictly enforced, avoid using special characters/punctuations.
 
 Example:
 ```shell
-$ orchestrator-client -c tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
+$ orch tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
 ```
 In the above we chose to create a tag named `vttablet_alias` with a value.
 
@@ -68,7 +68,7 @@ You may tags:
 
 Example:
 ```shell
-$ orchestrator-client -c untag -i db-host-01:3306 --tag vttablet_alias
+$ orch untag -i db-host-01:3306 --tag vttablet_alias
 ```
 
 ### Untagging: multiple instances
@@ -77,7 +77,7 @@ $ orchestrator-client -c untag -i db-host-01:3306 --tag vttablet_alias
 
 Example:
 ```shell
-$ orchestrator-client -c untag-all --tag vttablet_alias=dc1-0123456789
+$ orch untag-all --tag vttablet_alias=dc1-0123456789
 ```
 
 ### Listing instance tags
@@ -86,10 +86,10 @@ For a given instance `-c tags` or `api/tags` lists all known tags.
 
 Example:
 ```shell
-$ orchestrator-client -c tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
-$ orchestrator-client -c tag -i db-host-01:3306 --tag old-hardware
+$ orch tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
+$ orch tag -i db-host-01:3306 --tag old-hardware
 
-$ orchestrator-client -c tags -i db-host-01:3306
+$ orch tags -i db-host-01:3306
 old-hardware=
 vttablet_alias=dc1-0123456789
 ```
@@ -104,14 +104,14 @@ For a given instance or cluster alias `-c topology-tags` or `api/topology-tags` 
 
 Example:
 ```shell
-$ orchestrator-client -c tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
-$ orchestrator-client -c tag -i db-host-01:3306 --tag old-hardware
+$ orch tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
+$ orch tag -i db-host-01:3306 --tag old-hardware
 
-$ orchestrator-client -c topology-tags -alias mycluster
+$ orch topology-tags --alias mycluster
 db-host-01:3306     [0s,ok,5.7.23-log,rw,ROW,>>,GTID,P-GTID] [vttablet_alias=dc1-0123456789, old-hardware]
 + db-host-02:3306   [0s,ok,5.7.23-log,ro,ROW,>>,GTID,P-GTID] []
 
-$ orchestrator-client -c topology-tags -i db-host-01:3306
+$ orch topology-tags -i db-host-01:3306
 db-host-01:3306     [0s,ok,5.7.23-log,rw,ROW,>>,GTID,P-GTID] [vttablet_alias=dc1-0123456789, old-hardware]
 + db-host-02:3306   [0s,ok,5.7.23-log,ro,ROW,>>,GTID,P-GTID] []
 ```
@@ -123,14 +123,14 @@ db-host-01:3306     [0s,ok,5.7.23-log,rw,ROW,>>,GTID,P-GTID] [vttablet_alias=dc1
 
 Example:
 ```shell
-$ orchestrator-client -c tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
-$ orchestrator-client -c tag -i db-host-01:3306 --tag old-hardware
-$ orchestrator-client -c tag-value -i db-host-01:3306 --tag vttablet_alias
+$ orch tag -i db-host-01:3306 --tag vttablet_alias=dc1-0123456789
+$ orch tag -i db-host-01:3306 --tag old-hardware
+$ orch tag-value -i db-host-01:3306 --tag vttablet_alias
 dc1-0123456789
-$ orchestrator-client -c tag-value -i db-host-01:3306 --tag old-hardware
+$ orch tag-value -i db-host-01:3306 --tag old-hardware
 
 # <empty value>
-$ orchestrator-client -c tag-value -i db-host-01:3306 --tag no-such-tag
+$ orch tag-value -i db-host-01:3306 --tag no-such-tag
 tag no-such-tag not found for db-host-01:3306
 # in stderr
 ```
@@ -139,15 +139,15 @@ tag no-such-tag not found for db-host-01:3306
 
 `-c tagged` or `api/tagged` lists instances by tags, as follows:
 
-- `-c tagged -tag name=value`: list instances where `name` exists and equals `value`.
-- `-c tagged -tag name`: list instances where `name` exists, regardless of the value.
-- `-c tagged -tag name=`: list instances where `name` exists and has an empty value.
-- `-c tagged -tag name,role=backup`: list instances tagged by `name` (regardless of its value) and are _also_ tagged with `role=backup`
-- `-c tagged -tag !name`: list instances where no tag called `name` exists, regardless of its value
-- `-c tagged -tag ~name`: `~` is a synonym to `!`.
-- `-c tagged -tag name,~role`: list instances tagged by `name` (regardless of its value) and are _not_ tagged by `role` (regardless of its value)
-- `-c tagged -tag ~role=backup`: list instances that _are_ tagged with `role`, but with value other than `backup`.
-  Notice how this differs from `-c tagged -tag ~role` which will list instances which don't have the `role` tag in the first place.
+- `-c tagged --tag name=value`: list instances where `name` exists and equals `value`.
+- `-c tagged --tag name`: list instances where `name` exists, regardless of the value.
+- `-c tagged --tag name=`: list instances where `name` exists and has an empty value.
+- `-c tagged --tag name,role=backup`: list instances tagged by `name` (regardless of its value) and are _also_ tagged with `role=backup`
+- `-c tagged --tag !name`: list instances where no tag called `name` exists, regardless of its value
+- `-c tagged --tag ~name`: `~` is a synonym to `!`.
+- `-c tagged --tag name,~role`: list instances tagged by `name` (regardless of its value) and are _not_ tagged by `role` (regardless of its value)
+- `-c tagged --tag ~role=backup`: list instances that _are_ tagged with `role`, but with value other than `backup`.
+  Notice how this differs from `-c tagged --tag ~role` which will list instances which don't have the `role` tag in the first place.
 
 ### Tags, internal
 

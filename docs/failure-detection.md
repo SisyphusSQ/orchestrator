@@ -147,8 +147,8 @@ The following scenarios are of no interest to `orchestrator`, and while the info
 
 An up-to-date analysis is available via:
 
-- Command line: `orchestrator-client -c replication-analysis`
-  or `orchestrator -c replication-analysis`
+- Command line: `orch replication-analysis`
+  or `orch replication-analysis`
 - Web API: `/api/replication-analysis`
 - Web: `/web/clusters-analysis/` page (`Clusters`->`Failure analysis`).
   This presents an incomplete list of problems, only highlighting actionable ones.

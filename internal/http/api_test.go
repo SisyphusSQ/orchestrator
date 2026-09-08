@@ -71,12 +71,12 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	web := HttpWeb{URLPrefix: "/orchestrator"}
 	registeredAPIsBefore := len(registeredPaths)
 	api.RegisterRequests(standard)
-	if got, want := len(registeredPaths)-registeredAPIsBefore, 239; got != want {
+	if got, want := len(registeredPaths)-registeredAPIsBefore, 258; got != want {
 		t.Fatalf("registered API routes = %d, want %d", got, want)
 	}
 	RegisterObservability(standard, "/orchestrator")
 	web.RegisterRequests(standard)
-	if got, want := len(standard.logicalRoutes), 292; got != want {
+	if got, want := len(standard.logicalRoutes), 311; got != want {
 		t.Fatalf("standard logical routes = %d, want %d", got, want)
 	}
 
@@ -93,7 +93,7 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	if got, want := len(agents.logicalRoutes), 6; got != want {
 		t.Fatalf("agent logical routes = %d, want %d", got, want)
 	}
-	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 298; got != want {
+	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 317; got != want {
 		t.Fatalf("total logical routes = %d, want %d", got, want)
 	}
 

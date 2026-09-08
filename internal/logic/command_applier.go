@@ -19,6 +19,7 @@ package logic
 import (
 	"encoding/json"
 
+	"github.com/openark/orchestrator/internal/attributes"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/kv"
 	"github.com/openark/orchestrator/internal/raft"
@@ -37,6 +38,12 @@ func NewCommandApplier() *CommandApplier {
 
 func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{} {
 	switch op {
+	case "set-general-attribute":
+		var attribute attributes.HostAttributes
+		if err := json.Unmarshal(value, &attribute); err != nil {
+			return err
+		}
+		return attributes.SetGeneralAttribute(attribute.AttributeName, attribute.AttributeValue)
 	case "heartbeat":
 		return nil
 	case "async-snapshot":
@@ -79,6 +86,16 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 		return applier.putKeyValue(value)
 	case "put-instance-tag":
 		return applier.putInstanceTag(value)
+	case "delete-all-instance-tags":
+		tag := inst.Tag{}
+		if err := json.Unmarshal(value, &tag); err != nil {
+			return err
+		}
+		removed, err := inst.Untag(nil, &tag)
+		if err != nil {
+			return err
+		}
+		return removed
 	case "delete-instance-tag":
 		return applier.deleteInstanceTag(value)
 	case "leader-uri":
@@ -276,8 +293,11 @@ func (applier *CommandApplier) deleteInstanceTag(value []byte) interface{} {
 	if err := json.Unmarshal(value, &instanceTag); err != nil {
 		return log.Errore(err)
 	}
-	_, err := inst.Untag(&instanceTag.Key, &instanceTag.T)
-	return err
+	removed, err := inst.Untag(&instanceTag.Key, &instanceTag.T)
+	if err != nil {
+		return err
+	}
+	return removed
 }
 
 func (applier *CommandApplier) leaderURI(value []byte) interface{} {
