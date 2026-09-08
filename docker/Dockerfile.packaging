@@ -24,7 +24,6 @@ RUN apt-get install -y curl rsync gcc g++ bash git tar rpm
 
 WORKDIR /orchestrator
 COPY go.mod go.sum ./
-COPY go/golib/go.mod go/golib/go.sum ./go/golib/
 RUN go mod download
 COPY . .
 ARG RELEASE_VERSION=

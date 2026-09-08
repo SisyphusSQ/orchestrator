@@ -67,17 +67,14 @@ check-build-tools: check-go
 check-docker:
 	@command -v "$(DOCKER)" >/dev/null 2>&1 || { echo "docker binary not found in PATH" >&2; exit 1; }
 
-deps: check-go ## 下载并校验根模块与 go/golib 模块依赖
+deps: check-go ## 下载并校验根模块依赖
 	@test ! -d vendor || { echo "vendor directory must not be committed; use go.mod and go.sum" >&2; exit 1; }
 	$(GO) mod download
 	$(GO) mod verify
 	$(GO) mod tidy -diff
-	$(GO) -C go/golib mod download
-	$(GO) -C go/golib mod verify
-	$(GO) -C go/golib mod tidy -diff
 
 fmt-check: check-go ## 只读检查 Go 源码格式，不修改工作区
-	@unformatted="$$(gofmt -s -l go)"; \
+	@unformatted="$$(gofmt -s -l cmd internal)"; \
 	if [[ -n "$$unformatted" ]]; then \
 		echo "The following files need gofmt -s:" >&2; \
 		echo "$$unformatted" >&2; \
@@ -88,16 +85,15 @@ binary: check-build-tools ## 仅构建 orchestrator 二进制
 	@mkdir -p "$(dir $(BINARY))"
 	$(GO_ENV) $(GO) build $(RACE_FLAG) -mod=readonly \
 		-ldflags "-X main.AppVersion=$(VERSION) -X main.GitCommit=$(GIT_COMMIT)" \
-		-o "$(BINARY)" ./go/cmd/orchestrator/main.go
+		-o "$(BINARY)" ./cmd/orchestrator
 
 build: binary ## 构建二进制并同步运行时资源到 bin/
 	rsync -qa --delete ./resources/ "$(dir $(BINARY))resources/"
 
 test-build: build ## 验证构建入口
 
-test-unit: check-go ## 运行根模块与 go/golib 单元测试
-	$(GO) test -mod=readonly ./go/...
-	$(GO) -C go/golib test -mod=readonly ./...
+test-unit: check-go ## 运行全部 Go 包单元测试
+	$(GO) test -mod=readonly ./...
 
 test-integration: check-go ## 运行核心集成测试；可通过 INTEGRATION_ARGS 过滤
 	./tests/integration/test.sh $(INTEGRATION_ARGS)

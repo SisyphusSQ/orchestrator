@@ -114,9 +114,9 @@ span 不记录原始 SQL、参数、命令、实例地址或错误全文；错�
 ## 验证入口
 
 - `make test-unit`：模块级单元/fixture；覆盖指标结果、单位、上限、健康陈旧失效、旧接口/配置删除、gzip、队列与 semaphore 释放。
-- `go test -race -mod=readonly ./go/observability ./go/discovery ./go/http ./go/inst ./go/app ./go/config`：本次并发边界。
+- `go test -race -mod=readonly ./internal/observability ./internal/discovery ./internal/http ./internal/inst ./internal/app ./internal/config`：本次并发边界。
 - `make test-observability`：Prometheus 告警语法与触发/恢复 fixture，需要现有 promtool。
 - `make cve`：仓库固定工具版本的漏洞检查。
-- `go test -mod=readonly ./go/observability -run='^$' -bench=BenchmarkTelemetry -benchmem`：真实 SDK 启用下的记录和抓取微基准；不代表生产负载或旧版对照。
+- `go test -mod=readonly ./internal/observability -run='^$' -bench=BenchmarkTelemetry -benchmem`：真实 SDK 启用下的记录和抓取微基准；不代表生产负载或旧版对照。
 - 本地集成必须真正抓取 `/metrics`、导入 Grafana JSON、执行所有 PromQL、检查认证/URLPrefix/节点本地行为；HTTP 200 或 JSON 可解析本身不代表采集成功。
 - OTLP fixture 与真实 Collector/Tempo 分开记录；SQLite fixture 与真实 MySQL/多节点 Raft/生产业务 E2E 分开记录。未运行项明确写 Not Run。

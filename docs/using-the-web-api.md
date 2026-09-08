@@ -22,7 +22,7 @@ By way of example:
 
 ### Full listing
 
-The de-facto listing is the code, please see [api.go](https://github.com/openark/orchestrator/blob/master/go/http/api.go) (scroll down to `RegisterRequests`).
+The de-facto listing is the code, please see [api.go](../internal/http/api.go) (scroll down to `RegisterRequests`).
 
 You may also appreciate looking at [orchestrator-client](orchestrator-client.md) ([source code](https://github.com/openark/orchestrator/blob/master/resources/bin/orchestrator-client)) to see how command line interface is translated to API calls.
 

@@ -1,0 +1,167 @@
+/*
+   Copyright 2015 Shlomi Noach, courtesy Booking.com
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package inst
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/openark/orchestrator/internal/config"
+	"github.com/openark/orchestrator/internal/db"
+	"github.com/openark/orchestrator/internal/golib/log"
+	"gorm.io/gorm"
+)
+
+// writePoolInstances will write (and override) a single cluster name mapping
+func writePoolInstances(pool string, instanceKeys [](*InstanceKey)) error {
+	writeFunc := func() error {
+		dbh, err := db.OpenOrchestratorGORMContext(context.Background())
+		if err != nil {
+			return log.Errore(err)
+		}
+		return dbh.Transaction(func(tx *gorm.DB) error {
+			if _, err := db.ExecOrchestratorGORM(tx, `delete from database_instance_pool where pool = ?`, pool); err != nil {
+				return log.Errore(err)
+			}
+			query := `insert into database_instance_pool (hostname, port, pool, registered_at) values (?, ?, ?, now())`
+			for _, instanceKey := range instanceKeys {
+				if _, err := db.ExecOrchestratorGORM(tx, query, instanceKey.Hostname, instanceKey.Port, pool); err != nil {
+					return log.Errore(err)
+				}
+			}
+			return nil
+		})
+	}
+	return ExecDBWriteFunc(writeFunc)
+}
+
+// ReadClusterPoolInstances reads cluster-pool-instance associationsfor given cluster and pool
+func ReadClusterPoolInstances(clusterName string, pool string) (result [](*ClusterPoolInstance), err error) {
+	args := []interface{}{}
+	whereClause := ``
+	if clusterName != "" {
+		whereClause = `
+			where
+				database_instance.cluster_name = ?
+				and ? in ('', pool)
+		`
+		args = append(args, clusterName, pool)
+	}
+	query := fmt.Sprintf(`
+		select
+			cluster_name,
+			ifnull(alias, cluster_name) as alias,
+			database_instance_pool.*
+		from
+			database_instance
+			join database_instance_pool using (hostname, port)
+			left join cluster_alias using (cluster_name)
+		%s
+		`, whereClause)
+	type clusterPoolRow struct {
+		ClusterName  string `gorm:"column:cluster_name"`
+		ClusterAlias string `gorm:"column:alias"`
+		Pool         string `gorm:"column:pool"`
+		Hostname     string `gorm:"column:hostname"`
+		Port         int    `gorm:"column:port"`
+	}
+	rows, err := db.QueryOrchestratorRows[clusterPoolRow](context.Background(), query, args...)
+	for _, row := range rows {
+		clusterPoolInstance := ClusterPoolInstance{
+			ClusterName:  row.ClusterName,
+			ClusterAlias: row.ClusterAlias,
+			Pool:         row.Pool,
+			Hostname:     row.Hostname,
+			Port:         row.Port,
+		}
+		result = append(result, &clusterPoolInstance)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// ReadAllClusterPoolInstances returns all clusters-pools-insatnces associations
+func ReadAllClusterPoolInstances() ([](*ClusterPoolInstance), error) {
+	return ReadClusterPoolInstances("", "")
+}
+
+// ReadClusterPoolInstancesMap returns association of pools-to-instances for a given cluster
+// and potentially for a given pool.
+func ReadClusterPoolInstancesMap(clusterName string, pool string) (*PoolInstancesMap, error) {
+	var poolInstancesMap = make(PoolInstancesMap)
+
+	clusterPoolInstances, err := ReadClusterPoolInstances(clusterName, pool)
+	if err != nil {
+		return nil, nil
+	}
+	for _, clusterPoolInstance := range clusterPoolInstances {
+		if _, ok := poolInstancesMap[clusterPoolInstance.Pool]; !ok {
+			poolInstancesMap[clusterPoolInstance.Pool] = [](*InstanceKey){}
+		}
+		poolInstancesMap[clusterPoolInstance.Pool] = append(poolInstancesMap[clusterPoolInstance.Pool], &InstanceKey{Hostname: clusterPoolInstance.Hostname, Port: clusterPoolInstance.Port})
+	}
+
+	return &poolInstancesMap, nil
+}
+
+func ReadAllPoolInstancesSubmissions() ([]PoolInstancesSubmission, error) {
+	result := []PoolInstancesSubmission{}
+	query := `
+		select
+			pool,
+			min(registered_at) as registered_at,
+			GROUP_CONCAT(concat(hostname, ':', port)) as hosts
+		from
+			database_instance_pool
+		group by
+			pool
+	`
+	type poolSubmissionRow struct {
+		Pool         string `gorm:"column:pool"`
+		RegisteredAt string `gorm:"column:registered_at"`
+		Hosts        string `gorm:"column:hosts"`
+	}
+	rows, err := db.QueryOrchestratorRows[poolSubmissionRow](context.Background(), query)
+	for _, row := range rows {
+		submission := PoolInstancesSubmission{}
+		submission.Pool = row.Pool
+		submission.CreatedAt, _ = time.Parse(db.DateTimeFormat, row.RegisteredAt)
+		submission.RegisteredAt = row.RegisteredAt
+		submission.DelimitedInstances = row.Hosts
+		result = append(result, submission)
+	}
+
+	return result, log.Errore(err)
+}
+
+// ExpirePoolInstances cleans up the database_instance_pool table from expired items
+func ExpirePoolInstances() error {
+	_, err := db.ExecOrchestrator(`
+			delete
+				from database_instance_pool
+			where
+				registered_at < now() - interval ? minute
+			`,
+		config.Config.InstancePoolExpiryMinutes,
+	)
+	return log.Errore(err)
+}

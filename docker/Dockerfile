@@ -20,7 +20,6 @@ RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git make
 
 WORKDIR /orchestrator
 COPY go.mod go.sum ./
-COPY go/golib/go.mod go/golib/go.sum ./go/golib/
 RUN go mod download
 COPY . .
 RUN make build
