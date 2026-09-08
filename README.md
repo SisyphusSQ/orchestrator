@@ -1,96 +1,71 @@
-![](https://github.com/openark/orchestrator/workflows/CI/badge.svg)
+# orchestrator
 
-当前命令入口：服务端 `orchestrator server`，独立 Go HTTP 客户端 `orch`。客户端构建使用 `make cli`，完整构建使用 `make build`；详见 [客户端说明](docs/orch.md)。旧直连 CLI 与 Shell 客户端不再提供。
+[![CI](https://github.com/SisyphusSQ/orchestrator/actions/workflows/main.yml/badge.svg)](https://github.com/SisyphusSQ/orchestrator/actions/workflows/main.yml)
 
-服务端仅支持 Raft；开发可使用单节点 Raft，生产使用多节点。每个节点独立持有 MySQL/SQLite 元数据库。建群步骤见 [Raft 配置](docs/configuration-raft.md)，移除项见 [升级说明](docs/upgrading.md)。
+[中文](#中文) · [English](#english) · [GitHub Wiki](https://github.com/SisyphusSQ/orchestrator/wiki)
 
-前端源码位于 `web/`，使用 React、TypeScript 与 Ant Design。`make web-deps && make binary` 构建包含页面和 API 的单个 `orchestrator` 二进制；运行时无需外置前端资源或 Node。`make storybook` 启动组件与业务状态预览，详见 [Web 开发与 Storybook](docs/web.md)。
-![](https://github.com/openark/orchestrator/workflows/upgrade/badge.svg)
-![](https://github.com/openark/orchestrator/workflows/system%20tests/badge.svg)
-[![downloads](https://img.shields.io/github/downloads/openark/orchestrator/total.svg)](https://github.com/openark/orchestrator/releases) [![release](https://img.shields.io/github/release/openark/orchestrator.svg)](https://github.com/openark/orchestrator/releases)
+## 中文
 
-> **NOTE:** This is a fork of the abandoned [Orchestrator](https://github.com/openark/orchestrator) project. Percona is not the public maintainer of the Orchestrator project. We modify this fork almost exclusively for use in our Kubernetes Operators, but we make our changes available to the open-source community if they suit your needs.
+`orchestrator` 是 MySQL 复制拓扑发现、调整和故障恢复服务。本仓库在历史 orchestrator 项目基础上继续维护，当前运行架构与旧版有几项关键差异：
 
->We are not currently entertaining external enhancements or feature requests.  We do, however, believe Orchestrator has potential and are open to exploring its future as a community-driven project. We welcome collaboration with interested organizations. Our priority is determining whether sufficient resources (time and funding) can be secured to ensure Orchestrator's continued maintenance and development. We're open to discussing potential partnerships with organizations who might be interested in supporting this effort. 
+- 服务端仅支持 Raft；开发环境也需要显式建立单节点 Raft，生产通常使用 3 或 5 个投票节点。
+- 服务端入口是 `orchestrator server`；远程管理使用独立 Go HTTP 客户端 `orch`，不再提供直连数据库的旧 CLI 或 Shell 客户端。
+- Web 控制台位于 `web/`，使用 React、TypeScript 与 Ant Design，并通过 `go:embed` 编入服务端二进制；运行时不需要外置前端资源或 Node.js。
+- 每个 Raft 节点使用独立的 MySQL 或 SQLite 元数据库。节点之间通过 Raft 协调，不共享元数据库。
+- 节点原生暴露 Prometheus 指标和健康检查，并可向 OTLP HTTP trace endpoint 发送 OpenTelemetry traces。
 
->If you or your organization are willing to contribute resources or funding, please reach out to orchestrator@percona.com.
+快速构建：
 
+```sh
+make deps
+make web-deps
+make build
+bin/orchestrator server --config /absolute/path/orchestrator.conf.json
+```
 
-# orchestrator [[Documentation]](https://github.com/percona/orchestrator/tree/master/docs)
+单独构建客户端：
 
+```sh
+make cli
+ORCH_ENDPOINT=http://127.0.0.1:3000 bin/orch clusters
+```
 
-![Orchestrator logo](https://github.com/openark/orchestrator/raw/master/docs/images/orchestrator-logo-wide.png)
+从 [中文 Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Overview) 开始，或查看仓库内的 [文档索引](docs/README.md)。现有部署升级前必须先阅读 [升级指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)。
 
-`orchestrator` is a MySQL high availability and replication management tool, runs as a service and provides command line access, HTTP API and Web interface. `orchestrator` supports:
+问题与改进建议请提交到本仓库的 [Issues](https://github.com/SisyphusSQ/orchestrator/issues)。发布产物在可用时会出现在 [Releases](https://github.com/SisyphusSQ/orchestrator/releases)。
 
-#### Discovery
+## English
 
-`orchestrator` actively crawls through your topologies and maps them. It reads basic MySQL info such as replication status and configuration.
+`orchestrator` discovers, refactors, and recovers MySQL replication topologies. This maintained fork has several important differences from historical orchestrator releases:
 
-It provides you with slick visualization of your topologies, including replication problems, even in the face of failures.
+- The server is Raft-only. Development also requires an explicitly bootstrapped single-node Raft cluster; production normally uses three or five voters.
+- Run the service with `orchestrator server`. Remote administration uses the standalone Go HTTP client `orch`; the former database-connected CLI and shell client are not available.
+- The React, TypeScript, and Ant Design console lives in `web/` and is embedded in the server binary with `go:embed`; Node.js and external frontend resources are not runtime dependencies.
+- Every Raft node owns an independent MySQL or SQLite metadata backend. Nodes coordinate through Raft rather than sharing a backend database.
+- Every node exposes Prometheus metrics and health endpoints and can export OpenTelemetry traces over OTLP HTTP.
 
-#### Refactoring
+Quick build:
 
-`orchestrator` understands replication rules. It knows about binlog file:position, GTID, Pseudo GTID, Binlog Servers.
+```sh
+make deps
+make web-deps
+make build
+bin/orchestrator server --config /absolute/path/orchestrator.conf.json
+```
 
-Refactoring replication topologies can be a matter of drag & drop a replica under another master. Moving replicas around is safe: `orchestrator` will reject an illegal refactoring attempt.
+Build only the client:
 
-Fine-grained control is achieved by various command line options.
+```sh
+make cli
+ORCH_ENDPOINT=http://127.0.0.1:3000 bin/orch clusters
+```
 
-#### Recovery
+Start with the [English Wiki home](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Overview), or browse the in-repository [documentation index](docs/README.md). Existing deployments must read the [upgrade guide](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Upgrading) before replacing a binary.
 
-`orchestrator` uses a holistic approach to detect master and intermediate master failures. Based on information gained from the topology itself, it recognizes a variety of failure scenarios.
+Report problems and propose changes in this repository's [Issues](https://github.com/SisyphusSQ/orchestrator/issues). Published artifacts, when available, appear under [Releases](https://github.com/SisyphusSQ/orchestrator/releases).
 
-Configurable, it may choose to perform automated recovery (or allow the user to choose type of manual recovery). Intermediate master recovery achieved internally to `orchestrator`. Master failover supported by pre/post failure hooks.
+## Project lineage and license
 
-Recovery process utilizes _orchestrator's_ understanding of the topology and of its ability to perform refactoring. It is based on _state_ as opposed to _configuration_: `orchestrator` picks the best recovery method by investigating/evaluating the topology at the time of
-recovery itself.
+This repository is derived from [Percona's orchestrator fork](https://github.com/percona/orchestrator) and the original [openark/orchestrator](https://github.com/openark/orchestrator), authored by [Shlomi Noach](https://github.com/shlomi-noach). Historical attribution is preserved in the repository history and documentation.
 
-#### The interface
-
-`orchestrator` supports:
-
-- Command line interface (love your debug messages, take control of automated scripting)
-- Web API (HTTP GET access)
-- Web interface, a _slick_ one.
-
-![Orcehstrator screenshot](docs/images/orchestrator-topology-8-screenshot.png)
-
-#### Additional perks
-
-- Highly available
-- Controlled master takeovers
-- Manual failovers
-- Failover auditing
-- Audited operations
-- Pseudo-GTID
-- Datacenter/physical location awareness
-- MySQL-Pool association
-- HTTP security/authentication methods
-- There is also an [orchestrator-mysql](https://groups.google.com/forum/#!forum/orchestrator-mysql) Google groups forum to discuss topics related to orchestrator
-- More...
-
-Read the [Orchestrator documentation](https://github.com/openark/orchestrator/tree/master/docs)
-
-Authored by [Shlomi Noach](https://github.com/shlomi-noach):
-
-- 2020- as https://github.com/openark/orchestrator
-- 2016-2020 at [GitHub](http://github.com) as https://github.com/github/orchestrator
-- 2015 at [Booking.com](http://booking.com) as https://github.com/outbrain/orchestrator
-- 2014 at [Outbrain](http://outbrain.com) as https://github.com/outbrain/orchestrator
-
-#### Related projects
-
-- Orchestrator Puppet module: https://github.com/github/puppet-orchestrator-for-mysql
-- Orchestrator Chef Cookbook (1): https://github.com/silviabotros/chef-orchestrator
-- Orchestrator Chef Cookbook (2): https://supermarket.chef.io/cookbooks/orchestrator
-- Nagios / Icinga check based on Orchestrator API: https://github.com/mcrauwel/go-check-orchestrator
-- Light Python wrapper for Orchestrator API: https://github.com/stirlab/python-mysql-orchestrator
-
-#### Developers
-
-Get started developing Orchestrator by [reading the developer docs](/docs/developers.md). Thanks for your interest!
-
-#### License
-
-`orchestrator` is free and open sourced under the [Apache 2.0 license](LICENSE).
+`orchestrator` is licensed under the [Apache License 2.0](LICENSE).

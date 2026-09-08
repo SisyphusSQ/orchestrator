@@ -55,7 +55,7 @@ ifeq ($(MOUNT_TEST_DIR),YES)
 DOCKER_TEST_MOUNT := --mount type=bind,source=$(CURDIR)/tests,destination=/orchestrator/tests
 endif
 
-.PHONY: help check-go check-build-tools check-docker deps fmt-check binary build test-build test-unit test-integration test-docs test-system test test-container install-govulncheck cve image run hub-image docker-test docker-test-ci docker-cve docker-cve-ci package system system-ci raft
+.PHONY: help check-go check-build-tools check-docker deps fmt-check binary build test-build test-unit test-integration test-docs publish-wiki test-system test test-container install-govulncheck cve image run hub-image docker-test docker-test-ci docker-cve docker-cve-ci package system system-ci raft
 
 help: ## 显示可用的构建、测试和容器入口
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -134,6 +134,9 @@ test-integration: check-go ## 运行核心集成测试；可通过 INTEGRATION_A
 
 test-docs: ## 检查文档目录与本地链接
 	./script/test-docs
+
+publish-wiki: ## 将已提交的 docs/wiki 受管页面发布到 GitHub Wiki
+	./script/publish-wiki
 
 test-system: ## 运行核心系统测试；需要已准备好的 system 环境
 	./tests/system/test.sh $(SYSTEM_TEST_ARGS)

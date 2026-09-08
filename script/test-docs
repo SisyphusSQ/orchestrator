@@ -1,24 +1,166 @@
 #!/bin/bash
 
-validate_documentation() {
-  echo "# Validating documentation"
-  echo "## docs/toc.md and docs/README.md must be identical"
-  diff docs/toc.md docs/README.md > /dev/null 2> /dev/null || exit 1
-  echo "OK"
+set -uo pipefail
 
-  echo "## Checking if all local links are backed by doc files"
-  egrep -R '[(][^/()]+.md[)]' docs/ -o --no-file | sort | uniq | tr -d '()' | while read link ; do
-    echo "### Checking link: $link"
-    ls docs/$link > /dev/null && echo "## - yes" || exit 1
-  done || exit 1
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root" || exit 1
 
-  echo "## Checking every doc page has an inbound link"
-  ls docs/*.md | grep -v README.md | while read f ; do
-    docfile="$(basename $f)"
-    echo "### Checking if doc file $docfile is linked from another doc"
-    egrep -c -R "[(]$docfile[)]" docs/ -q && echo "## - yes" || exit 1
-  done || exit 1
+failures=0
+
+fail() {
+  echo "ERROR: $*" >&2
+  failures=$((failures + 1))
 }
 
+strip_link_title() {
+  local target="$1"
+  if [[ "${target:0:1}" == "<" ]]; then
+    target="${target#<}"
+    target="${target%%>*}"
+  else
+    target="${target%% *}"
+  fi
+  printf '%s' "$target"
+}
 
-validate_documentation
+check_target() {
+  local source="$1"
+  local raw_target="$2"
+  local target
+  local path
+  local slug
+
+  target="$(strip_link_title "$raw_target")"
+  target="${target%%#*}"
+  target="${target%%\?*}"
+
+  [[ -n "$target" ]] || return 0
+
+  case "$target" in
+    http://*|https://*|mailto:*|data:*|javascript:*|ftp:*)
+      case "$target" in
+        https://github.com/SisyphusSQ/orchestrator/wiki/*)
+          slug="${target#https://github.com/SisyphusSQ/orchestrator/wiki/}"
+          slug="${slug%%/*}"
+          [[ -f "docs/wiki/${slug}.md" ]] || fail "$source links to unmanaged or missing Wiki page: $raw_target"
+          ;;
+        https://github.com/SisyphusSQ/orchestrator/blob/main/*)
+          path="${target#https://github.com/SisyphusSQ/orchestrator/blob/main/}"
+          [[ -e "$path" ]] || fail "$source links to missing repository file: $raw_target"
+          ;;
+        https://github.com/SisyphusSQ/orchestrator/tree/main/*)
+          path="${target#https://github.com/SisyphusSQ/orchestrator/tree/main/}"
+          [[ -d "$path" ]] || fail "$source links to missing repository directory: $raw_target"
+          ;;
+      esac
+      return 0
+      ;;
+  esac
+
+  if [[ "$target" == /* ]]; then
+    path=".${target}"
+  else
+    path="$(dirname "$source")/$target"
+  fi
+
+  if [[ -e "$path" ]]; then
+    return 0
+  fi
+  if [[ "$source" == docs/wiki/* && -e "${path}.md" ]]; then
+    return 0
+  fi
+  fail "$source links to missing local target: $raw_target"
+}
+
+echo "# Validating Markdown links and images"
+while IFS=$'\t' read -r source target; do
+  [[ -n "$source" && -n "$target" ]] || continue
+  check_target "$source" "$target"
+done < <(
+  find README.md docs -type f -name '*.md' -print0 |
+    while IFS= read -r -d '' file; do
+      perl -0777 -ne 's/```.*?```//gs; s/~~~.*?~~~//gs; s/`[^`\n]*`//g; while (/!?\[[^]]*\]\(([^)\n]+)\)/g) { print "$ARGV\t$1\n" }' "$file"
+    done
+)
+
+wiki_dir="docs/wiki"
+manifest="$wiki_dir/managed-pages.txt"
+
+echo "# Validating Wiki manifest"
+[[ -f "$manifest" ]] || fail "missing $manifest"
+[[ -f "$wiki_dir/Home.md" ]] || fail "missing Wiki Home.md"
+[[ -f "$wiki_dir/_Sidebar.md" ]] || fail "missing Wiki _Sidebar.md"
+[[ -f "$wiki_dir/_Footer.md" ]] || fail "missing Wiki _Footer.md"
+
+duplicate_pages="$(sort "$manifest" | uniq -d)"
+[[ -z "$duplicate_pages" ]] || fail "duplicate Wiki manifest entries: $duplicate_pages"
+
+manifest_count=0
+while IFS= read -r page || [[ -n "$page" ]]; do
+  [[ -n "$page" ]] || continue
+  manifest_count=$((manifest_count + 1))
+
+  if [[ ! "$page" =~ ^[A-Za-z0-9._-]+\.md$ ]] || [[ "$page" == */* ]]; then
+    fail "unsafe Wiki manifest path: $page"
+    continue
+  fi
+  [[ -f "$wiki_dir/$page" ]] || {
+    fail "manifest page is missing: $page"
+    continue
+  }
+
+  case "$page" in
+    EN-*.md)
+      topic="${page#EN-}"
+      counterpart="ZH-$topic"
+      slug="${counterpart%.md}"
+      grep -Fq "/wiki/$slug" "$wiki_dir/$page" ||
+        fail "$page does not link to $counterpart"
+      grep -Fxq "$counterpart" "$manifest" ||
+        fail "$page has no Chinese manifest pair"
+      ;;
+    ZH-*.md)
+      topic="${page#ZH-}"
+      counterpart="EN-$topic"
+      slug="${counterpart%.md}"
+      grep -Fq "/wiki/$slug" "$wiki_dir/$page" ||
+        fail "$page does not link to $counterpart"
+      grep -Fxq "$counterpart" "$manifest" ||
+        fail "$page has no English manifest pair"
+      ;;
+  esac
+
+  case "$page" in
+    Home.md|_Sidebar.md|_Footer.md)
+      ;;
+    *)
+      slug="${page%.md}"
+      grep -Fq "/wiki/$slug" "$wiki_dir/Home.md" "$wiki_dir/_Sidebar.md" ||
+        fail "$page is not reachable from Home.md or _Sidebar.md"
+      ;;
+  esac
+done < "$manifest"
+
+source_count=0
+for page_path in "$wiki_dir"/*.md; do
+  page="$(basename "$page_path")"
+  [[ "$page" == "README.md" ]] && continue
+  source_count=$((source_count + 1))
+  grep -Fxq "$page" "$manifest" || fail "Wiki page is not managed: $page"
+done
+
+[[ "$manifest_count" -eq "$source_count" ]] ||
+  fail "Wiki manifest count $manifest_count does not match managed source count $source_count"
+
+echo "# Checking documentation classification"
+[[ ! -e docs/orch-validation.md ]] ||
+  fail "issue-specific validation must live under docs/verification"
+[[ -f docs/verification/orch-cli-too-426.md ]] ||
+  fail "moved TOO-426 verification record is missing"
+
+if [[ "$failures" -ne 0 ]]; then
+  echo "Documentation validation failed with $failures error(s)." >&2
+  exit 1
+fi
+
+echo "Documentation validation passed: $manifest_count managed Wiki pages."

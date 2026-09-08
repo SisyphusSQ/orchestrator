@@ -1,0 +1,105 @@
+#!/bin/bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source_dir="$repo_root/docs/wiki"
+manifest="$source_dir/managed-pages.txt"
+published_manifest=".orchestrator-managed-pages"
+
+cd "$repo_root"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Wiki publication requires a clean committed source tree." >&2
+  exit 1
+fi
+
+source_revision="$(git rev-parse HEAD)"
+remote_url="${WIKI_REMOTE_URL:-}"
+
+if [[ -z "$remote_url" ]]; then
+  origin_url="$(git remote get-url origin)"
+  case "$origin_url" in
+    https://github.com/*.git|git@github.com:*.git|ssh://git@github.com/*.git)
+      remote_url="${origin_url%.git}.wiki.git"
+      ;;
+    *)
+      echo "Cannot derive a GitHub Wiki URL from origin; set WIKI_REMOTE_URL." >&2
+      exit 1
+      ;;
+  esac
+fi
+
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/orchestrator-wiki.XXXXXX")"
+trap 'rm -rf "$tmp_root"' EXIT
+wiki_dir="$tmp_root/wiki"
+
+if ! git clone --quiet "$remote_url" "$wiki_dir"; then
+  echo "Unable to clone the GitHub Wiki." >&2
+  echo "If this is the first publication, create the initial Wiki page in GitHub and retry." >&2
+  exit 1
+fi
+
+safe_page() {
+  local page="$1"
+  [[ "$page" =~ ^[A-Za-z0-9._-]+\.md$ ]] && [[ "$page" != */* ]]
+}
+
+declare -a managed_paths
+managed_paths=("$published_manifest")
+
+duplicate_pages="$(sort "$manifest" | uniq -d)"
+if [[ -n "$duplicate_pages" ]]; then
+  echo "Duplicate paths in source manifest: $duplicate_pages" >&2
+  exit 1
+fi
+
+if [[ -f "$wiki_dir/$published_manifest" ]]; then
+  while IFS= read -r page || [[ -n "$page" ]]; do
+    [[ -n "$page" ]] || continue
+    safe_page "$page" || {
+      echo "Refusing unsafe path in published manifest: $page" >&2
+      exit 1
+    }
+    managed_paths+=("$page")
+    if ! grep -Fxq "$page" "$manifest"; then
+      rm -f "$wiki_dir/$page"
+    fi
+  done < "$wiki_dir/$published_manifest"
+fi
+
+while IFS= read -r page || [[ -n "$page" ]]; do
+  [[ -n "$page" ]] || continue
+  safe_page "$page" || {
+    echo "Refusing unsafe path in source manifest: $page" >&2
+    exit 1
+  }
+  [[ -f "$source_dir/$page" ]] || {
+    echo "Missing managed source page: $page" >&2
+    exit 1
+  }
+  managed_paths+=("$page")
+  install -m 0644 "$source_dir/$page" "$wiki_dir/$page"
+done < "$manifest"
+
+install -m 0644 "$manifest" "$wiki_dir/$published_manifest"
+git -C "$wiki_dir" add -A -- "${managed_paths[@]}"
+
+if git -C "$wiki_dir" diff --cached --quiet; then
+  echo "GitHub Wiki already matches source revision $source_revision."
+  exit 0
+fi
+
+if ! git -C "$wiki_dir" config --get user.name >/dev/null; then
+  git -C "$wiki_dir" config user.name "SisyphusSQ documentation"
+fi
+if ! git -C "$wiki_dir" config --get user.email >/dev/null; then
+  git -C "$wiki_dir" config user.email "docs@sisyphussq.invalid"
+fi
+
+wiki_branch="$(git -C "$wiki_dir" symbolic-ref --short HEAD)"
+git -C "$wiki_dir" commit --quiet -m "docs: sync wiki from $source_revision"
+git -C "$wiki_dir" push origin "HEAD:$wiki_branch"
+
+wiki_revision="$(git -C "$wiki_dir" rev-parse HEAD)"
+echo "Published source $source_revision to Wiki commit $wiki_revision."

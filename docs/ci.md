@@ -8,7 +8,7 @@
 
 ## Build
 
-Running on pull requests, the [main CI](https://github.com/openark/orchestrator/blob/master/.github/workflows/main.yml) job validates the following:
+Running on pull requests, the [main CI](https://github.com/SisyphusSQ/orchestrator/blob/main/.github/workflows/main.yml) job validates the following:
 
 - Validate source code is formatted using `gofmt`
 - Build passes
@@ -18,20 +18,20 @@ Running on pull requests, the [main CI](https://github.com/openark/orchestrator/
   - Using `MySQL` backend
 - Documentation tests pass: ensuring pages and links are not orphaned.
 
-The [action](https://github.com/openark/orchestrator/actions?query=workflow%3ACI) completes by producing an artifact: an `orchestrator` binary for Linux `amd64`. The artifact is kept for a couple months per GitHub Actions policy.
+The [action](https://github.com/SisyphusSQ/orchestrator/actions/workflows/main.yml) completes by producing build artifacts according to the current workflow retention policy.
 
 ## Upgrade
 
-[Upgrade](https://github.com/openark/orchestrator/blob/master/.github/workflows/upgrade.yml) runs on pull requests, tests a successful upgrade path from previous version (ie `master`) to PR's branch. This mainly tests internal database structure changes. The test:
+[Upgrade](https://github.com/SisyphusSQ/orchestrator/blob/main/.github/workflows/upgrade.yml) runs on pull requests and tests the workflow's declared upgrade path. This mainly tests internal database structure changes. The test:
 
 - Checks out `master` and run `orchestrator`, once using `SQLite`, once using `MySQL`
 - Checks out `HEAD` (PR's branch) and run `orchestrator` using pre-existing `SQLite` and `MySQL` backends. Expect no error.
 
 ## System
 
-[System tests](https://github.com/openark/orchestrator/blob/master/.github/workflows/system.yml) run as a scheduled job. A system test:
+[System tests](https://github.com/SisyphusSQ/orchestrator/blob/main/.github/workflows/system.yml) run as configured by the current workflow. A system test:
 
-- Sets up a [CI environment](https://github.com/openark/orchestrator-ci-env) which includes:
+- Sets up the configured [CI environment](https://github.com/percona/orchestrator-ci-env), which includes:
   - A replication topology via [DBDeployer](https://www.dbdeployer.com/), with heartbeat injection
   - [HAProxy](http://www.haproxy.org/)
   - [Consul](https://www.consul.io/)

@@ -87,7 +87,7 @@ No.
 
 ### Is orchestrator open source?
 
-Yes. `Orchestrator` is released as open source under the Apache License 2.0 and is available at: https://github.com/openark/orchestrator
+Yes. `orchestrator` is open source under the Apache License 2.0 and this maintained fork is available at: https://github.com/SisyphusSQ/orchestrator
 
 ### Who develops orchestrator and why?
 
