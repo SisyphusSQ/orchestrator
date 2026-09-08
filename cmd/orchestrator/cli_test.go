@@ -1,4 +1,4 @@
-package app
+package main
 
 import (
 	"path/filepath"
@@ -17,18 +17,7 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func TestHelp(t *testing.T) {
-	if err := Cli("help", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", ""); err != nil {
-		t.Fatalf("Cli(help) error: %v", err)
-	}
-	test.S(t).ExpectTrue(len(knownCommands) > 0)
-}
-
 func TestKnownCommands(t *testing.T) {
-	if err := Cli("help", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", ""); err != nil {
-		t.Fatalf("Cli(help) error: %v", err)
-	}
-
 	commandsMap := make(map[string]string)
 	for _, command := range knownCommands {
 		commandsMap[command.Command] = command.Section
@@ -43,7 +32,7 @@ func TestKnownCommands(t *testing.T) {
 	}
 }
 
-func TestCliWrapperReturnsRaftConfigurationError(t *testing.T) {
+func TestRunCLIWrapperReturnsRaftConfigurationError(t *testing.T) {
 	previousRaftEnabled := config.Config.RaftEnabled
 	previousIgnoreRaftSetup := config.RuntimeCLIFlags.IgnoreRaftSetup
 	ignoreRaftSetup := false
@@ -54,12 +43,12 @@ func TestCliWrapperReturnsRaftConfigurationError(t *testing.T) {
 		config.RuntimeCLIFlags.IgnoreRaftSetup = previousIgnoreRaftSetup
 	})
 
-	err := CliWrapper("help", false, "", "", "orc", "", "", "", "", "", "")
+	err := runCLIWrapper("clusters", false, "", "", "orc", "", "", "", "", "", "")
 	if err == nil {
-		t.Fatal("CliWrapper() returned nil for a Raft CLI invocation")
+		t.Fatal("runCLIWrapper() returned nil for a Raft CLI invocation")
 	}
 	if !strings.Contains(err.Error(), "RaftEnabled") {
-		t.Fatalf("CliWrapper() error = %q; want RaftEnabled context", err)
+		t.Fatalf("runCLIWrapper() error = %q; want RaftEnabled context", err)
 	}
 }
 
@@ -74,12 +63,12 @@ func TestCliReturnsKVInitError(t *testing.T) {
 	config.Config.ConsulScheme = "https"
 	config.Config.ConsulTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
 
-	err := Cli("help", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", "")
+	err := runCLI("dump-config", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", "")
 	if err == nil {
-		t.Fatal("Cli() returned nil for a Consul TLS initialization failure")
+		t.Fatal("runCLI() returned nil for a Consul TLS initialization failure")
 	}
 	if !strings.Contains(err.Error(), "initialize KV stores") {
-		t.Fatalf("Cli() error = %q; want initialize KV stores", err)
+		t.Fatalf("runCLI() error = %q; want initialize KV stores", err)
 	}
 }
 

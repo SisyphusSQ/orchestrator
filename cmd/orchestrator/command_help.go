@@ -3,35 +3,15 @@
 	 See https://github.com/openark/orchestrator/blob/master/LICENSE
 */
 
-package app
+package main
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
-const AppPrompt string = `
-orchestrator [-c command] [-i instance] [-d destination] [--verbose|--debug] [... cli ] | http
-
-Cheatsheet:
-    Run orchestrator in HTTP mode:
-
-        orchestrator --debug http
-
-    See all possible commands:
-
-        orchestrator help
-
-    Detailed help for a given command (e.g. "relocate")
-
-        orchestrator help relocate
-`
-
-var CommandHelp map[string]string
+var commandHelp map[string]string
 
 func init() {
-	CommandHelp = make(map[string]string)
-	CommandHelp["relocate"] = `
+	commandHelp = make(map[string]string)
+	commandHelp["relocate"] = `
   Relocate a replica beneath another (destination) instance. The choice of destination is almost arbitrary;
   it must not be a child/descendant of the instance, but otherwise it can be anywhere, and can be a normal replica
   or a binlog server. Orchestrator will choose the best course of action to relocate the replica.
@@ -45,7 +25,7 @@ func init() {
 
   (this command was previously named "relocate-below")
   `
-	CommandHelp["relocate-replicas"] = `
+	commandHelp["relocate-replicas"] = `
   Relocates all or part of the replicas of a given instance under another (destination) instance. This is
   typically much faster than relocating replicas one by one.
   Orchestrator chooses the best course of action to relocation the replicas. It may choose a multi-step operations.
@@ -58,7 +38,7 @@ func init() {
   orchestrator -c relocate-replicas -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master --pattern=regexp.filter
       only apply to those instances that match given regex
   `
-	CommandHelp["move-up-replicas"] = `
+	commandHelp["move-up-replicas"] = `
   Moves replicas of the given instance one level up the topology, making them siblings of given instance.
   This is a (faster) shortcut to executing move-up on all replicas of given instance.
   Examples:
@@ -68,7 +48,7 @@ func init() {
   orchestrator -c move-up-replicas -i replica.whose.subreplicas.will.move.up.com[:3306] --pattern=regexp.filter
       only apply to those instances that match given regex
 	`
-	CommandHelp["move-below"] = `
+	commandHelp["move-below"] = `
   Moves a replica beneath its sibling. Both replicas must be actively replicating from same master.
   The sibling will become instance's master. No action taken when sibling cannot act as master
   (e.g. has no binary logs, is of incompatible version, incompatible binlog format etc.)
@@ -79,7 +59,7 @@ func init() {
   orchestrator -c move-below -d sibling.replica.under.which.to.move.com
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["move-equivalent"] = `
+	commandHelp["move-equivalent"] = `
   Moves a replica beneath another server, based on previously recorded "equivalence coordinates". Such coordinates
   are obtained whenever orchestrator issues a CHANGE MASTER TO. The "before" and "after" masters coordinates are
   persisted. In such cases where the newly relocated replica is unable to replicate (e.g. firewall issues) it is then
@@ -90,21 +70,21 @@ func init() {
 
   orchestrator -c move-equivalent -i replica.to.revert.master.position.com -d master.to.move.to.com
 	`
-	CommandHelp["take-siblings"] = `
+	commandHelp["take-siblings"] = `
   Turn all siblings of a replica into its sub-replicas. No action taken for siblings that cannot become
   replicas of given instance (e.g. incompatible versions, binlog format etc.). This is a (faster) shortcut
   to executing move-below for all siblings of the given instance. Example:
 
   orchestrator -c take-siblings -i replica.whose.siblings.will.move.below.com
 	`
-	CommandHelp["take-master"] = `
+	commandHelp["take-master"] = `
   Turn an instance into a master of its own master; essentially switch the two. Replicas of each of the two
   involved instances are unaffected, and continue to replicate as they were.
   The instance's master must itself be a replica. It does not necessarily have to be actively replicating.
 
   orchestrator -c take-master -i replica.that.will.switch.places.with.its.master.com
 	`
-	CommandHelp["repoint"] = `
+	commandHelp["repoint"] = `
   Make the given instance replicate from another instance without changing the binglog coordinates. There
   are little sanity checks to this and this is a risky operation. Use cases are: a rename of the master's
   host, a corruption in relay-logs, move from beneath MaxScale & Binlog-server. Examples:
@@ -117,7 +97,7 @@ func init() {
   orchestrator -c repoint
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["repoint-replicas"] = `
+	commandHelp["repoint-replicas"] = `
   Repoint all replicas of given instance to replicate back from the instance. This is a convenience method
   which implies a one-by-one "repoint" command on each replica.
 
@@ -126,7 +106,7 @@ func init() {
   orchestrator -c repoint-replicas
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["make-co-master"] = `
+	commandHelp["make-co-master"] = `
   Create a master-master replication. Given instance is a replica which replicates directly from a master.
   The master is then turned to be a replica of the instance. The master is expected to not be a replica.
   The read_only property of the slve is unaffected by this operation. Examples:
@@ -136,7 +116,7 @@ func init() {
   orchestrator -c make-co-master
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["get-candidate-replica"] = `
+	commandHelp["get-candidate-replica"] = `
   Information command suggesting the most up-to-date replica of a given instance, which can be promoted
   as local master to its siblings. If replication is up and running, this command merely gives an
   estimate, since replicas advance and progress continuously in different pace. If all replicas of given
@@ -145,7 +125,7 @@ func init() {
 
   orchestrator -c get-candidate-replica -i instance.with.replicas.one.of.which.may.be.candidate.com
 	`
-	CommandHelp["regroup-replicas-bls"] = `
+	commandHelp["regroup-replicas-bls"] = `
   Given an instance that has Binlog Servers for replicas, promote one such Binlog Server over its other
   Binlog Server siblings.
 
@@ -155,7 +135,7 @@ func init() {
 
   --debug is your friend.
 	`
-	CommandHelp["move-gtid"] = `
+	commandHelp["move-gtid"] = `
   Move a replica beneath another (destination) instance. Orchestrator will reject the operation if GTID is
   not enabled on the replica, or is not supported by the would-be master.
   You may try and move the replica under any other instance; there are no constraints on the family ties the
@@ -168,7 +148,7 @@ func init() {
   orchestrator -c match -d destination.instance.that.becomes.its.master
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["move-replicas-gtid"] = `
+	commandHelp["move-replicas-gtid"] = `
   Moves all replicas of a given instance under another (destination) instance using GTID. This is a (faster)
   shortcut to moving each replica via "move-gtid".
   Orchestrator will only move those replica configured with GTID (either Oracle or MariaDB variants) and under the
@@ -180,7 +160,7 @@ func init() {
   orchestrator -c move-replicas-gtid -i instance.whose.replicas.will.relocate -d instance.that.becomes.their.master --pattern=regexp.filter
       only apply to those instances that match given regex
 	`
-	CommandHelp["regroup-replicas-gtid"] = `
+	commandHelp["regroup-replicas-gtid"] = `
   Given an instance (possibly a crashed one; it is never being accessed), pick one of its replica and make it
   local master of its siblings, using GTID. The rules are similar to those in the "regroup-replicas" command.
   Example:
@@ -189,7 +169,7 @@ func init() {
 
   --debug is your friend.
 	`
-	CommandHelp["match"] = `
+	commandHelp["match"] = `
   Matches a replica beneath another (destination) instance. The choice of destination is almost arbitrary;
   it must not be a child/descendant of the instance. But otherwise they don't have to be direct siblings,
   and in fact (if you know what you're doing), they don't actually have to belong to the same topology.
@@ -205,7 +185,7 @@ func init() {
 
   (this command was previously named "match-below")
 	`
-	CommandHelp["match-replicas"] = `
+	commandHelp["match-replicas"] = `
   Matches all replicas of a given instance under another (destination) instance. This is a (faster) shortcut
   to matching said replicas one by one under the destination instance. In fact, this bulk operation is highly
 	optimized and can execute in orders of magnitue faster, depending on the number of replicas involved and their
@@ -219,7 +199,7 @@ func init() {
 
   (this command was previously named "multi-match-replicas")
 	`
-	CommandHelp["match-up"] = `
+	commandHelp["match-up"] = `
   Transport the replica one level up the hierarchy, making it child of its grandparent. This is
   similar in essence to move-up, only based on Pseudo-GTID. The master of the given instance
   does not need to be alive or connected (and could in fact be crashed). It is never contacted.
@@ -231,7 +211,7 @@ func init() {
   orchestrator -c match-up
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["match-up-replicas"] = `
+	commandHelp["match-up-replicas"] = `
   Matches replicas of the given instance one level up the topology, making them siblings of given instance.
   This is a (faster) shortcut to executing match-up on all replicas of given instance. The instance need
   not be alive / accessib;e / functional. It can be crashed.
@@ -242,14 +222,14 @@ func init() {
   orchestrator -c match-up-replicas -i replica.whose.subreplicas.will.match.up.com[:3306] --pattern=regexp.filter
       only apply to those instances that match given regex
 	`
-	CommandHelp["rematch"] = `
+	commandHelp["rematch"] = `
   Reconnect a replica onto its master, via PSeudo-GTID. The use case for this operation is a non-crash-safe
   replication configuration (e.g. MySQL 5.5) with sync_binlog=1 and log_slave_updates. This operation
   implies crash-safe-replication and makes it possible for the replica to reconnect. Example:
 
   orchestrator -c rematch -i replica.to.rematch.under.its.master
 	`
-	CommandHelp["regroup-replicas"] = `
+	commandHelp["regroup-replicas"] = `
   Given an instance (possibly a crashed one; it is never being accessed), pick one of its replica and make it
   local master of its siblings, using Pseudo-GTID. It is uncertain that there *is* a replica that will be able to
   become master to all its siblings. But if there is one, orchestrator will pick such one. There are many
@@ -265,19 +245,19 @@ func init() {
   --debug is your friend.
 	`
 
-	CommandHelp["enable-gtid"] = `
+	commandHelp["enable-gtid"] = `
   If possible, enable GTID replication. This works on Oracle (>= 5.6, gtid-mode=1) and MariaDB (>= 10.0).
   Replication is stopped for a short duration so as to reconfigure as GTID. In case of error replication remains
   stopped. Example:
 
   orchestrator -c enable-gtid -i replica.compatible.with.gtid.com
 	`
-	CommandHelp["disable-gtid"] = `
+	commandHelp["disable-gtid"] = `
   Assuming replica replicates via GTID, disable GTID replication and resume standard file:pos replication. Example:
 
   orchestrator -c disable-gtid -i replica.replicating.via.gtid.com
 	`
-	CommandHelp["reset-master-gtid-remove-own-uuid"] = `
+	commandHelp["reset-master-gtid-remove-own-uuid"] = `
   Assuming GTID is enabled, Reset master on instance, remove GTID entries generated by the instance.
   This operation is only allowed on Oracle-GTID enabled servers that have no replicas.
   Is is used for cleaning up the GTID mess incurred by mistakenly issuing queries on the replica (even such
@@ -285,34 +265,34 @@ func init() {
 
   orchestrator -c reset-master-gtid-remove-own-uuid -i replica.running.with.gtid.com
 	`
-	CommandHelp["stop-slave"] = `
+	commandHelp["stop-replica"] = `
   Issues a STOP SLAVE; command. Example:
 
   orchestrator -c stop-slave -i replica.to.be.stopped.com
 	`
-	CommandHelp["start-slave"] = `
+	commandHelp["start-replica"] = `
   Issues a START SLAVE; command. Example:
 
   orchestrator -c start-slave -i replica.to.be.started.com
 	`
-	CommandHelp["restart-slave"] = `
+	commandHelp["restart-replica"] = `
   Issues STOP SLAVE + START SLAVE; Example:
 
   orchestrator -c restart-slave -i replica.to.be.started.com
 	`
-	CommandHelp["skip-query"] = `
+	commandHelp["skip-query"] = `
   On a failed replicating replica, skips a single query and attempts to resume replication.
   Only applies when the replication seems to be broken on SQL thread (e.g. on duplicate
   key error). Also works in GTID mode. Example:
 
   orchestrator -c skip-query -i replica.with.broken.sql.thread.com
 	`
-	CommandHelp["reset-slave"] = `
+	commandHelp["reset-replica"] = `
   Issues a RESET SLAVE command. Destructive to replication. Example:
 
   orchestrator -c reset-slave -i replica.to.reset.com
 	`
-	CommandHelp["detach-replica"] = `
+	commandHelp["detach-replica-master-host"] = `
   Stops replication and modifies binlog position into an impossible, yet reversible, value.
   This effectively means the replication becomes broken. See reattach-replica. Example:
 
@@ -320,7 +300,7 @@ func init() {
 
   Issuing this on an already detached replica will do nothing.
 	`
-	CommandHelp["reattach-replica"] = `
+	commandHelp["reattach-replica-master-host"] = `
   Undo a detach-replica operation. Reverses the binlog change into the original values, and
   resumes replication. Example:
 
@@ -328,7 +308,7 @@ func init() {
 
   Issuing this on an attached (i.e. normal) replica will do nothing.
 	`
-	CommandHelp["detach-replica-master-host"] = `
+	commandHelp["detach-replica-master-host"] = `
   Stops replication and modifies Master_Host into an impossible, yet reversible, value.
   This effectively means the replication becomes broken. See reattach-replica-master-host. Example:
 
@@ -336,7 +316,7 @@ func init() {
 
   Issuing this on an already detached replica will do nothing.
 	`
-	CommandHelp["reattach-replica-master-host"] = `
+	commandHelp["reattach-replica-master-host"] = `
   Undo a detach-replica-master-host operation. Reverses the hostname change into the original value, and
   resumes replication. Example:
 
@@ -344,7 +324,7 @@ func init() {
 
   Issuing this on an attached (i.e. normal) replica will do nothing.
 	`
-	CommandHelp["restart-slave-statements"] = `
+	commandHelp["restart-replica-statements"] = `
 	Prints a list of statements to execute to stop then restore replica to same execution state.
 	Provide --statement for injected statement.
 	This is useful for issuing a command that can only be executed while replica is stopped. Such
@@ -355,7 +335,7 @@ func init() {
 	orchestrator -c restart-slave-statements -i some.replica.com -statement="change master to master_heartbeat_period=5"
 	`
 
-	CommandHelp["set-read-only"] = `
+	commandHelp["set-read-only"] = `
   Turn an instance read-only, via SET GLOBAL read_only := 1. Examples:
 
   orchestrator -c set-read-only -i instance.to.turn.read.only.com
@@ -363,7 +343,7 @@ func init() {
   orchestrator -c set-read-only
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["set-writeable"] = `
+	commandHelp["set-writeable"] = `
   Turn an instance writeable, via SET GLOBAL read_only := 0. Example:
 
   orchestrator -c set-writeable -i instance.to.turn.writeable.com
@@ -372,7 +352,7 @@ func init() {
       -i not given, implicitly assumed local hostname
 	`
 
-	CommandHelp["flush-binary-logs"] = `
+	commandHelp["flush-binary-logs"] = `
   Flush binary logs on an instance. Examples:
 
   orchestrator -c flush-binary-logs -i instance.with.binary.logs.com
@@ -380,20 +360,20 @@ func init() {
   orchestrator -c flush-binary-logs -i instance.with.binary.logs.com --binlog=mysql-bin.002048
       Flushes binary logs until reaching given number. Fails when current number is larger than input
 	`
-	CommandHelp["purge-binary-logs"] = `
+	commandHelp["purge-binary-logs"] = `
   Purge binary logs on an instance. Examples:
 
   orchestrator -c purge-binary-logs -i instance.with.binary.logs.com --binlog mysql-bin.002048
 
       Purges binary logs until given log
 	`
-	CommandHelp["last-pseudo-gtid"] = `
+	commandHelp["last-pseudo-gtid"] = `
   Information command; an authoritative way of detecting whether a Pseudo-GTID event exist for an instance,
   and if so, output the last Pseudo-GTID entry and its location. Example:
 
   orchestrator -c last-pseudo-gtid -i instance.with.possible.pseudo-gtid.injection
 	`
-	CommandHelp["find-binlog-entry"] = `
+	commandHelp["find-binlog-entry"] = `
   Get binlog file:pos of entry given by --pattern (exact full match, not a regular expression) in a given instance.
   This will search the instance's binary logs starting with most recent, and terminate as soon as an exact match is found.
   The given input is not a regular expression. It must fully match the entry (not a substring).
@@ -403,7 +383,7 @@ func init() {
 
       Prints out the binlog file:pos where the entry is found, or errors if unfound.
 	`
-	CommandHelp["correlate-binlog-pos"] = `
+	commandHelp["correlate-binlog-pos"] = `
   Given an instance (-i) and binlog coordinates (--binlog=file:pos), find the correlated coordinates in another instance (-d).
   "Correlated coordinates" are those that present the same point-in-time of sequence of binary log events, untangling
   the mess of different binlog file:pos coordinates on different servers.
@@ -418,20 +398,20 @@ func init() {
       Prints out correlated coordinates, e.g.: "mysql-bin.002302:14220", or errors out.
 	`
 
-	CommandHelp["submit-pool-instances"] = `
+	commandHelp["submit-pool-instances"] = `
   Submit a pool name with a list of instances in that pool. This removes any previous instances associated with
   that pool. Expecting comma delimited list of instances
 
   orchestrator -c submit-pool-instances --pool name_of_pool -i pooled.instance1.com,pooled.instance2.com:3306,pooled.instance3.com
 	`
-	CommandHelp["cluster-pool-instances"] = `
+	commandHelp["cluster-pool-instances"] = `
   List all pools and their associated instances. Output is in tab delimited format, and lists:
   cluster_name, cluster_alias, pool_name, pooled instance
   Example:
 
   orchestrator -c cluster-pool-instances
 	`
-	CommandHelp["which-heuristic-cluster-pool-instances"] = `
+	commandHelp["which-heuristic-cluster-pool-instances"] = `
 	List instances belonging to a cluster, which are also in some pool or in a specific given pool.
 	Not all instances are listed: unreachable, downtimed instances ar left out. Only those that should be
 	responsive and healthy are listed. This serves applications in getting information about instances
@@ -451,19 +431,19 @@ func init() {
 			Cluster inferred by local hostname
 	`
 
-	CommandHelp["find"] = `
+	commandHelp["find"] = `
   Find instances whose hostname matches given regex pattern. Example:
 
   orchestrator -c find -pattern "backup.*us-east"
 	`
-	CommandHelp["clusters"] = `
+	commandHelp["clusters"] = `
   List all clusters known to orchestrator. A cluster (aka topology, aka chain) is identified by its
   master (or one of its master if more than one exists). Example:
 
   orchestrator -c clusters
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["all-clusters-masters"] = `
+	commandHelp["all-clusters-masters"] = `
   List of writeable masters, one per cluster.
 	For most single-master topologies, this is trivially the master.
 	For active-active master-master topologies, this ensures only one of
@@ -471,7 +451,7 @@ func init() {
 
         orchestrator -c all-clusters-masters
 	`
-	CommandHelp["topology"] = `
+	commandHelp["topology"] = `
   Show an ascii-graph of a replication topology, given a member of that topology. Example:
 
   orchestrator -c topology -i instance.belonging.to.a.topology.com
@@ -483,12 +463,12 @@ func init() {
   and not from synchronous investigation of the instances. The generated topology may include
   instances that are dead, or whose replication is broken.
 	`
-	CommandHelp["all-instances"] = `
+	commandHelp["all-instances"] = `
   List the complete known set of instances. Similar to '-c find -pattern "."' Example:
 
     orchestrator -c all-instances
 	`
-	CommandHelp["which-instance"] = `
+	commandHelp["which-instance"] = `
   Output the fully-qualified hostname:port representation of the given instance, or error if unknown
   to orchestrator. Examples:
 
@@ -497,7 +477,7 @@ func init() {
   orchestrator -c which-instance
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["which-cluster"] = `
+	commandHelp["which-cluster"] = `
   Output the name of the cluster an instance belongs to, or error if unknown to orchestrator. Examples:
 
   orchestrator -c which-cluster -i instance.to.check.com
@@ -505,7 +485,7 @@ func init() {
   orchestrator -c which-cluster
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["which-cluster-instances"] = `
+	commandHelp["which-cluster-instances"] = `
   Output the list of instances participating in same cluster as given instance; output is one line
   per instance, in hostname:port format. Examples:
 
@@ -517,7 +497,7 @@ func init() {
   orchestrator -c which-cluster-instances -alias some_alias
       assuming some_alias is a known cluster alias (see ClusterNameToAlias or DetectClusterAliasQuery configuration)
 	`
-	CommandHelp["which-cluster-domain"] = `
+	commandHelp["which-cluster-domain"] = `
   Output the domain name of given cluster, indicated by instance or alias. This depends on
 	the DetectClusterDomainQuery configuration. Example:
 
@@ -529,7 +509,7 @@ func init() {
   orchestrator -c which-cluster-domain -alias some_alias
       assuming some_alias is a known cluster alias (see ClusterNameToAlias or DetectClusterAliasQuery configuration)
 	`
-	CommandHelp["which-heuristic-domain-instance"] = `
+	commandHelp["which-heuristic-domain-instance"] = `
 	Returns the instance associated as the cluster's writer with a cluster's domain name.
 	Given a cluster, orchestrator looks for the domain name indicated by this cluster, and proceeds to search for
 	a stord key-value attribute for that domain name. This would be the writer host for the given domain.
@@ -543,7 +523,7 @@ func init() {
 	orchestrator -c which-heuristic-domain-instance -i instance.of.some.cluster
 		Cluster is inferred by a member instance (the instance is not necessarily the master)
 	`
-	CommandHelp["which-cluster-master"] = `
+	commandHelp["which-cluster-master"] = `
 	Output the name of the active master in a given cluster, indicated by instance or alias.
 	An "active" master is one that is writable and is not marked as downtimed due to a topology recovery.
 	Examples:
@@ -556,7 +536,7 @@ func init() {
   orchestrator -c which-cluster-master -alias some_alias
       assuming some_alias is a known cluster alias (see ClusterNameToAlias or DetectClusterAliasQuery configuration)
 	`
-	CommandHelp["which-cluster-osc-replicas"] = `
+	commandHelp["which-cluster-osc-replicas"] = `
   Output a list of replicas in same cluster as given instance, that would server as good candidates as control replicas
   for a pt-online-schema-change operation.
   Those replicas would be used for replication delay so as to throtthe osc operation. Selected replicas will include,
@@ -570,7 +550,7 @@ func init() {
   orchestrator -c which-cluster-osc-replicas -alias some_alias
       assuming some_alias is a known cluster alias (see ClusterNameToAlias or DetectClusterAliasQuery configuration)
 	`
-	CommandHelp["which-lost-in-recovery"] = `
+	commandHelp["which-lost-in-recovery"] = `
 	List instances marked as downtimed for being lost in a recovery process. The output of this command lists
   "lost" instances that probably should be recycled.
 	The topology recovery process injects a magic hint when downtiming lost instances, that is picked up
@@ -579,7 +559,7 @@ func init() {
 	orchestrator -c which-lost-in-recovery
 			Lists all heuristically-recent known lost instances
 	`
-	CommandHelp["which-master"] = `
+	commandHelp["which-master"] = `
   Output the fully-qualified hostname:port representation of a given instance's master. Examples:
 
   orchestrator -c which-master -i a.known.replica.com
@@ -587,7 +567,7 @@ func init() {
   orchestrator -c which-master
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["which-replicas"] = `
+	commandHelp["which-replicas"] = `
   Output the fully-qualified hostname:port list of replicas (one per line) of a given instance (or empty
   list if instance is not a master to anyone). Examples:
 
@@ -596,7 +576,7 @@ func init() {
   orchestrator -c which-replicas
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["get-cluster-heuristic-lag"] = `
+	commandHelp["get-cluster-heuristic-lag"] = `
   For a given cluster (indicated by an instance or alias), output a heuristic "representative" lag of that cluster.
   The output is obtained by examining the replicas that are member of "which-cluster-osc-replicas"-command, and
   getting the maximum replica lag of those replicas. Recall that those replicas are a subset of the entire cluster,
@@ -611,7 +591,7 @@ func init() {
   orchestrator -c get-cluster-heuristic-lag -alias some_alias
       assuming some_alias is a known cluster alias (see ClusterNameToAlias or DetectClusterAliasQuery configuration)
 	`
-	CommandHelp["instance-status"] = `
+	commandHelp["instance-status"] = `
   Output short status on a given instance (name, replication status, notable configuration). Example2:
 
   orchestrator -c instance-status -i instance.to.investigate.com
@@ -619,7 +599,7 @@ func init() {
   orchestrator -c instance-status
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["snapshot-topologies"] = `
+	commandHelp["snapshot-topologies"] = `
   Take a snapshot of existing topologies. This will record minimal replication topology data: the identity
   of an instance, its master and its cluster.
   Taking a snapshot later allows for reviewing changes in topologies. One might wish to invoke this command
@@ -629,7 +609,7 @@ func init() {
   orchestrator -c snapshot-topologies
 	`
 
-	CommandHelp["discover"] = `
+	commandHelp["discover"] = `
   Request that orchestrator cotacts given instance, reads its status, and upsert it into
   orchestrator's repository. Examples:
 
@@ -642,7 +622,7 @@ func init() {
 
   Orchestrator will resolve CNAMEs and VIPs.
 	`
-	CommandHelp["forget"] = `
+	commandHelp["forget"] = `
   Request that orchestrator removed given instance from its repository. If the instance is alive
   and connected through replication to otherwise known and live instances, orchestrator will
   re-discover it by nature of its discovery process. Instances are auto-removed via config's
@@ -653,7 +633,7 @@ func init() {
 
   Orchestrator will *not* resolve CNAMEs and VIPs for given instance.
 	`
-	CommandHelp["begin-maintenance"] = `
+	commandHelp["begin-maintenance"] = `
   Request a maintenance lock on an instance. Topology changes require placing locks on the minimal set of
   affected instances, so as to avoid an incident of two uncoordinated operations on a same instance (leading
   to possible chaos). Locks are placed in the backend database, and so multiple orchestrator instances are safe.
@@ -668,7 +648,7 @@ func init() {
   orchestrator -c begin-maintenance -i instance.to.lock.com --reason="load testing; do not disturb"
       --duration not given; default to MaintenanceExpireMinutes (hard coded value)
 	`
-	CommandHelp["end-maintenance"] = `
+	commandHelp["end-maintenance"] = `
   Remove maintenance lock; such lock may have been gained by an explicit begin-maintenance command implicitly
   by a topology change. You should generally only remove locks you have placed manually; orchestrator will
   automatically expire locks after MaintenanceExpireMinutes (hard coded value).
@@ -676,7 +656,7 @@ func init() {
 
   orchestrator -c end-maintenance -i locked.instance.com
 	`
-	CommandHelp["begin-downtime"] = `
+	commandHelp["begin-downtime"] = `
   Mark an instance as downtimed. A downtimed instance is assumed to be taken care of, and recovery-analysis does
   not apply for such an instance. As result, no recommendation for recovery, and no automated-recovery are issued
   on a downtimed instance.
@@ -692,7 +672,7 @@ func init() {
   orchestrator -c begin-downtime -i instance.to.lock.com --reason="dba handling; do not do recovery"
       --duration not given; default to MaintenanceExpireMinutes (hard coded value)
 	`
-	CommandHelp["end-downtime"] = `
+	commandHelp["end-downtime"] = `
   Indicate an instance is no longer downtimed. Typically you should not need to use this since
   a downtime is always bounded by a duration and auto-expires. But you may use this to forcibly
   indicate the active downtime should be expired now.
@@ -701,7 +681,7 @@ func init() {
   orchestrator -c end-downtime -i downtimed.instance.com
 	`
 
-	CommandHelp["recover"] = `
+	commandHelp["recover"] = `
   Do auto-recovery given a dead instance. Orchestrator chooses the best course of action.
   The given instance must be acknowledged as dead and have replicas, or else there's nothing to do.
   See "replication-analysis" command.
@@ -710,13 +690,13 @@ func init() {
 
   orchestrator -c recover -i dead.instance.com --debug
 	`
-	CommandHelp["recover-lite"] = `
+	commandHelp["recover-lite"] = `
   Do auto-recovery given a dead instance. Orchestrator chooses the best course of action, exactly
   as in "-c recover". Orchestratir will *not* execute external processes.
 
   orchestrator -c recover-lite -i dead.instance.com --debug
 	`
-	CommandHelp["force-master-failover"] = `
+	commandHelp["force-master-failover"] = `
   Forcibly begin a master failover process, even if orchestrator does not see anything wrong
   in particular with the master.
   - This will not work in a master-master configuration
@@ -724,7 +704,7 @@ func init() {
   - Orchestrator will issue all relevant pre-failover and post-failover external processes.
   - Orchestrator will not attempt to recover/reconnect the old master
 	`
-	CommandHelp["force-master-takeover"] = `
+	commandHelp["force-master-takeover"] = `
 	Forcibly discard master and promote another (direct child) instance instead, even if everything is running well.
 	This allows for planned switchover.
 	NOTE:
@@ -748,7 +728,7 @@ func init() {
 			Indicate cluster by an instance. You don't structly need to specify the master, orchestrator
 			will infer the master's identify.
 	`
-	CommandHelp["graceful-master-takeover"] = `
+	commandHelp["graceful-master-takeover"] = `
 	Gracefully discard master and promote another (direct child) instance instead, even if everything is running well.
 	This allows for planned switchover.
 	NOTE:
@@ -768,14 +748,14 @@ func init() {
 		Indicate cluster by an instance. You don't structly need to specify the master, orchestrator
 		will infer the master's identify.
 	`
-	CommandHelp["replication-analysis"] = `
+	commandHelp["replication-analysis"] = `
   Request an analysis of potential crash incidents in all known topologies.
   Output format is not yet stabilized and may change in the future. Do not trust the output
   for automated parsing. Use web API instead, at this time. Example:
 
   orchestrator -c replication-analysis
 	`
-	CommandHelp["ack-cluster-recoveries"] = `
+	commandHelp["ack-cluster-recoveries"] = `
   Acknowledge recoveries for a given cluster; this unblocks pending future recoveries.
   Acknowledging a recovery requires a comment (supply via --reason). Acknowledgement clears the in-active-period
   flag for affected recoveries, which in turn affects any blocking recoveries.
@@ -788,7 +768,7 @@ func init() {
   orchestrator -c ack-cluster-recoveries -alias some_alias --reason="dba has taken taken necessary steps"
        Cluster indicated by alias
 	`
-	CommandHelp["ack-instance-recoveries"] = `
+	commandHelp["ack-instance-recoveries"] = `
   Acknowledge recoveries for a given instance; this unblocks pending future recoveries.
   Acknowledging a recovery requires a comment (supply via --reason). Acknowledgement clears the in-active-period
   flag for affected recoveries, which in turn affects any blocking recoveries.
@@ -798,7 +778,7 @@ func init() {
   orchestrator -c ack-cluster-recoveries -i instance.that.failed.com --reason="dba has taken taken necessary steps"
 	`
 
-	CommandHelp["register-candidate"] = `
+	commandHelp["register-candidate"] = `
   Indicate that a specific instance is a preferred candidate for master promotion. Upon a dead master
   recovery, orchestrator will do its best to promote instances that are marked as candidates. However
   orchestrator cannot guarantee this will always work. Issues like version compatibilities, binlog format
@@ -819,7 +799,7 @@ func init() {
   orchestrator -c register-candidate
       -i not given, implicitly assumed local hostname
 	`
-	CommandHelp["register-hostname-unresolve"] = `
+	commandHelp["register-hostname-unresolve"] = `
   Assigns the given instance a virtual (aka "unresolved") name. When moving replicas under an instance with assigned
   "unresolve" name, orchestrator issues a CHANGE MASTER TO MASTER_HOST='<the unresovled name instead of the fqdn>' ...
   This is useful in cases where your master is behind virtual IP (e.g. active/passive masters with shared storage or DRBD,
@@ -831,7 +811,7 @@ func init() {
 
   orchestrator -c register-hostname-unresolve -i instance.fqdn.com --hostname=virtual.name.com
 	`
-	CommandHelp["deregister-hostname-unresolve"] = `
+	commandHelp["deregister-hostname-unresolve"] = `
   Explicitly deregister/dosassociate a hostname with an "unresolved" name. Orchestrator merely remvoes the association, but does
   not touch any replica at this point. A "repoint" command can be useful right after calling this command to change replica's master host
   name (assumed to be an "unresolved" name, such as a VIP) with the real fqdn of the master host.
@@ -839,7 +819,7 @@ func init() {
 
   orchestrator -c deregister-hostname-unresolve -i instance.fqdn.com
 	`
-	CommandHelp["set-heuristic-domain-instance"] = `
+	commandHelp["set-heuristic-domain-instance"] = `
 	This is a temporary (sync your watches, watch for next ice age) command which registers the cluster domain name of a given cluster
 	with the master/writer host for that cluster. It is a one-time-master-discovery operation.
 	At this time orchestrator may also act as a small & simple key-value store (recall the "temporary" indication).
@@ -854,21 +834,21 @@ func init() {
 			Cluster is inferred by a member instance (the instance is not necessarily the master)
 	`
 
-	CommandHelp["continuous"] = `
+	commandHelp["continuous"] = `
   Enter continuous mode, and actively poll for instances, diagnose problems, do maintenance etc.
   This type of work is typically done in HTTP mode. However nothing prevents orchestrator from
   doing it in command line. Invoking with "continuous" will run indefinitely. Example:
 
   orchestrator -c continuous
 	`
-	CommandHelp["active-nodes"] = `
+	commandHelp["active-nodes"] = `
 	List orchestrator nodes or processes that are actively running or have most recently
 	executed. Output is in hostname:token format, where "token" is an internal unique identifier
 	of an orchestrator process. Example:
 
 	orchestrator -c active-nodes
 	`
-	CommandHelp["access-token"] = `
+	commandHelp["access-token"] = `
 	When running HTTP with "AuthenticationMethod" : "token", receive a new access token.
 	This token must be utilized within "AccessTokenUseExpirySeconds" and can then be used
 	until "AccessTokenExpiryMinutes" have passed.
@@ -879,29 +859,24 @@ func init() {
 
 	orchestrator -c access-token
 	`
-	CommandHelp["reset-hostname-resolve-cache"] = `
+	commandHelp["reset-hostname-resolve-cache"] = `
   Clear the hostname resolve cache; it will be refilled by following host discoveries
 
   orchestrator -c reset-hostname-resolve-cache
 	`
-	CommandHelp["resolve"] = `
+	commandHelp["resolve"] = `
   Utility command to resolve a CNAME and return resolved hostname name. Example:
 
   orchestrator -c resolve -i cname.to.resolve
 	`
-	CommandHelp["redeploy-internal-db"] = `
+	commandHelp["redeploy-internal-db"] = `
 	Force internal schema migration to current backend structure. Orchestrator keeps track of the deployed
 	versions and will not reissue a migration for a version already deployed. Normally you should not use
 	this command, and it is provided mostly for building and testing purposes. Nonetheless it is safe to
 	use and at most it wastes some cycles.
 	`
 
-	for key := range CommandHelp {
-		CommandHelp[key] = strings.Trim(CommandHelp[key], "\n")
+	for key := range commandHelp {
+		commandHelp[key] = strings.Trim(commandHelp[key], "\n")
 	}
-}
-
-func HelpCommand(command string) {
-	fmt.Println(
-		fmt.Sprintf("%s:\n%s", command, CommandHelp[command]))
 }

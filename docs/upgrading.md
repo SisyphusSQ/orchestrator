@@ -4,6 +4,18 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### Cobra 命令行与旧调用兼容
+
+Go 二进制新增 `orchestrator <command>` 原生子命令；原有 `-c <command>`、
+`cli` 模式、旧命令别名及已注册的单横线长参数继续支持。不要同时指定
+原生操作子命令与 `-c`；多余位置参数和未知帮助主题现在会明确报错。
+参数可放在子命令前后；字符串参数值仍保持原样，布尔值使用 `=false` 关闭。
+
+帮助改由 Cobra 生成并写入 stdout；无参数、帮助、版本和补全不再加载配置或
+初始化数据库、KV、遥测。依赖旧帮助文本、stderr 帮助输出或忽略多余参数行为
+的脚本需要调整。版本仍按版本号和 Git commit 输出两行，业务命令输出不变。
+详见[命令行兼容说明](executing-via-command-line.md#commands-help-and-compatibility)。
+
 ### Go 源码迁移到 cmd 与 internal
 
 源码构建入口由 `go/cmd/orchestrator` 改为 `cmd/orchestrator`，推荐继续使用

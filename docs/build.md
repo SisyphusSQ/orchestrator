@@ -10,7 +10,7 @@ Developers have multiple ways to build and test `orchestrator`.
 
 项目使用根目录的 `go.mod` 和 `go.sum` 管理全部 Go 依赖：
 
-- `cmd/orchestrator/`：CLI 与 HTTP 服务的可执行入口及入口测试。
+- `cmd/orchestrator/`：可执行入口、Cobra 命令树、CLI 参数、命令目录、帮助、业务命令分发及相关测试；HTTP 子命令调用 `internal/app` 的服务启动能力。
 - `internal/`：应用内部包，保留现有业务包边界。
 - `internal/golib/`：项目维护的日志和辅助实现，包含在根模块测试中。
 - `conf/`、`resources/`、`etc/`：配置示例、运行资源和服务安装文件。
