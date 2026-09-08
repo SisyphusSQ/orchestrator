@@ -158,6 +158,16 @@ echo "# Checking documentation classification"
 [[ -f docs/verification/orch-cli-too-426.md ]] ||
   fail "moved TOO-426 verification record is missing"
 
+echo "# Checking metadata schema documentation"
+[[ -f docs/schema/README.md ]] || fail "metadata schema index is missing"
+grep -Fq '(schema/README.md)' docs/README.md ||
+  fail "metadata schema index is not linked from docs/README.md"
+while IFS= read -r -d '' page; do
+  page_name="$(basename "$page")"
+  grep -Fq -- "($page_name)" docs/schema/*.md ||
+    fail "$page is not linked from another metadata schema document"
+done < <(find docs/schema -type f -name '*.md' ! -name 'README.md' -print0)
+
 if [[ "$failures" -ne 0 ]]; then
   echo "Documentation validation failed with $failures error(s)." >&2
   exit 1

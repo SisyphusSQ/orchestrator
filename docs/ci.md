@@ -13,6 +13,7 @@ Running on pull requests, the [main CI](https://github.com/SisyphusSQ/orchestrat
 - Validate source code is formatted using `gofmt`
 - Build passes
 - Unit tests pass
+- Canonical metadata Schema completes an interrupted bootstrap on isolated MySQL 5.7.44 and 8.0.46 databases, then reads back table comments, column comments, collation, indexes, and migration markers
 - Integration tests pass
   - Using `SQLite` backend
   - Using `MySQL` backend

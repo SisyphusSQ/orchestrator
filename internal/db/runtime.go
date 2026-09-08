@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -360,7 +361,11 @@ func (runtime *databaseRuntime) ensureMySQLBackendDatabase(ctx context.Context) 
 	if err := database.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping orchestrator bootstrap connection: %w", err)
 	}
-	query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLOrchestratorDatabase)
+	databaseName := "`" + strings.ReplaceAll(config.Config.MySQLOrchestratorDatabase, "`", "``") + "`"
+	query := fmt.Sprintf(
+		"create database if not exists %s default character set utf8mb4 collate utf8mb4_general_ci",
+		databaseName,
+	)
 	if _, err := database.ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("create orchestrator database: %w", err)
 	}

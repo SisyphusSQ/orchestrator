@@ -20,32 +20,32 @@ package db
 var generateSQLBase = []string{
 	`
         CREATE TABLE IF NOT EXISTS database_instance (
-          hostname varchar(128) CHARACTER SET ascii NOT NULL,
+          hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           port smallint(5) unsigned NOT NULL,
           last_checked timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
           last_seen timestamp NULL DEFAULT NULL,
           server_id int(10) unsigned NOT NULL,
-          version varchar(128) CHARACTER SET ascii NOT NULL,
-          binlog_format varchar(16) CHARACTER SET ascii NOT NULL,
+          version varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+          binlog_format varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           log_bin tinyint(3) unsigned NOT NULL,
           log_slave_updates tinyint(3) unsigned NOT NULL,
-          binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+          binary_log_file varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           binary_log_pos bigint(20) unsigned NOT NULL,
-          master_host varchar(128) CHARACTER SET ascii NOT NULL,
+          master_host varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           master_port smallint(5) unsigned NOT NULL,
           slave_sql_running tinyint(3) unsigned NOT NULL,
           slave_io_running tinyint(3) unsigned NOT NULL,
-          master_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+          master_log_file varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           read_master_log_pos bigint(20) unsigned NOT NULL,
-          relay_master_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+          relay_master_log_file varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           exec_master_log_pos bigint(20) unsigned NOT NULL,
           seconds_behind_master bigint(20) unsigned DEFAULT NULL,
           slave_lag_seconds bigint(20) unsigned DEFAULT NULL,
           num_slave_hosts int(10) unsigned NOT NULL,
-          slave_hosts text CHARACTER SET ascii NOT NULL,
-          cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
+          slave_hosts text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+          cluster_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
           PRIMARY KEY (hostname,port)
-        ) ENGINE=InnoDB DEFAULT CHARSET=ascii
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX cluster_name_idx ON database_instance
@@ -73,10 +73,10 @@ var generateSQLBase = []string{
           maintenance_active tinyint(4) DEFAULT NULL,
           begin_timestamp timestamp NULL DEFAULT NULL,
           end_timestamp timestamp NULL DEFAULT NULL,
-          owner varchar(128) CHARACTER SET utf8 NOT NULL,
-          reason text CHARACTER SET utf8 NOT NULL,
+          owner varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+          reason text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
           PRIMARY KEY (database_instance_maintenance_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=ascii
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX maintenance_uidx ON database_instance_maintenance
@@ -90,15 +90,15 @@ var generateSQLBase = []string{
           port smallint(5) unsigned NOT NULL,
           process_id bigint(20) NOT NULL,
           process_started_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          process_user varchar(16) CHARACTER SET utf8 NOT NULL,
-          process_host varchar(128) CHARACTER SET utf8 NOT NULL,
-          process_db varchar(128) CHARACTER SET utf8 NOT NULL,
-          process_command varchar(16) CHARACTER SET utf8 NOT NULL,
+          process_user varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+          process_host varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+          process_db varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+          process_command varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
           process_time_seconds int(11) NOT NULL,
-          process_state varchar(128) CHARACTER SET utf8 NOT NULL,
-          process_info varchar(1024) CHARACTER SET utf8 NOT NULL,
+          process_state varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+          process_info varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
           PRIMARY KEY (hostname,port,process_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=ascii
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX process_started_at_idx ON database_instance_long_running_queries
@@ -110,12 +110,12 @@ var generateSQLBase = []string{
         CREATE TABLE IF NOT EXISTS audit (
           audit_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
           audit_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          audit_type varchar(128) CHARACTER SET ascii NOT NULL,
-          hostname varchar(128) CHARACTER SET ascii NOT NULL DEFAULT '',
+          audit_type varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+          hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
           port smallint(5) unsigned NOT NULL,
-          message text CHARACTER SET utf8 NOT NULL,
+          message text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
           PRIMARY KEY (audit_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=latin1
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX audit_timestamp_idx ON audit
@@ -140,7 +140,7 @@ var generateSQLBase = []string{
 		  mysql_port smallint(5) unsigned DEFAULT NULL,
 		  count_mysql_snapshots smallint(5) unsigned NOT NULL,
 		  PRIMARY KEY (hostname)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX token_idx ON host_agent
@@ -176,7 +176,7 @@ var generateSQLBase = []string{
 		  is_complete tinyint(3) unsigned NOT NULL DEFAULT '0',
 		  is_successful tinyint(3) unsigned NOT NULL DEFAULT '0',
 		  PRIMARY KEY (agent_seed_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX target_hostname_idx ON agent_seed
@@ -216,7 +216,7 @@ var generateSQLBase = []string{
 		  state_action varchar(127) NOT NULL,
 		  error_message varchar(255) NOT NULL,
 		  PRIMARY KEY (agent_seed_state_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 				DROP INDEX agent_seed_idx ON agent_seed_state
@@ -232,7 +232,7 @@ var generateSQLBase = []string{
 		  submit_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		  expire_timestamp timestamp NULL DEFAULT NULL,
 		  PRIMARY KEY (hostname,attribute_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX attribute_name_idx ON host_attributes
@@ -264,7 +264,7 @@ var generateSQLBase = []string{
 		  resolved_hostname varchar(128) NOT NULL,
 		  resolved_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		  PRIMARY KEY (hostname)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX resolved_timestamp_idx ON hostname_resolve
@@ -274,18 +274,18 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS cluster_alias (
-		  cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
+		  cluster_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 		  alias varchar(128) NOT NULL,
 		  PRIMARY KEY (cluster_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS node_health (
-		  hostname varchar(128) CHARACTER SET ascii NOT NULL,
+		  hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 		  token varchar(128) NOT NULL,
 		  last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		  PRIMARY KEY (hostname, token)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP VIEW IF EXISTS _whats_wrong
@@ -305,12 +305,12 @@ var generateSQLBase = []string{
 			start_active_period timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			end_active_period_unixtime int unsigned,
 			end_recovery timestamp NULL DEFAULT NULL,
-			processing_node_hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			processing_node_hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			processcing_node_token varchar(128) NOT NULL,
 			successor_hostname varchar(128) DEFAULT NULL,
 			successor_port smallint unsigned DEFAULT NULL,
 			PRIMARY KEY (recovery_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX in_active_start_period_idx ON topology_recovery
@@ -335,7 +335,7 @@ var generateSQLBase = []string{
 		  hostname varchar(128) NOT NULL,
 		  unresolved_hostname varchar(128) NOT NULL,
 		  PRIMARY KEY (hostname)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX unresolved_hostname_idx ON hostname_unresolve
@@ -345,11 +345,11 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_pool (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			pool varchar(128) NOT NULL,
 			PRIMARY KEY (hostname, port, pool)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX pool_idx ON database_instance_pool
@@ -360,13 +360,13 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_topology_history (
 			snapshot_unix_timestamp INT UNSIGNED NOT NULL,
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			port smallint(5) unsigned NOT NULL,
-			master_host varchar(128) CHARACTER SET ascii NOT NULL,
+			master_host varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			master_port smallint(5) unsigned NOT NULL,
-			cluster_name tinytext CHARACTER SET ascii NOT NULL,
+			cluster_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			PRIMARY KEY (snapshot_unix_timestamp, hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX cluster_name_idx ON database_instance_topology_history
@@ -376,11 +376,11 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS candidate_database_instance (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			last_suggested TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX last_suggested_idx ON candidate_database_instance
@@ -395,10 +395,10 @@ var generateSQLBase = []string{
 			downtime_active tinyint(4) DEFAULT NULL,
 			begin_timestamp timestamp DEFAULT CURRENT_TIMESTAMP,
 			end_timestamp timestamp NULL DEFAULT NULL,
-			owner varchar(128) CHARACTER SET utf8 NOT NULL,
-			reason text CHARACTER SET utf8 NOT NULL,
+			owner varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+			reason text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			PRIMARY KEY (hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS topology_failure_detection (
@@ -416,7 +416,7 @@ var generateSQLBase = []string{
 			count_affected_slaves int unsigned NOT NULL,
 			slave_hosts text NOT NULL,
 			PRIMARY KEY (detection_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX hostname_port_active_period_uidx ON topology_failure_detection
@@ -433,7 +433,7 @@ var generateSQLBase = []string{
 			hostname varchar(128) NOT NULL,
 			resolved_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (resolved_hostname)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX hostname ON hostname_resolve_history
@@ -453,7 +453,7 @@ var generateSQLBase = []string{
 			hostname varchar(128) NOT NULL,
 			last_registered TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (unresolved_hostname)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX hostname ON hostname_unresolve_history
@@ -469,10 +469,10 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS cluster_domain_name (
-			cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
+			cluster_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			domain_name varchar(128) NOT NULL,
 			PRIMARY KEY (cluster_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX domain_name_idx ON cluster_domain_name
@@ -483,17 +483,17 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS master_position_equivalence (
 			equivalence_id bigint unsigned not null auto_increment,
-			master1_hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			master1_hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			master1_port smallint(5) unsigned NOT NULL,
-			master1_binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+			master1_binary_log_file varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			master1_binary_log_pos bigint(20) unsigned NOT NULL,
-			master2_hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			master2_hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			master2_port smallint(5) unsigned NOT NULL,
-			master2_binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+			master2_binary_log_file varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			master2_binary_log_pos bigint(20) unsigned NOT NULL,
 			last_suggested TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (equivalence_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX equivalence_uidx ON master_position_equivalence
@@ -516,18 +516,18 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS async_request (
 			request_id bigint unsigned NOT NULL AUTO_INCREMENT,
-			command varchar(128) charset ascii not null,
+			command varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null,
 			hostname varchar(128) NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			destination_hostname varchar(128) NOT NULL,
 			destination_port smallint(5) unsigned NOT NULL,
-			pattern text CHARACTER SET utf8 NOT NULL,
-			gtid_hint varchar(32) charset ascii not null,
+			pattern text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+			gtid_hint varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null,
 			begin_timestamp timestamp NULL DEFAULT NULL,
 			end_timestamp timestamp NULL DEFAULT NULL,
-			story text CHARACTER SET utf8 NOT NULL,
+			story text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			PRIMARY KEY (request_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX begin_timestamp_idx ON async_request
@@ -550,7 +550,7 @@ var generateSQLBase = []string{
 			last_blocked_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			blocking_recovery_id bigint unsigned,
 			PRIMARY KEY (hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX cluster_blocked_idx ON blocked_topology_recovery
@@ -565,7 +565,7 @@ var generateSQLBase = []string{
 		  analysis_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		  analysis varchar(128) NOT NULL,
 		  PRIMARY KEY (hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX analysis_timestamp_idx ON database_instance_last_analysis
@@ -581,7 +581,7 @@ var generateSQLBase = []string{
 			analysis_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			analysis varchar(128) NOT NULL,
 			PRIMARY KEY (changelog_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX analysis_timestamp_idx ON database_instance_analysis_changelog
@@ -592,12 +592,12 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS node_health_history (
 			history_id bigint unsigned not null auto_increment,
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			token varchar(128) NOT NULL,
 			first_seen_active timestamp NOT NULL,
-			extra_info varchar(128) CHARACTER SET utf8 NOT NULL,
+			extra_info varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			PRIMARY KEY (history_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX first_seen_active_idx ON node_health_history
@@ -622,7 +622,7 @@ var generateSQLBase = []string{
 			relay_log_file varchar(128) NOT NULL,
 			relay_log_pos bigint(20) unsigned NOT NULL,
 			PRIMARY KEY (history_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX hostname_port_recorded_timestmp_idx ON database_instance_coordinates_history
@@ -646,7 +646,7 @@ var generateSQLBase = []string{
 			first_seen timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			last_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
 			PRIMARY KEY (history_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX hostname_port_file_idx ON database_instance_binlog_files_history
@@ -666,10 +666,10 @@ var generateSQLBase = []string{
 			public_token varchar(128) NOT NULL,
 			secret_token varchar(128) NOT NULL,
 			generated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			generated_by varchar(128) CHARACTER SET utf8 NOT NULL,
+			generated_by varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			is_acquired tinyint unsigned NOT NULL DEFAULT '0',
 			PRIMARY KEY (access_token_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX public_token_idx ON access_token
@@ -694,7 +694,7 @@ var generateSQLBase = []string{
 			prev_relay_log_pos bigint(20) unsigned NOT NULL,
 			prev_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
 			PRIMARY KEY (hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		DROP INDEX current_seen_idx ON database_instance_recent_relaylog_history
@@ -705,39 +705,39 @@ var generateSQLBase = []string{
 	`
 		CREATE TABLE IF NOT EXISTS orchestrator_metadata (
 			anchor tinyint unsigned NOT NULL,
-			last_deployed_version varchar(128) CHARACTER SET ascii NOT NULL,
+			last_deployed_version varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			last_deployed_timestamp timestamp NOT NULL,
 			PRIMARY KEY (anchor)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS orchestrator_db_deployments (
-			deployed_version varchar(128) CHARACTER SET ascii NOT NULL,
+			deployed_version varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			deployed_timestamp timestamp NOT NULL,
 			PRIMARY KEY (deployed_version)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS global_recovery_disable (
 			disable_recovery tinyint unsigned NOT NULL COMMENT 'Insert 1 to disable recovery globally',
 			PRIMARY KEY (disable_recovery)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS cluster_alias_override (
-			cluster_name varchar(128) CHARACTER SET ascii NOT NULL,
+			cluster_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			alias varchar(128) NOT NULL,
 			PRIMARY KEY (cluster_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS topology_recovery_steps (
 			recovery_step_id bigint unsigned not null auto_increment,
-			recovery_uid varchar(128) CHARACTER SET ascii NOT NULL,
+			recovery_uid varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			audit_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			message text CHARACTER SET utf8 NOT NULL,
+			message text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			PRIMARY KEY (recovery_step_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS raft_store (
@@ -745,7 +745,7 @@ var generateSQLBase = []string{
 			store_key varbinary(512) not null,
 			store_value blob not null,
 			PRIMARY KEY (store_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE INDEX store_key_idx_raft_store ON raft_store (store_key)
@@ -757,15 +757,15 @@ var generateSQLBase = []string{
 			log_type int not null,
 			data blob not null,
 			PRIMARY KEY (log_index)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS raft_snapshot (
 			snapshot_id bigint unsigned not null auto_increment,
-			snapshot_name varchar(128) CHARACTER SET utf8 NOT NULL,
-			snapshot_meta varchar(4096) CHARACTER SET utf8 NOT NULL,
+			snapshot_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+			snapshot_meta varchar(4096) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			PRIMARY KEY (snapshot_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE UNIQUE INDEX snapshot_name_uidx_raft_snapshot ON raft_snapshot (snapshot_name)
@@ -778,62 +778,62 @@ var generateSQLBase = []string{
 		  analysis_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		  analysis varchar(128) NOT NULL,
 		  PRIMARY KEY (peer, hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_tls (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			required tinyint unsigned NOT NULL DEFAULT 0,
 			PRIMARY KEY (hostname,port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS kv_store (
-			store_key varchar(255) CHARACTER SET ascii NOT NULL,
-			store_value text CHARACTER SET utf8 not null,
+			store_key varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			store_value text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci not null,
 			last_updated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (store_key)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS cluster_injected_pseudo_gtid (
 			cluster_name varchar(128) NOT NULL,
 			time_injected timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (cluster_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS hostname_ips (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			ipv4 varchar(128) CHARACTER SET ascii NOT NULL,
-			ipv6 varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			ipv4 varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			ipv6 varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			last_updated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (hostname)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_tags (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			port smallint(5) unsigned NOT NULL,
-			tag_name varchar(128) CHARACTER SET utf8 NOT NULL,
-			tag_value varchar(128) CHARACTER SET utf8 NOT NULL,
+			tag_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+			tag_value varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 			last_updated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (hostname, port, tag_name)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE INDEX tag_name_idx_database_instance_tags ON database_instance_tags (tag_name)
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS database_instance_stale_binlog_coordinates (
-			hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			binary_log_file varchar(128) NOT NULL,
 			binary_log_pos bigint(20) unsigned NOT NULL,
 			first_seen timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (hostname, port)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 	`,
 	`
 		CREATE INDEX first_seen_idx_database_instance_stale_binlog_coordinates ON database_instance_stale_binlog_coordinates (first_seen)

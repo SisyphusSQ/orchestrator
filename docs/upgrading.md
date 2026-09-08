@@ -1,5 +1,13 @@
 # Upgrading orchestrator
 
+## 元数据库 Schema 规范化（TOO-429）
+
+全新的空元数据库改由 [`docs/schema/mysql.sql`](schema/mysql.sql) 初始化，使用 MySQL 5.7–8.0、TiDB 与 OceanBase MySQL 模式的共同语法子集，并由同一权威源转换 SQLite 结构。新库写入 `canonical-v1`；已有库继续原有基础 DDL 与历史补丁链，完成后写入 `legacy-v1`。本次不会自动重建存量大表、转换字符集、重命名索引或删除兼容表。
+
+升级前备份每个 Raft 节点的独立元数据库，并在相同产品和精确版本的隔离空库运行 Schema 测试。升级后回读 `orchestrator_schema_migrations`、`orchestrator_db_deployments`、受管表数和关键业务读写。不要把 `mysql.sql` 直接导入非空库，也不要把测试 DSN 指向生产或共享数据库。
+
+存量库回退只需停止新进程并恢复旧二进制与配置。对新建的 `canonical-v1` 库回退时，旧二进制不理解新标记，可能重新执行历史补丁并增加旧索引名；应恢复升级前备份，或在确认结构完整后使用 `SkipOrchestratorDatabaseUpdate`。完整步骤、兼容保留表和 DDL 风险见[迁移指南](schema/migration-guide.md)。
+
 ## 仅支持 Raft（TOO-428）
 
 服务端移除非 Raft 单机、共享数据库选主及半高可用路径。MySQL 和 SQLite 仍可作为每个节点的独立元数据后端。单节点开发也使用 Raft，并显式 bootstrap。

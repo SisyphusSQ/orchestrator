@@ -31,12 +31,12 @@ use meta;
 
 create table if not exists pseudo_gtid_status (
     anchor                      int unsigned not null,
-    originating_mysql_host      varchar(128) charset ascii not null,
+    originating_mysql_host      varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null,
     originating_mysql_port      int unsigned not null,
     originating_server_id       int unsigned not null,
     time_generated              timestamp not null default current_timestamp,
-    pseudo_gtid_uri             varchar(255) charset ascii not null,
-    pseudo_gtid_hint            varchar(255) charset ascii not null,
+    pseudo_gtid_uri             varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null,
+    pseudo_gtid_hint            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null,
     PRIMARY KEY (anchor)
 );
 

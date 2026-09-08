@@ -33,10 +33,10 @@ To make such data accessible by a query, one trick is to create a table in some 
 ```sql
 CREATE TABLE IF NOT EXISTS cluster (
   anchor TINYINT NOT NULL,
-  cluster_name VARCHAR(128) CHARSET ascii NOT NULL DEFAULT '',
-  cluster_domain VARCHAR(128) CHARSET ascii NOT NULL DEFAULT '',
+  cluster_name VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
+  cluster_domain VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
   PRIMARY KEY (anchor)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 ```
 
 ... and populate it as follows (e.g. via puppet/cron):

@@ -8,6 +8,42 @@ on:
     - cron:  '13 */4 * * *'
 
 jobs:
+  metadata-schema-mysql:
+    name: Metadata schema / MySQL ${{ matrix.mysql }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql:
+          - "5.7.44"
+          - "8.0.46"
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql }}
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: orchestrator_schema
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - name: Validate canonical metadata schema
+      env:
+        ORCHESTRATOR_METADATA_SCHEMA_TEST_DSN: root@tcp(127.0.0.1:3306)/orchestrator_schema?interpolateParams=true
+      run: go test ./internal/db -run '^TestCanonicalMetadataSchemaExternalMySQL$' -count=1 -v
+
   build:
 
     runs-on: ubuntu-latest
