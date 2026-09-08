@@ -198,10 +198,13 @@ func normalizeEnginePath(path string) (string, map[string]string) {
 	return strings.Join(segments, "/"), parameterNames
 }
 
-// Static mounts one explicit static directory. The application registers the
-// bootstrap, css, images and js roots separately so no root catch-all can mask
-// application routes.
+// Static mounts one explicit static directory without directory listings.
 func (router *Router) Static(relativePath, root string) {
+	router.StaticFS(relativePath, gin.Dir(root, false))
+}
+
+// StaticFS 在指定前缀提供文件系统资源，不覆盖业务路由，不展示目录内容。
+func (router *Router) StaticFS(relativePath string, files nethttp.FileSystem) {
 	prefix := strings.TrimSuffix(relativePath, "/")
 	if prefix == "" || prefix == "/" || prefix[0] != '/' {
 		panic(fmt.Sprintf("static route must be a non-root absolute path: %q", relativePath))
@@ -218,7 +221,7 @@ func (router *Router) Static(relativePath, root string) {
 	router.registerExactRoute(nethttp.MethodGet, prefix, redirectDirectory)
 	router.registerExactRoute(nethttp.MethodHead, prefix, redirectDirectory)
 
-	fileServer := nethttp.StripPrefix(prefix, nethttp.FileServer(gin.Dir(root, false)))
+	fileServer := nethttp.StripPrefix(prefix, nethttp.FileServer(gin.OnlyFilesFS{FileSystem: files}))
 	serveFile := func(writer nethttp.ResponseWriter, request *nethttp.Request) {
 		fileServer.ServeHTTP(writer, request)
 	}

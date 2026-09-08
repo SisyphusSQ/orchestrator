@@ -20,6 +20,30 @@ jobs:
       with:
         go-version-file: go.mod
 
+    - name: Set up Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22.22.2
+
+    - name: Set up pnpm
+      run: npm install --global pnpm@10.33.2
+
+    - name: Install Web dependencies
+      run: make web-deps
+
+    - name: Test Web
+      run: make test-web
+
+    - name: Test Web browser flows
+      run: |
+        pnpm --dir web exec playwright install --with-deps chromium --only-shell
+        pnpm --dir web test:e2e
+
+    - name: Build and test Storybook
+      run: |
+        make storybook-build
+        make test-storybook
+
     - name: Test modules
       run: make deps
 
@@ -28,6 +52,22 @@ jobs:
 
     - name: Test build
       run: make build
+
+    - name: Test Web served by Go
+      run: |
+        cat > "$RUNNER_TEMP/web-e2e.json" <<EOF
+        {"BackendDB":"sqlite","SQLite3DataFile":"$RUNNER_TEMP/web-e2e.db","ListenAddress":"127.0.0.1:3002","AuditToBackendDB":true}
+        EOF
+        mkdir -p "$RUNNER_TEMP/standalone-web"
+        cp bin/orchestrator "$RUNNER_TEMP/standalone-web/orchestrator"
+        (cd "$RUNNER_TEMP/standalone-web" && exec ./orchestrator server --discovery=false --config="$RUNNER_TEMP/web-e2e.json") > "$RUNNER_TEMP/web-e2e.log" 2>&1 &
+        web_server_pid=$!
+        trap 'kill "$web_server_pid"' EXIT
+        for attempt in $(seq 1 40); do
+          curl --silent --fail http://127.0.0.1:3002/api/lb-check && break
+          sleep 0.5
+        done
+        ORCH_WEB_URL=http://127.0.0.1:3002 pnpm --dir web test:e2e --grep-invert URLPrefix
 
     - name: Test unit
       run: make test-unit

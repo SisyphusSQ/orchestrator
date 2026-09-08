@@ -76,14 +76,12 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	}
 	RegisterObservability(standard, "/orchestrator")
 	web.RegisterRequests(standard)
-	if got, want := len(standard.logicalRoutes), 311; got != want {
+	if got, want := len(standard.logicalRoutes), 385; got != want {
 		t.Fatalf("standard logical routes = %d, want %d", got, want)
 	}
 
-	for _, directory := range []string{"bootstrap", "css", "images", "js"} {
-		standard.Static("/orchestrator/"+directory, "resources/public/"+directory)
-	}
-	if got, want := len(standard.staticMounts), 4; got != want {
+	standard.Static("/orchestrator/web/assets", t.TempDir())
+	if got, want := len(standard.staticMounts), 1; got != want {
 		t.Fatalf("static mounts = %d, want %d", got, want)
 	}
 
@@ -93,14 +91,16 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	if got, want := len(agents.logicalRoutes), 6; got != want {
 		t.Fatalf("agent logical routes = %d, want %d", got, want)
 	}
-	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 317; got != want {
+	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 391; got != want {
 		t.Fatalf("total logical routes = %d, want %d", got, want)
 	}
 
 	assertExactRouteRegistered(t, standard, nethttp.MethodGet, "/orchestrator/api/topology/:host/:port")
 	assertExactRouteRegistered(t, standard, nethttp.MethodHead, "/orchestrator/api/topology/:host/:port/")
 	assertExactRouteRegistered(t, standard, nethttp.MethodPost, "/orchestrator/debug/pprof/symbol")
-	assertExactRouteRegistered(t, standard, nethttp.MethodGet, "/orchestrator/js/*filepath")
+	assertExactRouteRegistered(t, standard, nethttp.MethodGet, "/orchestrator/web/assets/*filepath")
+	assertExactRouteRegistered(t, standard, nethttp.MethodPost, "/orchestrator/api/relocate/:host/:port/:belowHost/:belowPort")
+	assertExactRouteRegistered(t, standard, nethttp.MethodGet, "/orchestrator/api/web-config")
 	assertExactRouteRegistered(t, standard, nethttp.MethodGet, "/orchestrator/api/raft/configuration")
 	assertExactRouteRegistered(t, standard, nethttp.MethodPost, "/orchestrator/api/raft/bootstrap")
 	assertExactRouteRegistered(t, standard, nethttp.MethodPost, "/orchestrator/api/raft/members")

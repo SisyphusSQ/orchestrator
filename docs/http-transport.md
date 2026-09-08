@@ -7,16 +7,17 @@ contracts rather than on `gin.Context` or other Gin types.
 
 ## Route contract
 
-The standard and agent listeners register 306 logical method-and-path routes:
+The standard and agent listeners register 391 logical method-and-path routes
+(385 standard and 6 agent). Legacy API registration retains 258 paths including
+synonyms. Web operations add 73 POST aliases and `/api/web-config` exposes
+public UI capabilities. All 39 explicit Web routes are preserved.
 
-- 250 API routes, including legacy synonym paths;
-- 39 Web routes;
-- 11 debug routes for pprof, expvar, and metrics; and
-- 6 routes on the agent listener.
-
-Static assets are separate from this count. The standard listener mounts the
-`bootstrap`, `css`, `images`, and `js` directories explicitly below the
-configured `URLPrefix`.
+静态资源不计入上述逻辑路由数量。标准监听器在 `URLPrefix + /web/assets`
+提供 Go 二进制内嵌的 React 资源，不再挂载旧静态目录或读取磁盘模板。
+Only explicit
+Web page routes return the SPA entry; unknown APIs and assets remain 404.
+Go injects an escaped base URL for prefixed deep links. HTML and UI capability
+responses use `Cache-Control: no-store`.
 
 The adapter disables Gin's automatic trailing-slash redirect, fixed-path
 redirect, extra-slash cleanup, and automatic 405 response. Each existing route
@@ -41,6 +42,10 @@ Authentication or mutual-TLS failure aborts the request before an application
 handler runs. A Raft follower proxy that commits a response also terminates the
 route chain, so the same request cannot continue into the local mutating
 handler.
+Web POST aliases check user write privileges and browser origin at ingress,
+then use the existing leader proxy and business handler. Leader readiness is
+checked after proxying, allowing follower clients to reach the leader. Legacy
+GET action routes remain available.
 
 The project responder preserves the existing wire contract:
 
@@ -60,8 +65,8 @@ starting continuous discovery. The Gin adapter is a standard
 
 Unit and fixture tests cover route registration, path parameters, optional
 trailing slashes, HEAD, authentication, gzip, mutual-TLS failure, Raft-style
-proxy termination, response rendering, project templates, all four static
-mounts, debug endpoints, URL prefixes, and isolated HTTP, TLS, and Unix socket
+proxy termination, response rendering, project templates, in-memory static
+assets without working-directory resources, debug endpoints, URL prefixes, and isolated HTTP, TLS, and Unix socket
 listeners.
 
 Live listener, real certificate/OU, Raft-cluster, browser, and business-flow

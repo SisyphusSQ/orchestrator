@@ -3465,6 +3465,13 @@ func (this *HttpAPI) registerSingleAPIRequest(m *Router, path string, handler Ha
 	} else {
 		m.Get(fullPath, handler)
 	}
+	if isWebAction(path) {
+		handlers := []Handler{guardWebAction, handler}
+		if allowProxy && config.Config.RaftEnabled {
+			handlers = []Handler{guardWebAction, raftReverseProxy, handler}
+		}
+		m.Post(fullPath, handlers...)
+	}
 }
 
 func (this *HttpAPI) registerAPIRequestInternal(m *Router, path string, handler Handler, allowProxy bool) {

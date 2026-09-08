@@ -14,6 +14,14 @@
 # ORC_USER (default: orc_server_user): username used to login to orchestrator backend MySQL server
 # ORC_PASSWORD (default: orc_server_password): password used to login to orchestrator backend MySQL server
 
+FROM node:22.22.2-bookworm-slim AS web-build
+WORKDIR /web
+RUN npm install --global pnpm@10.33.2
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY web/ ./
+RUN pnpm build
+
 FROM golang:1.26.8-alpine3.23 as build
 
 RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git make
@@ -22,6 +30,8 @@ WORKDIR /orchestrator
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+COPY --from=web-build /web/dist/ /orchestrator/web/assets/
+ENV WEB_PREBUILT=1
 RUN make build
 
 FROM alpine:3.23
