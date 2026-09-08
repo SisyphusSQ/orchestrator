@@ -124,9 +124,9 @@ Queries can be satisfied by injecting data into metadata tables on your master. 
 ```sql
 CREATE TABLE IF NOT EXISTS cluster (
   anchor TINYINT NOT NULL,
-  cluster_name VARCHAR(128) CHARSET ascii NOT NULL DEFAULT '',
+  cluster_name VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
   PRIMARY KEY (anchor)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 ```
 
 and populate this table, with, say `1, my_cluster_name`, coupled with:

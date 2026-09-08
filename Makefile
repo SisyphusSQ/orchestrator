@@ -78,7 +78,7 @@ deps: check-go ## 下载并校验服务端与 CLI 模块依赖
 	cd tools/orch-cli && $(GO) mod download && $(GO) mod verify && $(GO) mod tidy -diff
 
 fmt-check: check-go ## 只读检查 Go 源码格式，不修改工作区
-	@unformatted="$$(gofmt -s -l cmd internal tools/orch-cli tests/cli web/*.go)"; \
+	@unformatted="$$(gofmt -s -l cmd docs/schema internal tools/orch-cli tests/cli web/*.go)"; \
 	if [[ -n "$$unformatted" ]]; then \
 		echo "The following files need gofmt -s:" >&2; \
 		echo "$$unformatted" >&2; \

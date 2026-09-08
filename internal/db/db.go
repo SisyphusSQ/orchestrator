@@ -19,10 +19,13 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+	metadataschema "github.com/openark/orchestrator/docs/schema"
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 )
@@ -129,7 +132,7 @@ func versionIsDeployedContext(ctx context.Context, db *sql.DB) (result bool, err
 	return result, err
 }
 
-// registerOrchestratorDeployment updates the orchestrator_metadata table upon successful deployment
+// registerOrchestratorDeployment records the application version after successful schema initialization.
 func registerOrchestratorDeployment(db *sql.DB) error {
 	return registerOrchestratorDeploymentContext(context.Background(), db)
 }
@@ -149,6 +152,81 @@ func registerOrchestratorDeploymentContext(ctx context.Context, db *sql.DB) erro
 	return nil
 }
 
+type metadataSchemaLayout uint8
+
+const (
+	metadataSchemaBootstrap metadataSchemaLayout = iota
+	metadataSchemaLegacy
+	metadataSchemaCanonical
+)
+
+func detectMetadataSchemaLayoutContext(ctx context.Context, db *sql.DB) (metadataSchemaLayout, error) {
+	tables := metadataschema.ManagedTables()
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(tables)), ",")
+	args := make([]any, 0, len(tables)+1)
+	args = append(args, "orchestrator_schema_migrations")
+	for _, table := range tables {
+		args = append(args, table)
+	}
+
+	tableNameColumn := "table_name"
+	tableSource := "information_schema.tables"
+	tableFilter := "table_schema = DATABASE()"
+	if IsSQLite() {
+		tableNameColumn = "name"
+		tableSource = "sqlite_master"
+		tableFilter = "type = 'table'"
+	}
+	query := fmt.Sprintf(`
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN %s = ? THEN 1 ELSE 0 END), 0)
+		FROM %s
+		WHERE %s
+			AND %s IN (%s)
+	`, tableNameColumn, tableSource, tableFilter, tableNameColumn, placeholders)
+
+	var managedTableCount int
+	var migrationTableCount int
+	if err := db.QueryRowContext(ctx, query, args...).Scan(&managedTableCount, &migrationTableCount); err != nil {
+		return metadataSchemaBootstrap, fmt.Errorf("inspect orchestrator metadata tables: %w", err)
+	}
+	if managedTableCount == 0 {
+		return metadataSchemaBootstrap, nil
+	}
+	if migrationTableCount == 0 {
+		return metadataSchemaLegacy, nil
+	}
+
+	var canonicalMigrationCount int
+	var pendingMigrationCount int
+	if err := db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0)
+		FROM orchestrator_schema_migrations
+	`, metadataschema.CanonicalMigration, metadataschema.CanonicalMigrationPending).Scan(
+		&canonicalMigrationCount,
+		&pendingMigrationCount,
+	); err != nil {
+		return metadataSchemaBootstrap, fmt.Errorf("inspect canonical schema migration: %w", err)
+	}
+	if canonicalMigrationCount > 0 {
+		if managedTableCount != len(tables) {
+			return metadataSchemaBootstrap, fmt.Errorf(
+				"canonical metadata schema has %d of %d managed tables",
+				managedTableCount,
+				len(tables),
+			)
+		}
+		return metadataSchemaCanonical, nil
+	}
+	if pendingMigrationCount > 0 || managedTableCount == 1 {
+		return metadataSchemaBootstrap, nil
+	}
+	return metadataSchemaLegacy, nil
+}
+
 // deployStatements will issue given sql queries that are not already known to be deployed.
 // This iterates both lists (to-run and already-deployed) and also verifies no contraditions.
 func deployStatements(db *sql.DB, queries []string) error {
@@ -156,6 +234,22 @@ func deployStatements(db *sql.DB, queries []string) error {
 }
 
 func deployStatementsContext(ctx context.Context, db *sql.DB, queries []string) error {
+	return deployStatementsWithPolicyContext(ctx, db, queries, true)
+}
+
+func deployCanonicalStatementsContext(ctx context.Context, db *sql.DB, queries []string) error {
+	return deployStatementsWithPolicyContext(ctx, db, queries, false)
+}
+
+func isDuplicateIndexError(err error) bool {
+	var mysqlError *mysql.MySQLError
+	if errors.As(err, &mysqlError) {
+		return mysqlError.Number == 1061
+	}
+	return IsSQLite() && strings.Contains(strings.ToLower(err.Error()), "already exists")
+}
+
+func deployStatementsWithPolicyContext(ctx context.Context, db *sql.DB, queries []string, legacyCompatibilityMode bool) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin orchestrator deployment transaction: %w", err)
@@ -170,7 +264,7 @@ func deployStatementsContext(ctx context.Context, db *sql.DB, queries []string) 
 	// along with the "invalid" definition, and then go ahead and fix those definitions via following ALTER statements.
 	// My bad.
 	originalSqlMode := ""
-	if config.Config.IsMySQL() {
+	if config.Config.IsMySQL() && legacyCompatibilityMode {
 		err = tx.QueryRowContext(ctx, `select @@session.sql_mode`).Scan(&originalSqlMode)
 		if err != nil {
 			return fmt.Errorf("read SQL mode before orchestrator deployment: %w", err)
@@ -195,6 +289,12 @@ func deployStatementsContext(ctx context.Context, db *sql.DB, queries []string) 
 			if strings.Contains(err.Error(), "syntax error") {
 				return fmt.Errorf("execute orchestrator deployment query %q: %w", query, err)
 			}
+			if !legacyCompatibilityMode {
+				if IsCreateIndex(query) && isDuplicateIndexError(err) {
+					continue
+				}
+				return fmt.Errorf("execute canonical metadata schema query %q: %w", query, err)
+			}
 			if !IsAlterTable(query) && !IsCreateIndex(query) && !IsDropIndex(query) {
 				return fmt.Errorf("execute orchestrator deployment query %q: %w", query, err)
 			}
@@ -207,7 +307,7 @@ func deployStatementsContext(ctx context.Context, db *sql.DB, queries []string) 
 			}
 		}
 	}
-	if config.Config.IsMySQL() {
+	if config.Config.IsMySQL() && legacyCompatibilityMode {
 		if _, err := tx.ExecContext(ctx, `set session sql_mode=?`, originalSqlMode); err != nil {
 			return fmt.Errorf("restore SQL mode after orchestrator deployment: %w", err)
 		}
@@ -228,6 +328,10 @@ func initOrchestratorDBContext(ctx context.Context, db *sql.DB) error {
 	log.Debug("Initializing orchestrator")
 
 	versionAlreadyDeployed, err := versionIsDeployedContext(ctx, db)
+	layout, layoutErr := detectMetadataSchemaLayoutContext(ctx, db)
+	if layoutErr != nil {
+		return layoutErr
+	}
 	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
 		// Already deployed with this version
 		return nil
@@ -235,12 +339,24 @@ func initOrchestratorDBContext(ctx context.Context, db *sql.DB) error {
 	if config.Config.PanicIfDifferentDatabaseDeploy && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
 		return fmt.Errorf("PanicIfDifferentDatabaseDeploy is set: configured version %s is not present in the database", config.RuntimeCLIFlags.ConfiguredVersion)
 	}
-	log.Debugf("Migrating database schema")
-	if err := deployStatementsContext(ctx, db, generateSQLBase); err != nil {
-		return err
-	}
-	if err := deployStatementsContext(ctx, db, generateSQLPatches); err != nil {
-		return err
+	switch layout {
+	case metadataSchemaBootstrap:
+		log.Debug("Bootstrapping or resuming canonical metadata schema")
+		if err := deployCanonicalStatementsContext(ctx, db, metadataschema.Statements()); err != nil {
+			return err
+		}
+	case metadataSchemaLegacy:
+		log.Debug("Migrating legacy metadata schema")
+		if err := deployStatementsContext(ctx, db, generateSQLBase); err != nil {
+			return err
+		}
+		if err := deployStatementsContext(ctx, db, generateSQLPatches); err != nil {
+			return err
+		}
+	case metadataSchemaCanonical:
+		log.Debug("Canonical metadata schema is already bootstrapped")
+	default:
+		return fmt.Errorf("unsupported metadata schema layout: %d", layout)
 	}
 	if err := registerOrchestratorDeploymentContext(ctx, db); err != nil {
 		return err

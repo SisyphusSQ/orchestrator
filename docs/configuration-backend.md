@@ -9,7 +9,7 @@ Let orchestrator know where to find backend database. In this setup `orchestrato
 }
 ```
 
-You may choose either a `MySQL` backend or a `SQLite` backend. See [High availability](high-availability.md) page for scenarios, possibilities and reasons to using either.
+You may choose a MySQL-protocol backend (MySQL 5.7–8.0, TiDB, or OceanBase MySQL mode) or a `SQLite` backend. The shared DDL contract and exact validation boundaries are documented under [Metadata schema](schema/README.md). See [High availability](high-availability.md) for deployment scenarios; every Raft node uses its own independent backend.
 
 ## MySQL backend
 
@@ -43,9 +43,9 @@ Alternatively, you may choose to use plaintext credentials in the config file:
 }
 ```
 
-#### MySQL backend DB setup
+#### MySQL-compatible backend DB setup
 
-For a MySQL backend DB, you will need to grant the necessary privileges:
+For a MySQL-compatible backend DB, grant the necessary privileges using the target product's account syntax. The following example is native MySQL syntax:
 
 ```
 CREATE USER 'orchestrator_srv'@'orc_host' IDENTIFIED BY 'orc_server_password';
@@ -113,11 +113,15 @@ configured MySQL or SQLite dialect. GORM is bound to the same process-owned
 Statements that require a driver-provided `LastInsertId` use a small explicit
 `database/sql` adapter over that same pool.
 
-Schema creation and upgrades remain driven by the existing ordered SQL lists.
-The runtime does not call GORM `AutoMigrate` or `Migrator`, so this change does
-not introduce implicit DDL or a new schema source of truth. Connections to
-managed topology instances, Raft storage, dynamic topology result sets, and
-snapshot table transfer also remain outside the backend GORM DAO boundary.
+Schema ownership remains explicit and never moves to GORM `AutoMigrate` or
+`Migrator`. Empty databases are initialized from the executable
+[`docs/schema/mysql.sql`](schema/mysql.sql) contract. Databases that already
+contain orchestrator tables continue through the ordered `generateSQLBase` and
+`generateSQLPatches` compatibility stream; the two layouts are recorded in
+`orchestrator_schema_migrations`. See the [migration guide](schema/migration-guide.md)
+before upgrading or rolling back. Connections to managed topology instances,
+Raft storage, dynamic topology result sets, and snapshot table transfer remain
+outside the backend GORM DAO boundary.
 
 The GORM statement logger records duration and errors without rendering SQL or
 bound values. Existing database credentials and query parameters are therefore

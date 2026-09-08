@@ -32,7 +32,7 @@ The older top-level Markdown files under `docs/` preserve detailed design, histo
 - Operations: [failure detection](failure-detection.md), [topology recovery](topology-recovery.md), [status checks](status-checks.md), [observability](observability.md)
 - Interfaces: [orch](orch.md), [HTTP API](using-the-web-api.md), [Web console](web.md)
 - Configuration: [configuration topics](configuration.md), [sample](configuration-sample.md), [security](security.md), [TLS](ssl-and-tls.md)
-- Development: [build](build.md), [CI](ci.md), [contributors](developers.md)
+- Development: [metadata schema](schema/README.md), [build](build.md), [CI](ci.md), [contributors](developers.md)
 - Verification records: [verification index](verification/README.md)
 
 ## Maintenance

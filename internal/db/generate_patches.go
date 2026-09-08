@@ -47,7 +47,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_master_log_pos
+			ADD COLUMN relay_log_file varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER exec_master_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -80,12 +80,12 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN data_center varchar(32) CHARACTER SET ascii NOT NULL AFTER cluster_name
+			ADD COLUMN data_center varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER cluster_name
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN physical_environment varchar(32) CHARACTER SET ascii NOT NULL AFTER data_center
+			ADD COLUMN physical_environment varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER data_center
 	`,
 	`
 		ALTER TABLE
@@ -120,17 +120,17 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN analysis              varchar(128) CHARACTER SET ascii NOT NULL
+			ADD COLUMN analysis              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN cluster_name          varchar(128) CHARACTER SET ascii NOT NULL
+			ADD COLUMN cluster_name          varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN cluster_alias         varchar(128) CHARACTER SET ascii NOT NULL
+			ADD COLUMN cluster_alias         varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
@@ -140,7 +140,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN slave_hosts text CHARACTER SET ascii NOT NULL
+			ADD COLUMN slave_hosts text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE hostname_unresolve
@@ -179,17 +179,17 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN executed_gtid_set text CHARACTER SET ascii NOT NULL AFTER oracle_gtid
+			ADD COLUMN executed_gtid_set text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER oracle_gtid
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN server_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER server_id
+			ADD COLUMN server_uuid varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER server_id
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN suggested_cluster_alias varchar(128) CHARACTER SET ascii NOT NULL AFTER cluster_name
+			ADD COLUMN suggested_cluster_alias varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER cluster_name
 	`,
 	`
 		ALTER TABLE cluster_alias
@@ -212,31 +212,31 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN acknowledged_by varchar(128) CHARACTER SET utf8 NOT NULL
+			ADD COLUMN acknowledged_by varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN acknowledge_comment text CHARACTER SET utf8 NOT NULL
+			ADD COLUMN acknowledge_comment text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN participating_instances text CHARACTER SET ascii NOT NULL after slave_hosts
+			ADD COLUMN participating_instances text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL after slave_hosts
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN lost_slaves text CHARACTER SET ascii NOT NULL after participating_instances
+			ADD COLUMN lost_slaves text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL after participating_instances
 	`,
 	`
 		ALTER TABLE
 			topology_recovery
-			ADD COLUMN all_errors text CHARACTER SET ascii NOT NULL after lost_slaves
+			ADD COLUMN all_errors text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL after lost_slaves
 	`,
 	`
 		ALTER TABLE audit
-			ADD COLUMN cluster_name varchar(128) CHARACTER SET ascii NOT NULL DEFAULT '' AFTER port
+			ADD COLUMN cluster_name varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' AFTER port
 	`,
 	`
 		ALTER TABLE candidate_database_instance
@@ -268,7 +268,7 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE node_health
-			ADD COLUMN extra_info varchar(128) CHARACTER SET utf8 NOT NULL
+			ADD COLUMN extra_info varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
 	`,
 	`
 		ALTER TABLE agent_seed /* sqlite3-skip */
@@ -314,20 +314,20 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE node_health_history
-			ADD COLUMN command varchar(128) CHARACTER SET utf8 NOT NULL
+			ADD COLUMN command varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
 	`,
 	`
 		ALTER TABLE node_health
-			ADD COLUMN command varchar(128) CHARACTER SET utf8 NOT NULL
+			ADD COLUMN command varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
 	`,
 	`
 		ALTER TABLE database_instance_topology_history
-			ADD COLUMN version varchar(128) CHARACTER SET ascii NOT NULL
+			ADD COLUMN version varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN gtid_purged text CHARACTER SET ascii NOT NULL AFTER executed_gtid_set
+			ADD COLUMN gtid_purged text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER executed_gtid_set
 	`,
 	`
 		ALTER TABLE
@@ -372,7 +372,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN instance_alias varchar(128) CHARACTER SET ascii NOT NULL AFTER physical_environment
+			ADD COLUMN instance_alias varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER physical_environment
 	`,
 	`
 		ALTER TABLE
@@ -392,7 +392,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance_maintenance
-			ADD COLUMN processing_node_hostname varchar(128) CHARACTER SET ascii NOT NULL
+			ADD COLUMN processing_node_hostname varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
@@ -406,19 +406,19 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE node_health_history
-			ADD COLUMN app_version varchar(64) CHARACTER SET ascii NOT NULL DEFAULT ""
+			ADD COLUMN app_version varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ""
 	`,
 	`
 		ALTER TABLE node_health
-			ADD COLUMN app_version varchar(64) CHARACTER SET ascii NOT NULL DEFAULT ""
+			ADD COLUMN app_version varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ""
 	`,
 	`
 		ALTER TABLE node_health_history /* sqlite3-skip */
-			MODIFY app_version varchar(64) CHARACTER SET ascii NOT NULL DEFAULT ""
+			MODIFY app_version varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ""
 	`,
 	`
 		ALTER TABLE node_health /* sqlite3-skip */
-			MODIFY app_version varchar(64) CHARACTER SET ascii NOT NULL DEFAULT ""
+			MODIFY app_version varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ""
 	`,
 	`
 		ALTER TABLE
@@ -431,16 +431,16 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE database_instance
-			ADD COLUMN major_version varchar(16) CHARACTER SET ascii NOT NULL
+			ADD COLUMN major_version varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN binlog_row_image varchar(16) CHARACTER SET ascii NOT NULL
+			ADD COLUMN binlog_row_image varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE topology_recovery
-			ADD COLUMN uid varchar(128) CHARACTER SET ascii NOT NULL
+			ADD COLUMN uid varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		CREATE INDEX uid_idx_topology_recovery ON topology_recovery(uid)
@@ -476,7 +476,7 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE node_health
-			ADD COLUMN db_backend varchar(255) CHARACTER SET ascii NOT NULL DEFAULT ""
+			ADD COLUMN db_backend varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ""
 	`,
 	`
 		ALTER TABLE node_health
@@ -495,7 +495,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN gtid_mode varchar(32) CHARACTER SET ascii NOT NULL
+			ADD COLUMN gtid_mode varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
 	`,
 	`
 		ALTER TABLE
@@ -505,17 +505,17 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN master_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
+			ADD COLUMN master_uuid varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER oracle_gtid
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN gtid_errant text CHARACTER SET ascii NOT NULL AFTER gtid_purged
+			ADD COLUMN gtid_errant text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER gtid_purged
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER master_uuid
+			ADD COLUMN ancestry_uuid text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER master_uuid
 	`,
 	`
 		ALTER TABLE
@@ -536,7 +536,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN region varchar(32) CHARACTER SET ascii NOT NULL AFTER data_center
+			ADD COLUMN region varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER data_center
 	`,
 	`
 		ALTER TABLE
@@ -577,7 +577,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replication_group_name VARCHAR(64) CHARACTER SET ascii NOT NULL DEFAULT '' AFTER gtid_mode
+			ADD COLUMN replication_group_name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' AFTER gtid_mode
 	`,
 	`
 		ALTER TABLE
@@ -587,26 +587,37 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 		database_instance
-			ADD COLUMN replication_group_member_state VARCHAR(16) CHARACTER SET ascii NOT NULL DEFAULT '' AFTER replication_group_is_single_primary_mode
+			ADD COLUMN replication_group_member_state VARCHAR(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' AFTER replication_group_is_single_primary_mode
 	`,
 	`
 		ALTER TABLE
 		database_instance
-			ADD COLUMN replication_group_member_role VARCHAR(16) CHARACTER SET ascii NOT NULL DEFAULT '' AFTER replication_group_member_state
+			ADD COLUMN replication_group_member_role VARCHAR(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' AFTER replication_group_member_state
 	`,
 	`
 		ALTER TABLE
 		database_instance
-			ADD COLUMN replication_group_members text CHARACTER SET ascii NOT NULL AFTER replication_group_member_role
+			ADD COLUMN replication_group_members text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL AFTER replication_group_member_role
 	`,
 	`
 		ALTER TABLE
 		database_instance
-			ADD COLUMN replication_group_primary_host varchar(128) CHARACTER SET ascii NOT NULL DEFAULT '' AFTER replication_group_members
+			ADD COLUMN replication_group_primary_host varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' AFTER replication_group_members
 	`,
 	`
 		ALTER TABLE
 		database_instance
 			ADD COLUMN replication_group_primary_port smallint(5) unsigned NOT NULL DEFAULT 0 AFTER replication_group_primary_host
+	`,
+	`
+		CREATE TABLE IF NOT EXISTS orchestrator_schema_migrations (
+			migration_id varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '稳定的结构迁移标识',
+			applied_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '结构迁移完成时间',
+			PRIMARY KEY (migration_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='元数据库结构迁移记录'
+	`,
+	`
+		INSERT IGNORE INTO orchestrator_schema_migrations (migration_id, applied_at)
+		VALUES ('legacy-v1', CURRENT_TIMESTAMP)
 	`,
 }

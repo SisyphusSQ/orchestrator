@@ -25,12 +25,15 @@ func applyConversions(statement string, conversions []regexpMap) string {
 }
 
 var sqliteCreateTableConversions = []regexpMap{
-	newRegexpMap(`(?i) (character set|charset) [\S]+`, ``),
+	newRegexpMap(`(?i)DEFAULT (CHARSET|CHARACTER SET)[\s]*=[\s]*[\S]+`, ``),
+	newRegexpMap(`(?i) (CHARACTER SET|CHARSET) [a-z0-9_]+`, ``),
 	newRegexpMap(`(?i)int unsigned`, `int`),
 	newRegexpMap(`(?i)int[\s]*[(][\s]*([0-9]+)[\s]*[)] unsigned`, `int`),
 	newRegexpMap(`(?i)engine[\s]*=[\s]*(innodb|myisam|ndb|memory|tokudb)`, ``),
-	newRegexpMap(`(?i)DEFAULT CHARSET[\s]*=[\s]*[\S]+`, ``),
+	newRegexpMap(`(?i) COLLATE[\s]*=[\s]*[\S]+`, ``),
+	newRegexpMap(`(?i) COLLATE [\S]+`, ``),
 	newRegexpMap(`(?i)[\S]*int( not null|) auto_increment`, `integer`),
+	newRegexpMap(`(?i)COMMENT[\s]*=[\s]*'[^']*'`, ``),
 	newRegexpMap(`(?i)comment '[^']*'`, ``),
 	newRegexpMap(`(?i)after [\S]+`, ``),
 	newRegexpMap(`(?i)alter table ([\S]+) add (index|key) ([\S]+) (.+)`, `create index ${3}_${1} on $1 $4`),
