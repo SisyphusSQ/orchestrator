@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+rule_files:
+  - /etc/prometheus/alerts.yml
+scrape_configs:
+  - job_name: orchestrator
+    metrics_path: /metrics
+    scrape_timeout: 5s
+    static_configs:
+      # Every node must be scraped directly. Never use a leader-only VIP.
+      - targets: ['host.docker.internal:3000']
+        labels:
+          orchestrator_cluster: local-example
+    # For URLPrefix use /<prefix>/metrics. Configure basic_auth and tls_config
+    # here when required by the existing orchestrator authentication policy.

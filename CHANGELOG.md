@@ -7,6 +7,9 @@
   - Require a durable `RaftNodeID` independent of bind/advertise/DNS, bootstrap a single seed voter, and manage membership through ID-aware HTTP APIs (`/api/raft/configuration`, `/bootstrap`, `/members`, `/leadership/transfer`, `/snapshot`).
   - Use official FileSnapshotStore plus one Bolt store for logs and stable state, remove Yield/peer/health-report control paths, and report readiness from VerifyLeader, configuration suffrage, and last-contact.
 - optimization
+  - Replace Graphite, rcrowley/go-metrics and raw/aggregated Collection APIs with OpenTelemetry metrics and a node-local Prometheus endpoint; reject removed telemetry configuration keys and document the breaking upgrade.
+  - Add bounded OTLP tracing, layered local health checks, and an importable Prometheus Grafana dashboard with collection, alert and Collector/Tempo examples.
+  - Correct discovery queue/dead-instance gauges and backend wait/flush timing semantics while retaining discovery and recovery decisions.
   - Replace Martini and its auth, gzip, and render extensions with Gin v1.12.0 behind a project-owned HTTP transport adapter, preserving 306 API, Web, debug, and agent route contracts plus authentication, templates, static assets, Raft proxy termination, URL prefixes, and HTTP/HTTPS/Unix listener behavior.
   - Migrate stable orchestrator backend DAO reads and writes to GORM v1.31.2 with MySQL and SQLite drivers, while reusing the process-owned pool, retaining ordered SQL schema migrations, and keeping topology, snapshot, Raft, and `LastInsertId` paths explicitly scoped.
   - Remove the local `sqlutils` package and replace its remaining dynamic topology and snapshot helpers with context-aware, null-preserving adapters.

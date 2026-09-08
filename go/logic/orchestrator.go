@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -29,22 +30,21 @@ import (
 
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/agent"
-	"github.com/openark/orchestrator/go/collection"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/discovery"
 	"github.com/openark/orchestrator/go/inst"
 	"github.com/openark/orchestrator/go/kv"
-	ometrics "github.com/openark/orchestrator/go/metrics"
 	"github.com/openark/orchestrator/go/process"
 	orcraft "github.com/openark/orchestrator/go/raft"
 	"github.com/openark/orchestrator/go/util"
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
+
+	"github.com/openark/orchestrator/go/observability"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const (
-	discoveryMetricsName           = "DISCOVERY_METRICS"
 	transferAfterUnhealthyDuration = 5 * config.HealthPollSeconds * time.Second
 	fatalAfterUnhealthyDuration    = 30 * config.HealthPollSeconds * time.Second
 )
@@ -57,18 +57,7 @@ var deadInstancesDiscoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
 
-var discoveriesCounter = metrics.NewCounter()
-var failedDiscoveriesCounter = metrics.NewCounter()
-var instancePollSecondsExceededCounter = metrics.NewCounter()
-var discoveryQueueLengthGauge = metrics.NewGauge()
-var discoveryRecentCountGauge = metrics.NewGauge()
-var isElectedGauge = metrics.NewGauge()
-var isHealthyGauge = metrics.NewGauge()
-var isRaftHealthyGauge = metrics.NewGauge()
-var isRaftLeaderGauge = metrics.NewGauge()
-var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
-
-var deadInstancesDiscoveryQueueLengthGauge = metrics.NewGauge()
+var instancePollSecondsExceededCounter = observability.NewCounter("orchestrator_discoveries_instance_poll_seconds_exceeded_total", "discoveries.instance_poll_seconds_exceeded events")
 
 var isElectedNode int64 = 0
 
@@ -79,41 +68,6 @@ var kvFoundCache = cache.New(10*time.Minute, time.Minute)
 func init() {
 	snapshotDiscoveryKeys = make(chan inst.InstanceKey, 10)
 
-	metrics.Register("discoveries.attempt", discoveriesCounter)
-	metrics.Register("discoveries.fail", failedDiscoveriesCounter)
-	metrics.Register("discoveries.instance_poll_seconds_exceeded", instancePollSecondsExceededCounter)
-	metrics.Register("discoveries.queue_length", discoveryQueueLengthGauge)
-	metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
-	metrics.Register("elect.is_elected", isElectedGauge)
-	metrics.Register("health.is_healthy", isHealthyGauge)
-	metrics.Register("raft.is_healthy", isRaftHealthyGauge)
-	metrics.Register("raft.is_leader", isRaftLeaderGauge)
-
-	ometrics.OnMetricsTick(func() {
-		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
-	})
-	ometrics.OnMetricsTick(func() {
-		if recentDiscoveryOperationKeys == nil {
-			return
-		}
-		discoveryRecentCountGauge.Update(int64(recentDiscoveryOperationKeys.ItemCount()))
-	})
-	ometrics.OnMetricsTick(func() {
-		isElectedGauge.Update(atomic.LoadInt64(&isElectedNode))
-	})
-	ometrics.OnMetricsTick(func() {
-		isHealthyGauge.Update(atomic.LoadInt64(&process.LastContinousCheckHealthy))
-	})
-	ometrics.OnMetricsTick(func() {
-		var healthy int64
-		if orcraft.IsHealthy() {
-			healthy = 1
-		}
-		isRaftHealthyGauge.Update(healthy)
-	})
-	ometrics.OnMetricsTick(func() {
-		isRaftLeaderGauge.Update(atomic.LoadInt64(&isElectedNode))
-	})
 }
 
 func IsLeader() bool {
@@ -135,12 +89,17 @@ func instancePollSecondsDuration() time.Duration {
 	return time.Duration(config.Config.InstancePollSeconds) * time.Second
 }
 
+// AcceptSignals installs the process signal handler once, including HTTP without discovery.
+func AcceptSignals() { acceptSignalsOnce() }
+
+var acceptSignalsOnce = sync.OnceFunc(acceptSignals)
+
 // acceptSignals registers for OS signals
 func acceptSignals() {
 	c := make(chan os.Signal, 1)
 
 	signal.Notify(c, syscall.SIGHUP)
-	signal.Notify(c, syscall.SIGTERM)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		for sig := range c {
 			switch sig {
@@ -150,10 +109,8 @@ func acceptSignals() {
 				if _, err := config.Reload(); err != nil {
 					log.Sugar().Errorw("configuration reload failed", "trigger", "SIGHUP", "error", err)
 				}
-				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
-			case syscall.SIGTERM:
+			case syscall.SIGTERM, syscall.SIGINT:
 				log.Infof("Received SIGTERM. Shutting down orchestrator")
-				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
 				exitCode := 0
@@ -196,10 +153,6 @@ func handleDiscoveryRequests() {
 		deadInstancesDiscoveryQueue = discovery.CreateOrReturnQueue("DEADINSTANCES")
 
 		// Register dead instances queue gauge only if the queue exists
-		metrics.Register("discoveries.dead_instances_queue_length", deadInstancesDiscoveryQueueLengthGauge)
-		ometrics.OnMetricsTick(func() {
-			deadInstancesDiscoveryQueueLengthGauge.Update(int64(deadInstancesDiscoveryQueue.QueueLen()))
-		})
 
 		// create a pool of discovery workers
 		for i := uint(0); i < config.Config.DeadInstanceDiscoveryMaxConcurrency; i++ {
@@ -238,6 +191,9 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 		return
 	}
 
+	ctx, span := observability.StartSpan(context.Background(), "discovery")
+	observationStarted := false
+	observationResult := "failure"
 	// create stopwatch entries
 	latency := stopwatch.NewNamedStopwatch()
 	latency.AddMany([]string{
@@ -247,10 +203,17 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
 
 	defer func() {
+		defer span.End()
 		latency.Stop("total")
 		discoveryTime := latency.Elapsed("total")
+		if observationStarted {
+			observability.RecordDiscovery(ctx, observationResult, discoveryTime, latency.Elapsed("backend"), latency.Elapsed("instance"))
+			if observationResult == "failure" {
+				span.SetStatus(codes.Error, "discovery failed")
+			}
+		}
 		if discoveryTime > instancePollSecondsDuration() {
-			instancePollSecondsExceededCounter.Inc(1)
+			instancePollSecondsExceededCounter.Add(context.Background(), 1)
 			log.Warningf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", instanceKey, discoveryTime.Seconds())
 		}
 	}()
@@ -269,18 +232,20 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	}
 
 	latency.Start("backend")
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceContext(ctx, &instanceKey)
 	latency.Stop("backend")
 	if found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
 		return
 	}
 
-	discoveriesCounter.Inc(1)
+	observability.DiscoveryStarted.Add(ctx, 1)
+	observationStarted = true
 
 	// First we've ever heard of this instance. Continue investigation:
 	skipped := false
-	instance, skipped, err = inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, skipped, err = inst.ReadTopologyInstanceBufferableContext(ctx, &instanceKey, config.Config.BufferInstanceWrites, latency)
+	observationResult = observability.Result(err)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -288,22 +253,18 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	instanceLatency := latency.Elapsed("instance")
 
 	if skipped {
+		observationResult = "skipped"
 		if config.Config.EnableDiscoveryFiltersLogs {
 			log.Infof("discoverInstance: skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", instanceKey)
 		}
 		return
 	}
 
+	if err != nil {
+		observationResult = "failure"
+	}
 	if instance == nil {
-		failedDiscoveriesCounter.Inc(1)
-		discoveryMetrics.Append(&discovery.Metric{
-			Timestamp:       time.Now(),
-			InstanceKey:     instanceKey,
-			TotalLatency:    totalLatency,
-			BackendLatency:  backendLatency,
-			InstanceLatency: instanceLatency,
-			Err:             err,
-		})
+		observationResult = "failure"
 		if util.ClearToLog("discoverInstance", instanceKey.StringCode()) {
 			log.Warningf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
 				instanceKey,
@@ -314,15 +275,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 		}
 		return
 	}
-
-	discoveryMetrics.Append(&discovery.Metric{
-		Timestamp:       time.Now(),
-		InstanceKey:     instanceKey,
-		TotalLatency:    totalLatency,
-		BackendLatency:  backendLatency,
-		InstanceLatency: instanceLatency,
-		Err:             nil,
-	})
 
 	if !IsLeaderOrActive() {
 		// Maybe this node was elected before, but isn't elected anymore.
@@ -573,6 +525,8 @@ func ContinuousDiscovery() error {
 	continuousDiscoveryStartTime := time.Now()
 	checkAndRecoverWaitPeriod := 3 * instancePollSecondsDuration()
 	recentDiscoveryOperationKeys = cache.New(instancePollSecondsDuration(), time.Second)
+	recentCache := recentDiscoveryOperationKeys
+	observability.Gauge("orchestrator_discovery_recent_instances", "Recent discovery cache entries", func() int64 { return int64(recentCache.ItemCount()) })
 	var raftErrors <-chan error
 	if config.Config.RaftEnabled {
 		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
@@ -615,9 +569,7 @@ func ContinuousDiscovery() error {
 
 	var seedOnce sync.Once
 
-	go ometrics.InitMetrics()
-	go ometrics.InitGraphiteMetrics()
-	go acceptSignals()
+	AcceptSignals()
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()

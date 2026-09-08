@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,13 +33,13 @@ import (
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/inst"
 	"github.com/openark/orchestrator/go/kv"
-	ometrics "github.com/openark/orchestrator/go/metrics"
 	"github.com/openark/orchestrator/go/os"
 	"github.com/openark/orchestrator/go/process"
 	orcraft "github.com/openark/orchestrator/go/raft"
 	"github.com/openark/orchestrator/go/util"
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 var countPendingRecoveries int64
@@ -184,40 +185,11 @@ func (this InstancesByCountReplicas) Less(i, j int) bool {
 	return len(this[i].Replicas) < len(this[j].Replicas)
 }
 
-var recoverDeadMasterCounter = metrics.NewCounter()
-var recoverDeadMasterSuccessCounter = metrics.NewCounter()
-var recoverDeadMasterFailureCounter = metrics.NewCounter()
-var recoverDeadIntermediateMasterCounter = metrics.NewCounter()
-var recoverDeadIntermediateMasterSuccessCounter = metrics.NewCounter()
-var recoverDeadIntermediateMasterFailureCounter = metrics.NewCounter()
-var recoverDeadCoMasterCounter = metrics.NewCounter()
-var recoverDeadCoMasterSuccessCounter = metrics.NewCounter()
-var recoverDeadCoMasterFailureCounter = metrics.NewCounter()
-var recoverDeadReplicationGroupMemberCounter = metrics.NewCounter()
-var recoverDeadReplicationGroupMemberSuccessCounter = metrics.NewCounter()
-var recoverDeadReplicationGroupMemberFailureCounter = metrics.NewCounter()
-var countPendingRecoveriesGauge = metrics.NewGauge()
-
 func init() {
-	metrics.Register("recover.dead_master.start", recoverDeadMasterCounter)
-	metrics.Register("recover.dead_master.success", recoverDeadMasterSuccessCounter)
-	metrics.Register("recover.dead_master.fail", recoverDeadMasterFailureCounter)
-	metrics.Register("recover.dead_intermediate_master.start", recoverDeadIntermediateMasterCounter)
-	metrics.Register("recover.dead_intermediate_master.success", recoverDeadIntermediateMasterSuccessCounter)
-	metrics.Register("recover.dead_intermediate_master.fail", recoverDeadIntermediateMasterFailureCounter)
-	metrics.Register("recover.dead_co_master.start", recoverDeadCoMasterCounter)
-	metrics.Register("recover.dead_co_master.success", recoverDeadCoMasterSuccessCounter)
-	metrics.Register("recover.dead_co_master.fail", recoverDeadCoMasterFailureCounter)
-	metrics.Register("recover.dead_replication_group_member.start", recoverDeadReplicationGroupMemberCounter)
-	metrics.Register("recover.dead_replication_group_member.success", recoverDeadReplicationGroupMemberSuccessCounter)
-	metrics.Register("recover.dead_replication_group_member.fail", recoverDeadReplicationGroupMemberFailureCounter)
-	metrics.Register("recover.pending", countPendingRecoveriesGauge)
 
 	go initializeTopologyRecoveryPostConfiguration()
 
-	ometrics.OnMetricsTick(func() {
-		countPendingRecoveriesGauge.Update(getCountPendingRecoveries())
-	})
+	observability.Gauge("orchestrator_recovery_pending", "Pending recoveries", getCountPendingRecoveries)
 }
 
 func getCountPendingRecoveries() int64 {
@@ -355,7 +327,13 @@ func applyEnvironmentVariables(topologyRecovery *TopologyRecovery) []string {
 	return env
 }
 
-func executeProcess(command string, env []string, topologyRecovery *TopologyRecovery, fullDescription string) (err error) {
+func executeProcess(command string, env []string, topologyRecovery *TopologyRecovery, fullDescription string) error {
+	return executeProcessContext(context.Background(), command, env, topologyRecovery, fullDescription)
+}
+
+func executeProcessContext(ctx context.Context, command string, env []string, topologyRecovery *TopologyRecovery, fullDescription string) (err error) {
+	_, span := observability.StartSpan(ctx, "recovery.hook")
+	defer func() { observability.EndSpan(span, err) }()
 	// Log the command to be run and record how long it takes as this may be useful
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Running %s: %s", fullDescription, command))
 	start := time.Now()
@@ -371,7 +349,11 @@ func executeProcess(command string, env []string, topologyRecovery *TopologyReco
 }
 
 // executeProcesses executes a list of processes
-func executeProcesses(processes []string, description string, topologyRecovery *TopologyRecovery, failOnError bool) (err error) {
+func executeProcesses(processes []string, description string, topologyRecovery *TopologyRecovery, failOnError bool) error {
+	return executeProcessesContext(context.Background(), processes, description, topologyRecovery, failOnError)
+}
+
+func executeProcessesContext(ctx context.Context, processes []string, description string, topologyRecovery *TopologyRecovery, failOnError bool) (err error) {
 	if len(processes) == 0 {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("No %s hooks to run", description))
 		return nil
@@ -388,9 +370,9 @@ func executeProcesses(processes []string, description string, topologyRecovery *
 		}
 		if async {
 			// Ignore errors
-			go executeProcess(command, env, topologyRecovery, fullDescription)
+			go executeProcessContext(context.WithoutCancel(ctx), command, env, topologyRecovery, fullDescription)
 		} else {
-			if cmdErr := executeProcess(command, env, topologyRecovery, fullDescription); cmdErr != nil {
+			if cmdErr := executeProcessContext(ctx, command, env, topologyRecovery, fullDescription); cmdErr != nil {
 				if failOnError {
 					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Not running further %s hooks", description))
 					return cmdErr
@@ -513,6 +495,11 @@ func GetMasterRecoveryType(analysisEntry *inst.ReplicationAnalysis) (masterRecov
 
 // recoverDeadMaster recovers a dead master, complete logic inside
 func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+	return recoverDeadMasterContext(context.Background(), topologyRecovery, candidateInstanceKey, skipProcesses)
+}
+func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+	ctx, span := observability.StartSpan(ctx, "recovery.execute")
+	defer func() { observability.EndSpan(span, err) }()
 	topologyRecovery.Type = MasterRecovery
 	analysisEntry := &topologyRecovery.AnalysisEntry
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
@@ -521,7 +508,7 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 
 	inst.AuditOperation("recover-dead-master", failedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeProcessesContext(ctx, config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
 			return false, nil, lostReplicas, topologyRecovery.AddError(err)
 		}
 	}
@@ -851,8 +838,10 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 	// That's it! We must do recovery!
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", analysisEntry.ClusterDetails.ClusterName))
-	recoverDeadMasterCounter.Inc(1)
-	recoveryAttempted, promotedReplica, lostReplicas, err := recoverDeadMaster(topologyRecovery, candidateInstanceKey, skipProcesses)
+	recoveryCtx, finishRecovery := observability.BeginRecovery(context.Background(), "dead_master")
+	recoveryResult := "failure"
+	defer func() { finishRecovery(recoveryResult) }()
+	recoveryAttempted, promotedReplica, lostReplicas, err := recoverDeadMasterContext(recoveryCtx, topologyRecovery, candidateInstanceKey, skipProcesses)
 	if err != nil {
 		AuditTopologyRecovery(topologyRecovery, err.Error())
 	}
@@ -899,7 +888,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 	// Now, see whether we are successful or not. From this point there's no going back.
 	if promotedReplica != nil {
 		// Success!
-		recoverDeadMasterSuccessCounter.Inc(1)
+		recoveryResult = "success"
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: successfully promoted %+v", promotedReplica.Key))
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: promoted server coordinates: %+v", promotedReplica.SelfBinlogCoordinates))
 
@@ -972,10 +961,10 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 		if !skipProcesses {
 			// Execute post master-failover processes
-			executeProcesses(config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
+			executeProcessesContext(recoveryCtx, config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
 		}
 	} else {
-		recoverDeadMasterFailureCounter.Inc(1)
+		recoveryResult = "failure"
 	}
 
 	return true, topologyRecovery, err
@@ -1119,6 +1108,11 @@ func GetCandidateSiblingOfIntermediateMaster(topologyRecovery *TopologyRecovery,
 
 // RecoverDeadIntermediateMaster performs intermediate master recovery; complete logic inside
 func RecoverDeadIntermediateMaster(topologyRecovery *TopologyRecovery, skipProcesses bool) (successorInstance *inst.Instance, err error) {
+	return RecoverDeadIntermediateMasterContext(context.Background(), topologyRecovery, skipProcesses)
+}
+func RecoverDeadIntermediateMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, skipProcesses bool) (successorInstance *inst.Instance, err error) {
+	ctx, span := observability.StartSpan(ctx, "recovery.execute")
+	defer func() { observability.EndSpan(span, err) }()
 	topologyRecovery.Type = IntermediateMasterRecovery
 	analysisEntry := &topologyRecovery.AnalysisEntry
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
@@ -1126,7 +1120,7 @@ func RecoverDeadIntermediateMaster(topologyRecovery *TopologyRecovery, skipProce
 
 	inst.AuditOperation("recover-dead-intermediate-master", failedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeProcessesContext(ctx, config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
 			return nil, topologyRecovery.AddError(err)
 		}
 	}
@@ -1270,26 +1264,33 @@ func checkAndRecoverDeadIntermediateMaster(analysisEntry inst.ReplicationAnalysi
 	}
 
 	// That's it! We must do recovery!
-	recoverDeadIntermediateMasterCounter.Inc(1)
-	promotedReplica, err := RecoverDeadIntermediateMaster(topologyRecovery, skipProcesses)
+	recoveryCtx, finishRecovery := observability.BeginRecovery(context.Background(), "dead_intermediate_master")
+	recoveryResult := "failure"
+	defer func() { finishRecovery(recoveryResult) }()
+	promotedReplica, err := RecoverDeadIntermediateMasterContext(recoveryCtx, topologyRecovery, skipProcesses)
 	if promotedReplica != nil {
 		// success
-		recoverDeadIntermediateMasterSuccessCounter.Inc(1)
+		recoveryResult = "success"
 
 		if !skipProcesses {
 			// Execute post intermediate-master-failover processes
 			topologyRecovery.SuccessorKey = &promotedReplica.Key
 			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
-			executeProcesses(config.Config.PostIntermediateMasterFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
+			executeProcessesContext(recoveryCtx, config.Config.PostIntermediateMasterFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
 		}
 	} else {
-		recoverDeadIntermediateMasterFailureCounter.Inc(1)
+		recoveryResult = "failure"
 	}
 	return true, topologyRecovery, err
 }
 
 // RecoverDeadCoMaster recovers a dead co-master, complete logic inside
 func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+	return RecoverDeadCoMasterContext(context.Background(), topologyRecovery, skipProcesses)
+}
+func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+	ctx, span := observability.StartSpan(ctx, "recovery.execute")
+	defer func() { observability.EndSpan(span, err) }()
 	topologyRecovery.Type = CoMasterRecovery
 	analysisEntry := &topologyRecovery.AnalysisEntry
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
@@ -1300,7 +1301,7 @@ func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool)
 	}
 	inst.AuditOperation("recover-dead-co-master", failedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeProcessesContext(ctx, config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
 			return nil, lostReplicas, topologyRecovery.AddError(err)
 		}
 	}
@@ -1421,8 +1422,10 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 	}
 
 	// That's it! We must do recovery!
-	recoverDeadCoMasterCounter.Inc(1)
-	promotedReplica, lostReplicas, err := RecoverDeadCoMaster(topologyRecovery, skipProcesses)
+	recoveryCtx, finishRecovery := observability.BeginRecovery(context.Background(), "dead_co_master")
+	recoveryResult := "failure"
+	defer func() { finishRecovery(recoveryResult) }()
+	promotedReplica, lostReplicas, err := RecoverDeadCoMasterContext(recoveryCtx, topologyRecovery, skipProcesses)
 	resolveRecovery(topologyRecovery, promotedReplica)
 	if promotedReplica == nil {
 		inst.AuditOperation("recover-dead-co-master", failedInstanceKey, "Failure: no replica promoted.")
@@ -1435,7 +1438,7 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 			return false, nil, log.Errorf("Promoted replica %+v: sql thread is not up to date (relay logs still unapplied). Aborting promotion", promotedReplica.Key)
 		}
 		// success
-		recoverDeadCoMasterSuccessCounter.Inc(1)
+		recoveryResult = "success"
 
 		if config.Config.ApplyMySQLPromotionAfterMasterFailover {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: will apply MySQL changes to promoted master"))
@@ -1445,10 +1448,10 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 			// Execute post intermediate-master-failover processes
 			topologyRecovery.SuccessorKey = &promotedReplica.Key
 			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
-			executeProcesses(config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
+			executeProcessesContext(recoveryCtx, config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
 		}
 	} else {
-		recoverDeadCoMasterFailureCounter.Inc(1)
+		recoveryResult = "failure"
 	}
 	return true, topologyRecovery, err
 }
@@ -1574,23 +1577,25 @@ func checkAndRecoverDeadGroupMemberWithReplicas(analysisEntry inst.ReplicationAn
 		return false, nil, err
 	}
 	// Proceed with recovery
-	recoverDeadReplicationGroupMemberCounter.Inc(1)
+	recoveryCtx, finishRecovery := observability.BeginRecovery(context.Background(), "dead_replication_group_member")
+	recoveryResult := "failure"
+	defer func() { finishRecovery(recoveryResult) }()
 
 	recoveredToGroupMember, err := RecoverDeadReplicationGroupMemberWithReplicas(topologyRecovery, skipProcesses)
 
 	if recoveredToGroupMember != nil {
 		// success
-		recoverDeadReplicationGroupMemberSuccessCounter.Inc(1)
+		recoveryResult = "success"
 
 		if !skipProcesses {
 			// Execute post failover processes
 			topologyRecovery.SuccessorKey = &recoveredToGroupMember.Key
 			topologyRecovery.SuccessorAlias = recoveredToGroupMember.InstanceAlias
 			// For the same reasons that were mentioned above, we re-use the post intermediate master fail-over hooks
-			executeProcesses(config.Config.PostIntermediateMasterFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
+			executeProcessesContext(recoveryCtx, config.Config.PostIntermediateMasterFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
 		}
 	} else {
-		recoverDeadReplicationGroupMemberFailureCounter.Inc(1)
+		recoveryResult = "failure"
 	}
 	return true, topologyRecovery, err
 }

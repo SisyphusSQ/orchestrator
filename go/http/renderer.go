@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 const defaultResponseCharset = "UTF-8"
@@ -94,6 +96,9 @@ type response struct {
 var _ Responder = (*response)(nil)
 
 func (response *response) JSON(status int, value interface{}) {
+	if api, ok := value.(*APIResponse); ok && api.Code == ERROR {
+		observability.MarkBusinessError(response.request.Context())
+	}
 	contents, err := json.Marshal(value)
 	if err != nil {
 		nethttp.Error(response.writer, err.Error(), nethttp.StatusInternalServerError)

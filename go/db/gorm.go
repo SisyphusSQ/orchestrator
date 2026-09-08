@@ -12,6 +12,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 const backendSlowQueryThreshold = 200 * time.Millisecond
@@ -68,11 +70,12 @@ func (logger backendGORMLogger) Error(_ context.Context, _ string, _ ...interfac
 }
 
 func (logger backendGORMLogger) Trace(
-	_ context.Context,
+	ctx context.Context,
 	begin time.Time,
 	_ func() (sql string, rowsAffected int64),
 	err error,
 ) {
+	observability.RecordSQL(ctx, "backend", begin, err)
 	if logger.level == gormlogger.Silent {
 		return
 	}
@@ -173,7 +176,9 @@ func ExecOrchestratorSQLContext(ctx context.Context, query string, args ...inter
 	if err != nil {
 		return nil, err
 	}
+	begin := time.Now()
 	result, err := database.ExecContext(ctx, translated, args...)
+	observability.RecordSQL(ctx, "backend_adapter", begin, err)
 	if err != nil {
 		return nil, fmt.Errorf("execute orchestrator SQL adapter: %w", err)
 	}

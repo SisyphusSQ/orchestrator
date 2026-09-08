@@ -6,6 +6,8 @@ The following is a production configuration file, with some details redacted.
 
 ```json
 {
+  "OTelTraceEndpoint": "",
+  "OTelTraceSampleRatio": 0.1,
   "Debug": true,
   "EnableSyslog": false,
   "ListenAddress": ":3000",
@@ -155,10 +157,6 @@ The following is a production configuration file, with some details redacted.
   "OSCIgnoreHostnameFilters": [
 
   ],
-  "GraphitePollSeconds": 60,
-  "GraphiteAddr": "",
-  "GraphitePath": "",
-  "GraphiteConvertHostnameDotsToUnderscores": true,
   "BackendDB": "mysql",
   "MySQLTopologyReadTimeoutSeconds": 3,
   "MySQLDiscoveryReadTimeoutSeconds": 3,

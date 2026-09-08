@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -30,12 +31,15 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 var AppVersion, GitCommit string
 
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
+	log.RegisterCloseHook(app.CloseHealthMonitor)
 	registerProcessCloseHooks(log.RegisterCloseHook, inst.CloseAuditSyslog, db.Close)
 	exitCode := run()
 	if err := log.Close(); err != nil {
@@ -173,6 +177,12 @@ func run() int {
 		}
 	}
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
+	telemetry, err := observability.New(context.Background(), config.Config.OTelTraceEndpoint, config.Config.OTelTraceSampleRatio, AppVersion)
+	if err != nil {
+		log.Fatalf("initialize telemetry: %v", err)
+	}
+	telemetry.Install()
+	log.RegisterCloseHook(telemetry.Close)
 	config.MarkConfigurationLoaded()
 
 	if len(flag.Args()) == 0 && *command == "" {

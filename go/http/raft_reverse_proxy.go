@@ -8,6 +8,8 @@ import (
 	"github.com/openark/golib/log"
 
 	"github.com/openark/orchestrator/go/raft"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 func raftReverseProxy(w http.ResponseWriter, r *http.Request) {
@@ -42,5 +44,6 @@ func raftReverseProxy(w http.ResponseWriter, r *http.Request) {
 		log.Errore(err)
 		return
 	}
+	observability.InjectTrace(r)
 	proxy.ServeHTTP(w, r)
 }

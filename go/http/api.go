@@ -31,12 +31,9 @@ import (
 
 	fqdn "github.com/Showmax/go-fqdn"
 	"github.com/openark/orchestrator/go/agent"
-	"github.com/openark/orchestrator/go/collection"
 	"github.com/openark/orchestrator/go/config"
-	"github.com/openark/orchestrator/go/discovery"
 	"github.com/openark/orchestrator/go/inst"
 	"github.com/openark/orchestrator/go/logic"
-	"github.com/openark/orchestrator/go/metrics/query"
 	"github.com/openark/orchestrator/go/process"
 	orcraft "github.com/openark/orchestrator/go/raft"
 )
@@ -168,9 +165,6 @@ type HttpAPI struct {
 }
 
 var API HttpAPI = HttpAPI{}
-var discoveryMetrics = collection.CreateOrReturnCollection("DISCOVERY_METRICS")
-var queryMetrics = collection.CreateOrReturnCollection("BACKEND_WRITES")
-var writeBufferMetrics = collection.CreateOrReturnCollection("WRITE_BUFFER")
 
 func (this *HttpAPI) getInstanceKeyInternal(host string, port string, resolve bool) (inst.InstanceKey, error) {
 	var instanceKey *inst.InstanceKey
@@ -244,7 +238,7 @@ func (this *HttpAPI) Instance(params Params, r Responder, req *http.Request) {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -281,7 +275,7 @@ func (this *HttpAPI) Discover(params Params, r Responder, req *http.Request, use
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ReadTopologyInstance(&instanceKey)
+	instance, err := inst.ReadTopologyInstanceContext(req.Context(), &instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1057,7 +1051,7 @@ func (this *HttpAPI) LastPseudoGTID(params Params, r Responder, req *http.Reques
 		return
 	}
 
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1531,7 +1525,7 @@ func (this *HttpAPI) CanReplicateFrom(params Params, r Responder, req *http.Requ
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -1541,7 +1535,7 @@ func (this *HttpAPI) CanReplicateFrom(params Params, r Responder, req *http.Requ
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowInstance, found, err := inst.ReadInstance(&belowKey)
+	belowInstance, found, err := inst.ReadInstanceContext(req.Context(), &belowKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", belowKey)})
 		return
@@ -1563,7 +1557,7 @@ func (this *HttpAPI) CanReplicateFromGTID(params Params, r Responder, req *http.
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -1573,7 +1567,7 @@ func (this *HttpAPI) CanReplicateFromGTID(params Params, r Responder, req *http.
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowInstance, found, err := inst.ReadInstance(&belowKey)
+	belowInstance, found, err := inst.ReadInstanceContext(req.Context(), &belowKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", belowKey)})
 		return
@@ -1828,7 +1822,7 @@ func (this *HttpAPI) ClusterByInstance(params Params, r Responder, req *http.Req
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, err := inst.ReadInstanceContext(req.Context(), &instanceKey)
 	if (!found) || (err != nil) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -2387,189 +2381,6 @@ func (this *HttpAPI) BulkInstances(params Params, r Responder, req *http.Request
 	}
 
 	r.JSON(http.StatusOK, instances)
-}
-
-// DiscoveryMetricsRaw will return the last X seconds worth of discovery information in time based order as a JSON array
-func (this *HttpAPI) DiscoveryMetricsRaw(params Params, r Responder, req *http.Request, user Principal) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	if err != nil || seconds <= 0 {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Invalid value provided for seconds"})
-		return
-	}
-
-	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
-	json, err := discovery.JSONSince(discoveryMetrics, refTime)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to determine start time. Perhaps seconds value is wrong?"})
-		return
-	}
-	log.Debugf("DiscoveryMetricsRaw data: retrieved %d entries from discovery.MC", len(json))
-
-	r.JSON(http.StatusOK, json)
-}
-
-// DiscoveryMetricsAggregated will return a single set of aggregated metrics for raw values collected since the
-// specified time.
-func (this *HttpAPI) DiscoveryMetricsAggregated(params Params, r Responder, req *http.Request, user Principal) {
-	seconds, err := strconv.Atoi(params["seconds"])
-
-	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
-	aggregated, err := discovery.AggregatedSince(discoveryMetrics, refTime)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate aggregated discovery metrics"})
-		return
-	}
-	// log.Debugf("DiscoveryMetricsAggregated data: %+v", aggregated)
-	r.JSON(http.StatusOK, aggregated)
-}
-
-func (this *HttpAPI) discoveryQueueMetricsAggregatedCommon(params Params, r Responder, req *http.Request, user Principal, queueName string) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("DiscoveryQueueMetricsAggregated: queue: %s, seconds: %d", queueName, seconds)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue aggregated metrics"})
-		return
-	}
-
-	queue := discovery.ReturnQueue(queueName)
-	if queue == nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue aggregated metrics for unknown queue"})
-		return
-	}
-	aggregated := queue.AggregatedDiscoveryQueueMetrics(seconds)
-	log.Debugf("DiscoveryQueueMetricsAggregated data: %+v", aggregated)
-
-	r.JSON(http.StatusOK, aggregated)
-}
-
-func (this *HttpAPI) discoveryQueueMetricsRawCommon(params Params, r Responder, req *http.Request, user Principal, queueName string) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("DiscoveryQueueMetricsRaw: seconds: %d", seconds)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue raw metrics"})
-		return
-	}
-
-	queue := discovery.ReturnQueue(queueName)
-	if queue == nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue aggregated metrics for unknown queue"})
-		return
-	}
-	metrics := queue.DiscoveryQueueMetrics(seconds)
-	log.Debugf("DiscoveryQueueMetricsRaw data: %+v", metrics)
-
-	r.JSON(http.StatusOK, metrics)
-}
-
-// DiscoveryQueueMetricsRaw returns the raw queue metrics (active and
-// queued values), data taken secondly for the last N seconds.
-func (this *HttpAPI) DiscoveryQueueMetricsRaw(params Params, r Responder, req *http.Request, user Principal) {
-	this.discoveryQueueMetricsRawCommon(params, r, req, user, "DEFAULT")
-}
-
-// DiscoveryQueueMetricsAggregated returns a single value showing the metrics of the discovery queue over the last N seconds.
-// This is expected to be called every 60 seconds (?) and the config setting of the retention period is currently hard-coded.
-// See go/discovery/ for more information.
-func (this *HttpAPI) DiscoveryQueueMetricsAggregated(params Params, r Responder, req *http.Request, user Principal) {
-	this.discoveryQueueMetricsAggregatedCommon(params, r, req, user, "DEFAULT")
-}
-
-// DiscoveryQueueMetricsRaw2 returns the raw queue metrics (active and
-// queued values), data taken secondly for the last N seconds.
-func (this *HttpAPI) DiscoveryQueueMetricsRaw2(params Params, r Responder, req *http.Request, user Principal) {
-	queue, found := params["queue"]
-	if !found {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue raw metrics"})
-		return
-	}
-
-	this.discoveryQueueMetricsRawCommon(params, r, req, user, queue)
-}
-
-// DiscoveryQueueMetricsAggregated2 returns a single value showing the metrics of the discovery queue over the last N seconds.
-// This is expected to be called every 60 seconds (?) and the config setting of the retention period is currently hard-coded.
-// See go/discovery/ for more information.
-func (this *HttpAPI) DiscoveryQueueMetricsAggregated2(params Params, r Responder, req *http.Request, user Principal) {
-	queue, found := params["queue"]
-	if !found {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate discovery queue aggregated metrics"})
-		return
-	}
-
-	this.discoveryQueueMetricsAggregatedCommon(params, r, req, user, queue)
-}
-
-// BackendQueryMetricsRaw returns the raw backend query metrics
-func (this *HttpAPI) BackendQueryMetricsRaw(params Params, r Responder, req *http.Request, user Principal) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("BackendQueryMetricsRaw: seconds: %d", seconds)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate raw backend query metrics"})
-		return
-	}
-
-	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
-	m, err := queryMetrics.Since(refTime)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to return backend query metrics"})
-		return
-	}
-
-	log.Debugf("BackendQueryMetricsRaw data: %+v", m)
-
-	r.JSON(http.StatusOK, m)
-}
-
-func (this *HttpAPI) BackendQueryMetricsAggregated(params Params, r Responder, req *http.Request, user Principal) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("BackendQueryMetricsAggregated: seconds: %d", seconds)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to aggregated generate backend query metrics"})
-		return
-	}
-
-	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
-	aggregated := query.AggregatedSince(queryMetrics, refTime)
-	log.Debugf("BackendQueryMetricsAggregated data: %+v", aggregated)
-
-	r.JSON(http.StatusOK, aggregated)
-}
-
-// WriteBufferMetricsRaw returns the raw instance write buffer metrics
-func (this *HttpAPI) WriteBufferMetricsRaw(params Params, r Responder, req *http.Request, user Principal) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("WriteBufferMetricsRaw: seconds: %d", seconds)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to generate raw instance write buffer metrics"})
-		return
-	}
-
-	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
-	m, err := writeBufferMetrics.Since(refTime)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to return instance write buffermetrics"})
-		return
-	}
-
-	log.Debugf("WriteBufferMetricsRaw data: %+v", m)
-
-	r.JSON(http.StatusOK, m)
-}
-
-// WriteBufferMetricsAggregated provides aggregate metrics of instance write buffer metrics
-func (this *HttpAPI) WriteBufferMetricsAggregated(params Params, r Responder, req *http.Request, user Principal) {
-	seconds, err := strconv.Atoi(params["seconds"])
-	log.Debugf("WriteBufferMetricsAggregated: seconds: %d", seconds)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Unable to aggregated instance write buffer metrics"})
-		return
-	}
-
-	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
-	aggregated := inst.AggregatedSince(writeBufferMetrics, refTime)
-	log.Debugf("WriteBufferMetricsAggregated data: %+v", aggregated)
-
-	r.JSON(http.StatusOK, aggregated)
 }
 
 // Agents provides complete list of registered agents (See https://github.com/openark/orchestrator-agent)
@@ -3174,7 +2985,7 @@ func (this *HttpAPI) ForceMasterTakeover(params Params, r Responder, req *http.R
 		return
 	}
 	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
-	designatedInstance, _, err := inst.ReadInstance(&designatedKey)
+	designatedInstance, _, err := inst.ReadInstanceContext(req.Context(), &designatedKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -3887,16 +3698,6 @@ func (this *HttpAPI) RegisterRequests(m *Router) {
 	this.registerAPIRequest(m, "bulk-promotion-rules", this.BulkPromotionRules)
 
 	// Monitoring
-	this.registerAPIRequest(m, "discovery-metrics-raw/:seconds", this.DiscoveryMetricsRaw)
-	this.registerAPIRequest(m, "discovery-metrics-aggregated/:seconds", this.DiscoveryMetricsAggregated)
-	this.registerAPIRequest(m, "discovery-queue-metrics-raw/:seconds", this.DiscoveryQueueMetricsRaw)
-	this.registerAPIRequest(m, "discovery-queue-metrics-aggregated/:seconds", this.DiscoveryQueueMetricsAggregated)
-	this.registerAPIRequest(m, "discovery-queue-metrics-raw/:queue/:seconds", this.DiscoveryQueueMetricsRaw2)
-	this.registerAPIRequest(m, "discovery-queue-metrics-aggregated/:queue/:seconds", this.DiscoveryQueueMetricsAggregated2)
-	this.registerAPIRequest(m, "backend-query-metrics-raw/:seconds", this.BackendQueryMetricsRaw)
-	this.registerAPIRequest(m, "backend-query-metrics-aggregated/:seconds", this.BackendQueryMetricsAggregated)
-	this.registerAPIRequest(m, "write-buffer-metrics-raw/:seconds", this.WriteBufferMetricsRaw)
-	this.registerAPIRequest(m, "write-buffer-metrics-aggregated/:seconds", this.WriteBufferMetricsAggregated)
 
 	// Agents
 	this.registerAPIRequest(m, "agents", this.Agents)

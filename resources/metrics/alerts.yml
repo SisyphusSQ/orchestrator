@@ -1,0 +1,50 @@
+groups:
+  - name: orchestrator
+    rules:
+      - alert: OrchestratorTargetDown
+        expr: up{job="orchestrator"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Orchestrator 节点无法抓取'
+          description: '检查目标 {{ $labels.instance }} 的进程、网络、URLPrefix 和认证配置。'
+      - alert: OrchestratorNotReady
+        expr: (orchestrator_ready{job="orchestrator"} == 0) and on(job, instance, orchestrator_cluster) (up{job="orchestrator"} == 1)
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Orchestrator 节点未就绪'
+      - alert: OrchestratorNoLeaderReady
+        expr: (sum by (orchestrator_cluster) (orchestrator_leader_ready{job="orchestrator"}) == 0) and on(orchestrator_cluster) (sum by (orchestrator_cluster) (up{job="orchestrator"}) > 0)
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: '部署集群没有可执行 leader 的节点'
+      - alert: OrchestratorDiscoveryFailures
+        expr: (sum by (orchestrator_cluster) (rate(orchestrator_discovery_operations_total{job="orchestrator",result="failure"}[5m])) / sum by (orchestrator_cluster) (rate(orchestrator_discovery_operations_total{job="orchestrator"}[5m])) > 0.1) and on(orchestrator_cluster) (sum by (orchestrator_cluster) (increase(orchestrator_discovery_operations_total{job="orchestrator"}[5m])) >= 20)
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: '发现失败比例持续超过示例阈值 10%'
+      - alert: OrchestratorQueueStalled
+        expr: (orchestrator_discovery_queue_items{job="orchestrator",state="queued"} > 0) and on(job, instance, orchestrator_cluster) (sum by (job, instance, orchestrator_cluster) (increase(orchestrator_discovery_operations_total{job="orchestrator"}[5m])) == 0)
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: '发现队列有积压且没有完成进度'
+      - alert: OrchestratorWriteBufferFailures
+        expr: increase(orchestrator_write_buffer_flushes_total{job="orchestrator",result="failure"}[5m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: '写缓冲 flush 失败'
+      - alert: OrchestratorRecoveryFailed
+        expr: increase(orchestrator_recovery_completed_total{job="orchestrator",result="failure"}[5m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: '拓扑恢复失败，检查恢复审计和 trace'
+      - alert: OrchestratorTraceExportFailed
+        expr: increase(orchestrator_trace_export_failures_total{job="orchestrator"}[5m]) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Trace 导出失败，业务 readiness 不受此告警影响'

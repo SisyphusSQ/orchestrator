@@ -35,16 +35,15 @@ import (
 	"github.com/openark/golib/log"
 	"github.com/openark/golib/math"
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
 	"github.com/openark/orchestrator/go/attributes"
-	"github.com/openark/orchestrator/go/collection"
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/db"
 	"github.com/openark/orchestrator/go/kv"
-	"github.com/openark/orchestrator/go/metrics/query"
 	"github.com/openark/orchestrator/go/util"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 const (
@@ -121,23 +120,14 @@ var instanceKeyInformativeClusterName *cache.Cache
 var forgetInstanceKeys *cache.Cache
 var clusterInjectedPseudoGTIDCache *cache.Cache
 
-var accessDeniedCounter = metrics.NewCounter()
-var readTopologyInstanceCounter = metrics.NewCounter()
-var readInstanceCounter = metrics.NewCounter()
-var writeInstanceCounter = metrics.NewCounter()
-var backendWrites = collection.CreateOrReturnCollection("BACKEND_WRITES")
-var writeBufferMetrics = collection.CreateOrReturnCollection("WRITE_BUFFER")
-var writeBufferLatency = stopwatch.NewNamedStopwatch()
+var accessDeniedCounter = observability.NewCounter("orchestrator_instance_access_denied_total", "instance.access_denied events")
+var readTopologyInstanceCounter = observability.NewCounter("orchestrator_instance_read_topology_total", "instance.read_topology events")
+var readInstanceCounter = observability.NewCounter("orchestrator_instance_read_total", "instance.read events")
+var writeInstanceCounter = observability.NewCounter("orchestrator_instance_write_total", "instance.write events")
 
 var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
 
 func init() {
-	metrics.Register("instance.access_denied", accessDeniedCounter)
-	metrics.Register("instance.read_topology", readTopologyInstanceCounter)
-	metrics.Register("instance.read", readInstanceCounter)
-	metrics.Register("instance.write", writeInstanceCounter)
-	writeBufferLatency.AddMany([]string{"wait", "write"})
-	writeBufferLatency.Start("wait")
 
 	go initializeInstanceDao()
 }
@@ -145,6 +135,7 @@ func init() {
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
 	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.InstanceWriteBufferSize)
+	observability.Gauge("orchestrator_write_buffer_items", "Current pending instance writes", func() int64 { return int64(len(instanceWriteBuffer)) })
 	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
 	clusterInjectedPseudoGTIDCache = cache.New(time.Minute, time.Second)
@@ -165,30 +156,43 @@ func initializeInstanceDao() {
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronuously or not
 func ExecDBWriteFunc(f func() error) error {
-	m := query.NewMetric()
+	return ExecDBWriteFuncContext(context.Background(), f)
+}
 
-	instanceWriteChan <- true
-	m.WaitLatency = time.Since(m.Timestamp)
-
-	// catch the exec time and error if there is one
+// ExecDBWriteFuncContext records task wait separately from execution and preserves panic semantics.
+func ExecDBWriteFuncContext(ctx context.Context, f func() error) (resultErr error) {
+	ctx, span := observability.StartSpan(ctx, "backend.write_task")
+	started := time.Now()
+	select {
+	case instanceWriteChan <- true:
+	case <-ctx.Done():
+		observability.RecordBackendWrite(ctx, "failure", time.Since(started), 0)
+		observability.EndSpan(span, ctx.Err())
+		return ctx.Err()
+	}
+	wait := time.Since(started)
+	execution := time.Now()
+	result := "failure"
 	defer func() {
-		if r := recover(); r != nil {
+		r := recover()
+		observability.RecordBackendWrite(ctx, result, wait, time.Since(execution))
+		<-instanceWriteChan
+		if r != nil {
+			observability.EndSpan(span, fmt.Errorf("write task panicked"))
 			if _, ok := r.(runtime.Error); ok {
 				panic(r)
 			}
-
-			if s, ok := r.(string); ok {
-				m.Err = errors.New(s)
-			} else {
-				m.Err = r.(error)
+			// Preserve the existing recovery contract; unsupported panic payloads still panic.
+			if _, ok := r.(string); !ok {
+				_ = r.(error)
 			}
+			return
 		}
-		m.ExecuteLatency = time.Since(m.Timestamp.Add(m.WaitLatency))
-		backendWrites.Append(m)
-		<-instanceWriteChan // assume this takes no time
+		observability.EndSpan(span, resultErr)
 	}()
-	res := f()
-	return res
+	resultErr = f()
+	result = observability.Result(resultErr)
+	return resultErr
 }
 
 func ExpireTableData(tableName string, timestampColumn string) error {
@@ -266,7 +270,11 @@ func readReplicationTLSStatusFromShowReplicaRow(instance *Instance, m db.Dynamic
 // server and writes the result synchronously to the orchestrator
 // backend.
 func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
-	instance, skipped, err := ReadTopologyInstanceBufferable(instanceKey, false, nil)
+	return ReadTopologyInstanceContext(context.Background(), instanceKey)
+}
+
+func ReadTopologyInstanceContext(ctx context.Context, instanceKey *InstanceKey) (*Instance, error) {
+	instance, skipped, err := ReadTopologyInstanceBufferableContext(ctx, instanceKey, false, nil)
 	if skipped {
 		if config.Config.EnableDiscoveryFiltersLogs {
 			log.Infof("Skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", instanceKey)
@@ -354,7 +362,7 @@ func (instance *Instance) checkMaxScale(database *sql.DB, latency *stopwatch.Nam
 	// we are executing as that might be confusing.
 	if err != nil {
 		if strings.Contains(err.Error(), error1045AccessDenied) {
-			accessDeniedCounter.Inc(1)
+			accessDeniedCounter.Add(context.Background(), 1)
 		}
 		if unrecoverableError(err) {
 			logReadTopologyInstanceError(&instance.Key, "", err)
@@ -390,7 +398,14 @@ func expectReplicationThreadsState(instance *Instance, instanceKey *InstanceKey,
 // It writes the information retrieved into orchestrator's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
-func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, skipped bool, err error) {
+func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (*Instance, bool, error) {
+	return ReadTopologyInstanceBufferableContext(context.Background(), instanceKey, bufferWrites, latency)
+}
+
+// ReadTopologyInstanceBufferableContext keeps discovery spans and SQL calls on the caller's context.
+func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, skipped bool, err error) {
+	ctx, span := observability.StartSpan(ctx, "topology.discover")
+	defer func() { observability.EndSpan(span, err) }()
 	defer func() {
 		if r := recover(); r != nil {
 			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", fmt.Errorf("%+v", r))
@@ -441,7 +456,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// the backend database's timestamps
 	instance.Key = *instanceKey
 
-	err = topologyDB.Ping()
+	err = topologyDB.PingContext(ctx)
 	if err != nil {
 		DeadInstancesFilter.RegisterInstance(instanceKey)
 		goto Cleanup
@@ -470,21 +485,21 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 			// Buggy buggy maxscale 1.1.0. Reported Master_Host can be corrupted.
 			// Therefore we (currently) take @@hostname (which is masquerading as master host anyhow)
-			err = topologyDB.QueryRow("select @@hostname").Scan(&maxScaleMasterHostname)
+			err = topologyDB.QueryRowContext(ctx, "select @@hostname").Scan(&maxScaleMasterHostname)
 			if err != nil {
 				goto Cleanup
 			}
 		}
 		if isMaxScale110 {
 			// Only this is supported:
-			topologyDB.QueryRow("select @@server_id").Scan(&instance.ServerID)
+			topologyDB.QueryRowContext(ctx, "select @@server_id").Scan(&instance.ServerID)
 		} else {
-			topologyDB.QueryRow("select @@global.server_id").Scan(&instance.ServerID)
-			topologyDB.QueryRow("select @@global.server_uuid").Scan(&instance.ServerUUID)
+			topologyDB.QueryRowContext(ctx, "select @@global.server_id").Scan(&instance.ServerID)
+			topologyDB.QueryRowContext(ctx, "select @@global.server_uuid").Scan(&instance.ServerUUID)
 		}
 	} else {
 		// NOT MaxScale
-		err = topologyDB.QueryRow("select @@global.version").Scan(&instance.Version)
+		err = topologyDB.QueryRowContext(ctx, "select @@global.version").Scan(&instance.Version)
 		if err != nil {
 			goto Cleanup
 		}
@@ -506,7 +521,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// set show-replica-auth-info=1 and report_user set accordingly). In such a case
 	// replica will not be filtered out during source examination and will go to discovery
 	// queue. This is how we get here with the replica.
-	err = db.QueryDynamicRows(topologyDB, instance.QSP.show_slave_status(), func(m db.DynamicRow) error {
+	err = db.QueryDynamicRowsContext(ctx, topologyDB, instance.QSP.show_slave_status(), func(m db.DynamicRow) error {
 		user := m.GetString(instance.QSP.master_user())
 
 		if FiltersMatchReplicationIgnoreUsername(user, config.Config.DiscoveryIgnoreReplicationUsernameFilters) {
@@ -577,7 +592,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 				defer waitGroup.Done()
 				var dummy string
 				// show global status works just as well with 5.6 & 5.7 (5.7 moves variables to performance_schema)
-				err := topologyDB.QueryRow("show global status like 'Uptime'").Scan(&dummy, &instance.Uptime)
+				err := topologyDB.QueryRowContext(ctx, "show global status like 'Uptime'").Scan(&dummy, &instance.Uptime)
 
 				if err != nil {
 					logReadTopologyInstanceError(instanceKey, "show global status like 'Uptime'", err)
@@ -595,7 +610,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 		// Synchronously query for some params needed in following go routines
 		var mysqlHostname, mysqlReportHost string
-		err = topologyDB.QueryRow("select @@global.hostname, ifnull(@@global.report_host, ''), @@global.server_id, @@global.version_comment, @@global.read_only, @@global.binlog_format, @@global.log_bin, @@global."+instance.QSP.log_slave_updates()).Scan(
+		err = topologyDB.QueryRowContext(ctx, "select @@global.hostname, ifnull(@@global.report_host, ''), @@global.server_id, @@global.version_comment, @@global.read_only, @@global.binlog_format, @@global.log_bin, @@global."+instance.QSP.log_slave_updates()).Scan(
 			&mysqlHostname, &mysqlReportHost, &instance.ServerID, &instance.VersionComment, &instance.ReadOnly, &instance.Binlog_format, &instance.LogBinEnabled, &instance.LogReplicationUpdatesEnabled)
 		if err != nil {
 			goto Cleanup
@@ -620,7 +635,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			waitGroup.Add(1)
 			go func() {
 				defer waitGroup.Done()
-				err := db.QueryDynamicRows(topologyDB, instance.QSP.show_master_status(), func(m db.DynamicRow) error {
+				err := db.QueryDynamicRowsContext(ctx, topologyDB, instance.QSP.show_master_status(), func(m db.DynamicRow) error {
 					var err error
 					instance.SelfBinlogCoordinates.LogFile = m.GetString("File")
 					instance.SelfBinlogCoordinates.LogPos = m.GetInt64("Position")
@@ -638,7 +653,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 				semiSyncReplicaPluginLoaded := false
 				instance.SemiSyncAvailable = false
 
-				err := db.QueryDynamicRows(topologyDB, "show global variables like 'rpl_semi_sync_%'", func(m db.DynamicRow) error {
+				err := db.QueryDynamicRowsContext(ctx, topologyDB, "show global variables like 'rpl_semi_sync_%'", func(m db.DynamicRow) error {
 					variableName := m.GetString("Variable_name")
 					// Learn if semi-sync plugin is loaded and what is its version
 					if variableName == "rpl_semi_sync_master_enabled" {
@@ -691,7 +706,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			waitGroup.Add(1)
 			go func() {
 				defer waitGroup.Done()
-				err := db.QueryDynamicRows(topologyDB, "show global status like 'rpl_semi_sync_%'", func(m db.DynamicRow) error {
+				err := db.QueryDynamicRowsContext(ctx, topologyDB, "show global status like 'rpl_semi_sync_%'", func(m db.DynamicRow) error {
 					variableName := m.GetString("Variable_name")
 					matched, regexperr := regexp.MatchString("^Rpl_semi_sync_(master|source)_status$", variableName)
 					if regexperr != nil {
@@ -733,7 +748,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 				// ...
 				// @@gtid_mode only available in Orcale MySQL >= 5.6
 				// Previous version just issued this query brute-force, but I don't like errors being issued where they shouldn't.
-				_ = topologyDB.QueryRow(instance.QSP.master_gtid_info()).Scan(&instance.GTIDMode, &instance.ServerUUID, &instance.ExecutedGtidSet, &instance.GtidPurged, &masterInfoRepositoryOnTable, &instance.BinlogRowImage)
+				_ = topologyDB.QueryRowContext(ctx, instance.QSP.master_gtid_info()).Scan(&instance.GTIDMode, &instance.ServerUUID, &instance.ExecutedGtidSet, &instance.GtidPurged, &masterInfoRepositoryOnTable, &instance.BinlogRowImage)
 				if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
 					instance.SupportsOracleGTID = true
 				}
@@ -741,7 +756,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 					instance.ReplicationCredentialsAvailable = true
 				} else if masterInfoRepositoryOnTable {
 					// mysql.slave_master_info table is still present in 8.4, no need for instance.QSP
-					_ = topologyDB.QueryRow("select count(*) > 0 and MAX(User_name) != '' from mysql.slave_master_info").Scan(&instance.ReplicationCredentialsAvailable)
+					_ = topologyDB.QueryRowContext(ctx, "select count(*) > 0 and MAX(User_name) != '' from mysql.slave_master_info").Scan(&instance.ReplicationCredentialsAvailable)
 				}
 			}()
 		}
@@ -821,7 +836,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			if err := topologyDB.QueryRow(config.Config.ReplicationLagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
+			if err := topologyDB.QueryRowContext(ctx, config.Config.ReplicationLagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
 				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
 					log.Warningf("Host: %+v, instance.SlaveLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
 					instance.ReplicationLagSeconds.Int64 = 0
@@ -858,7 +873,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// 	  It contains replica's replication user name, so the replica will be skipped
 	//    always.
 	if config.Config.DiscoverByShowSlaveHosts || isMaxScale {
-		err := db.QueryDynamicRows(topologyDB, instance.QSP.show_slave_hosts(),
+		err := db.QueryDynamicRowsContext(ctx, topologyDB, instance.QSP.show_slave_hosts(),
 			func(m db.DynamicRow) error {
 				// MaxScale 1.1 may trigger an error with this command, but
 				// also we may see issues if anything on the MySQL server locks up.
@@ -898,7 +913,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := db.QueryDynamicRows(topologyDB, instance.QSP.select_user_host(),
+			err := db.QueryDynamicRowsContext(ctx, topologyDB, instance.QSP.select_user_host(),
 				func(m db.DynamicRow) error {
 					cname, resolveErr := ResolveHostname(m.GetString("slave_hostname"))
 					user := m.GetString("user")
@@ -928,7 +943,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := db.QueryDynamicRows(topologyDB, `
+			err := db.QueryDynamicRowsContext(ctx, topologyDB, `
       	select
       		substring(service_URI,9) mysql_host
       	from
@@ -954,7 +969,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRow(config.Config.DetectDataCenterQuery).Scan(&instance.DataCenter)
+			err := topologyDB.QueryRowContext(ctx, config.Config.DetectDataCenterQuery).Scan(&instance.DataCenter)
 			logReadTopologyInstanceError(instanceKey, "DetectDataCenterQuery", err)
 		}()
 	}
@@ -963,7 +978,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRow(config.Config.DetectRegionQuery).Scan(&instance.Region)
+			err := topologyDB.QueryRowContext(ctx, config.Config.DetectRegionQuery).Scan(&instance.Region)
 			logReadTopologyInstanceError(instanceKey, "DetectRegionQuery", err)
 		}()
 	}
@@ -972,7 +987,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRow(config.Config.DetectPhysicalEnvironmentQuery).Scan(&instance.PhysicalEnvironment)
+			err := topologyDB.QueryRowContext(ctx, config.Config.DetectPhysicalEnvironmentQuery).Scan(&instance.PhysicalEnvironment)
 			logReadTopologyInstanceError(instanceKey, "DetectPhysicalEnvironmentQuery", err)
 		}()
 	}
@@ -981,7 +996,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRow(config.Config.DetectInstanceAliasQuery).Scan(&instance.InstanceAlias)
+			err := topologyDB.QueryRowContext(ctx, config.Config.DetectInstanceAliasQuery).Scan(&instance.InstanceAlias)
 			logReadTopologyInstanceError(instanceKey, "DetectInstanceAliasQuery", err)
 		}()
 	}
@@ -990,7 +1005,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRow(config.Config.DetectSemiSyncEnforcedQuery).Scan(&instance.SemiSyncPriority)
+			err := topologyDB.QueryRowContext(ctx, config.Config.DetectSemiSyncEnforcedQuery).Scan(&instance.SemiSyncPriority)
 			logReadTopologyInstanceError(instanceKey, "DetectSemiSyncEnforcedQuery", err)
 		}()
 	}
@@ -1014,7 +1029,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			waitGroup.Add(1)
 			go func() {
 				defer waitGroup.Done()
-				if resultData, err := db.QueryResultData(topologyDB, config.Config.DetectPseudoGTIDQuery); err == nil {
+				if resultData, err := db.QueryResultDataContext(ctx, topologyDB, config.Config.DetectPseudoGTIDQuery); err == nil {
 					if len(resultData) > 0 {
 						if len(resultData[0]) > 0 {
 							if resultData[0][0].Valid && resultData[0][0].String == "1" {
@@ -1044,7 +1059,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		go func() {
 			defer waitGroup.Done()
 			var value string
-			err := topologyDB.QueryRow(config.Config.DetectPromotionRuleQuery).Scan(&value)
+			err := topologyDB.QueryRowContext(ctx, config.Config.DetectPromotionRuleQuery).Scan(&value)
 			logReadTopologyInstanceError(instanceKey, "DetectPromotionRuleQuery", err)
 			promotionRule, err := ParseCandidatePromotionRule(value)
 			logReadTopologyInstanceError(instanceKey, "ParseCandidatePromotionRule", err)
@@ -1065,7 +1080,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			// Only need to do on masters
 			if config.Config.DetectClusterAliasQuery != "" {
 				clusterAlias := ""
-				if err := topologyDB.QueryRow(config.Config.DetectClusterAliasQuery).Scan(&clusterAlias); err != nil {
+				if err := topologyDB.QueryRowContext(ctx, config.Config.DetectClusterAliasQuery).Scan(&clusterAlias); err != nil {
 					logReadTopologyInstanceError(instanceKey, "DetectClusterAliasQuery", err)
 				} else {
 					instance.SuggestedClusterAlias = clusterAlias
@@ -1083,7 +1098,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" && !isMaxScale {
 		// Only need to do on masters
 		domainName := ""
-		if err := topologyDB.QueryRow(config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
+		if err := topologyDB.QueryRowContext(ctx, config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
 			domainName = ""
 			logReadTopologyInstanceError(instanceKey, "DetectClusterDomainQuery", err)
 		}
@@ -1143,13 +1158,13 @@ Cleanup:
 				redactedMasterExecutedGtidSet, _ := NewOracleGtidSet(instance.masterExecutedGtidSet)
 				redactedMasterExecutedGtidSet.RemoveUUID(instance.MasterUUID)
 
-				topologyDB.QueryRow("select gtid_subtract(?, ?)", redactedExecutedGtidSet.String(), redactedMasterExecutedGtidSet.String()).Scan(&instance.GtidErrant)
+				topologyDB.QueryRowContext(ctx, "select gtid_subtract(?, ?)", redactedExecutedGtidSet.String(), redactedMasterExecutedGtidSet.String()).Scan(&instance.GtidErrant)
 			}
 		}
 	}
 
 	latency.Stop("instance")
-	readTopologyInstanceCounter.Inc(1)
+	readTopologyInstanceCounter.Add(context.Background(), 1)
 
 	if instanceFound {
 		instance.LastDiscoveryLatency = time.Since(readingStartTime)
@@ -1364,7 +1379,7 @@ func BulkReadInstance() ([](*InstanceKey), error) {
 
 	// update counters if we picked anything up
 	if len(instances) > 0 {
-		readInstanceCounter.Inc(int64(len(instances)))
+		readInstanceCounter.Add(context.Background(), int64(len(instances)))
 
 		for _, instance := range instances {
 			instanceKeys = append(instanceKeys, &instance.Key)
@@ -1611,7 +1626,11 @@ func readInstanceRow(row instanceBackendRow) *Instance {
 }
 
 // readInstancesByCondition is a generic function to read instances from the backend database
-func readInstancesByCondition(condition string, args []interface{}, sort string) ([](*Instance), error) {
+func readInstancesByCondition(condition string, args []interface{}, sort string) ([]*Instance, error) {
+	return readInstancesByConditionContext(context.Background(), condition, args, sort)
+}
+
+func readInstancesByConditionContext(ctx context.Context, condition string, args []interface{}, sort string) ([]*Instance, error) {
 	readFunc := func() ([](*Instance), error) {
 		instances := [](*Instance){}
 
@@ -1644,7 +1663,7 @@ func readInstancesByCondition(condition string, args []interface{}, sort string)
 			%s
 			`, condition, sort)
 
-		rows, err := db.QueryOrchestratorRows[instanceBackendRow](context.Background(), query, args...)
+		rows, err := db.QueryOrchestratorRows[instanceBackendRow](ctx, query, args...)
 		for _, row := range rows {
 			instance := readInstanceRow(row)
 			instances = append(instances, instance)
@@ -1658,26 +1677,36 @@ func readInstancesByCondition(condition string, args []interface{}, sort string)
 		}
 		return instances, err
 	}
-	instanceReadChan <- true
+	select {
+	case instanceReadChan <- true:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	instances, err := readFunc()
 	<-instanceReadChan
 	return instances, err
 }
 
-func readInstancesByExactKey(instanceKey *InstanceKey) ([](*Instance), error) {
+func readInstancesByExactKey(instanceKey *InstanceKey) ([]*Instance, error) {
+	return readInstancesByExactKeyContext(context.Background(), instanceKey)
+}
+func readInstancesByExactKeyContext(ctx context.Context, instanceKey *InstanceKey) ([]*Instance, error) {
 	condition := `
 			hostname = ?
 			and port = ?
 		`
-	return readInstancesByCondition(condition, []interface{}{instanceKey.Hostname, instanceKey.Port}, "")
+	return readInstancesByConditionContext(ctx, condition, []interface{}{instanceKey.Hostname, instanceKey.Port}, "")
 }
 
 // ReadInstance reads an instance from the orchestrator backend database
 func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
-	instances, err := readInstancesByExactKey(instanceKey)
+	return ReadInstanceContext(context.Background(), instanceKey)
+}
+func ReadInstanceContext(ctx context.Context, instanceKey *InstanceKey) (*Instance, bool, error) {
+	instances, err := readInstancesByExactKeyContext(ctx, instanceKey)
 	// We know there will be at most one (hostname & port are PK)
 	// And we expect to find one
-	readInstanceCounter.Inc(1)
+	readInstanceCounter.Add(context.Background(), 1)
 	if len(instances) == 0 {
 		return nil, false, err
 	}
@@ -3129,15 +3158,6 @@ func flushInstanceWriteBuffer() {
 	var instances []*Instance
 	var lastseen []*Instance // instances to update with last_seen field
 
-	defer func() {
-		// reset stopwatches (TODO: .ResetAll())
-		writeBufferLatency.Reset("wait")
-		writeBufferLatency.Reset("write")
-		writeBufferLatency.Start("wait") // waiting for next flush
-	}()
-
-	writeBufferLatency.Stop("wait")
-
 	if len(instanceWriteBuffer) == 0 {
 		return
 	}
@@ -3156,7 +3176,7 @@ func flushInstanceWriteBuffer() {
 		}
 	}
 
-	writeBufferLatency.Start("write")
+	flushStarted := time.Now()
 
 	// sort instances by instanceKey (table pk) to make locking predictable
 	sort.Sort(byInstanceKey(instances))
@@ -3172,7 +3192,7 @@ func flushInstanceWriteBuffer() {
 			return log.Errorf("flushInstanceWriteBuffer last_seen: %v", err)
 		}
 
-		writeInstanceCounter.Inc(int64(len(instances) + len(lastseen)))
+		writeInstanceCounter.Add(context.Background(), int64(len(instances)+len(lastseen)))
 		return nil
 	}
 	err := ExecDBWriteFunc(writeFunc)
@@ -3180,14 +3200,7 @@ func flushInstanceWriteBuffer() {
 		log.Errorf("flushInstanceWriteBuffer: %v", err)
 	}
 
-	writeBufferLatency.Stop("write")
-
-	writeBufferMetrics.Append(&WriteBufferMetric{
-		Timestamp:    time.Now(),
-		WaitLatency:  writeBufferLatency.Elapsed("wait"),
-		WriteLatency: writeBufferLatency.Elapsed("write"),
-		Instances:    len(lastseen) + len(instances),
-	})
+	observability.RecordFlush(context.Background(), err, time.Since(flushStarted), len(lastseen)+len(instances))
 }
 
 // WriteInstance stores an instance in the orchestrator backend

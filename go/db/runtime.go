@@ -16,6 +16,8 @@ import (
 	"github.com/openark/golib/log"
 	"github.com/openark/orchestrator/go/config"
 	"gorm.io/gorm"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 // ErrDatabaseRuntimeClosed indicates that process shutdown has already closed
@@ -321,6 +323,7 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 				maxIdleConns)
 		}
 	}
+	observability.SetBackendPool(database)
 	return database, nil
 }
 

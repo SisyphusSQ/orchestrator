@@ -28,10 +28,11 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/openark/golib/log"
 	"github.com/patrickmn/go-cache"
-	"github.com/rcrowley/go-metrics"
 
 	"github.com/openark/orchestrator/go/config"
 	"github.com/openark/orchestrator/go/ssl"
+
+	"github.com/openark/orchestrator/go/observability"
 )
 
 const Error3159 = "Error 3159:"
@@ -51,23 +52,19 @@ const (
 
 var requireTLSCache *cache.Cache = cache.New(time.Duration(config.Config.TLSCacheTTLFactor*config.Config.InstancePollSeconds)*time.Second, time.Second)
 
-var readInstanceTLSCounter = metrics.NewCounter()
-var writeInstanceTLSCounter = metrics.NewCounter()
-var readInstanceTLSCacheCounter = metrics.NewCounter()
-var writeInstanceTLSCacheCounter = metrics.NewCounter()
+var readInstanceTLSCounter = observability.NewCounter("orchestrator_instance_tls_read_total", "instance_tls.read events")
+var writeInstanceTLSCounter = observability.NewCounter("orchestrator_instance_tls_write_total", "instance_tls.write events")
+var readInstanceTLSCacheCounter = observability.NewCounter("orchestrator_instance_tls_read_cache_total", "instance_tls.read_cache events")
+var writeInstanceTLSCacheCounter = observability.NewCounter("orchestrator_instance_tls_write_cache_total", "instance_tls.write_cache events")
 
 func init() {
-	metrics.Register("instance_tls.read", readInstanceTLSCounter)
-	metrics.Register("instance_tls.write", writeInstanceTLSCounter)
-	metrics.Register("instance_tls.read_cache", readInstanceTLSCacheCounter)
-	metrics.Register("instance_tls.write_cache", writeInstanceTLSCacheCounter)
 }
 
 func requiresTLSContext(ctx context.Context, host string, port int, cfg *mysql.Config) (bool, error) {
 	poolKey := newTopologyPoolKey(topologyConnectionDiscovery, cfg)
 	cacheKey := fmt.Sprintf("%s:%d:%x", host, port, poolKey.fingerprint)
 	if value, found := requireTLSCache.Get(cacheKey); found {
-		readInstanceTLSCacheCounter.Inc(1)
+		readInstanceTLSCacheCounter.Add(context.Background(), 1)
 		return value.(bool), nil
 	}
 
@@ -92,9 +89,9 @@ func requiresTLSContext(ctx context.Context, host string, port int, cfg *mysql.C
 	if _, err := ExecOrchestratorContext(ctx, query, host, port, required); err != nil {
 		log.Sugar().Warnw("persist topology TLS requirement failed", "host", host, "port", port, "error", err)
 	}
-	writeInstanceTLSCounter.Inc(1)
+	writeInstanceTLSCounter.Add(context.Background(), 1)
 	requireTLSCache.Set(cacheKey, required, cache.DefaultExpiration)
-	writeInstanceTLSCacheCounter.Inc(1)
+	writeInstanceTLSCacheCounter.Add(context.Background(), 1)
 	return required, nil
 }
 

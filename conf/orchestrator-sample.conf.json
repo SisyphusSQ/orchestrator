@@ -1,4 +1,6 @@
 {
+  "OTelTraceEndpoint": "",
+  "OTelTraceSampleRatio": 0.1,
   "Debug": true,
   "EnableSyslog": false,
   "ListenAddress": ":3000",
@@ -138,9 +140,6 @@
   "MasterFailoverLostInstancesDowntimeMinutes": 0,
   "PostponeReplicaRecoveryOnLagMinutes": 0,
   "OSCIgnoreHostnameFilters": [],
-  "GraphiteAddr": "",
-  "GraphitePath": "",
-  "GraphiteConvertHostnameDotsToUnderscores": true,
   "ConsulAddress": "",
   "ConsulScheme": "http",
   "ConsulAclToken": "",

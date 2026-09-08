@@ -1,0 +1,51 @@
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="orchestrator",instance="n1",orchestrator_cluster="test"}'
+        values: '1 1 0 0 0 1 1'
+      - series: 'orchestrator_ready{job="orchestrator",instance="n1",orchestrator_cluster="test"}'
+        values: '1 1 0 0 0 1 1'
+      - series: 'orchestrator_leader_ready{job="orchestrator",instance="n1",orchestrator_cluster="test"}'
+        values: '1 1 0 0 0 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: OrchestratorTargetDown
+        exp_alerts:
+          - exp_labels: {job: orchestrator, instance: n1, orchestrator_cluster: test, severity: critical}
+            exp_annotations:
+              summary: 'Orchestrator 节点无法抓取'
+              description: '检查目标 n1 的进程、网络、URLPrefix 和认证配置。'
+      - eval_time: 6m
+        alertname: OrchestratorTargetDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: OrchestratorNotReady
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'up{job="orchestrator",instance="n1",orchestrator_cluster="test"}'
+        values: '1+0x10'
+      - series: 'orchestrator_ready{job="orchestrator",instance="n1",orchestrator_cluster="test"}'
+        values: '0 0 0 1 1 1'
+      - series: 'orchestrator_leader_ready{job="orchestrator",instance="n1",orchestrator_cluster="test"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OrchestratorNotReady
+        exp_alerts:
+          - exp_labels: {job: orchestrator, instance: n1, orchestrator_cluster: test, severity: critical}
+            exp_annotations: {summary: 'Orchestrator 节点未就绪'}
+      - eval_time: 2m
+        alertname: OrchestratorNoLeaderReady
+        exp_alerts:
+          - exp_labels: {orchestrator_cluster: test, severity: critical}
+            exp_annotations: {summary: '部署集群没有可执行 leader 的节点'}
+      - eval_time: 4m
+        alertname: OrchestratorNotReady
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: OrchestratorNoLeaderReady
+        exp_alerts: []

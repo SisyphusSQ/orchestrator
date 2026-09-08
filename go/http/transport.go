@@ -16,6 +16,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/openark/golib/log"
+
+	"github.com/openark/orchestrator/go/observability"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const basicAuthenticationRealm = "Authorization Required"
@@ -88,6 +91,12 @@ func NewRouter(options RouterOptions) (*Router, error) {
 	engine.RedirectFixedPath = false
 	engine.HandleMethodNotAllowed = false
 	engine.RemoveExtraSlash = false
+	engine.Use(func(ctx *gin.Context) {
+		request, finish := observability.BeginHTTP(ctx.Request, ctx.FullPath())
+		ctx.Request = request
+		defer func() { finish(ctx.Writer.Status()) }()
+		ctx.Next()
+	})
 	engine.Use(requestLogger())
 	engine.Use(recovery())
 	if middleware := authenticationMiddleware(options.Authentication); middleware != nil {
@@ -362,7 +371,8 @@ func requestLogger() gin.HandlerFunc {
 		}
 		log.Infof("Started %s %s for %s", ctx.Request.Method, ctx.Request.URL.Path, address)
 		ctx.Next()
-		log.Infof("Completed %v %s in %v", ctx.Writer.Status(), nethttp.StatusText(ctx.Writer.Status()), time.Since(started))
+		spanContext := trace.SpanContextFromContext(ctx.Request.Context())
+		log.Sugar().Infow("HTTP request completed", "status", ctx.Writer.Status(), "duration", time.Since(started), "trace_id", spanContext.TraceID().String(), "span_id", spanContext.SpanID().String())
 	}
 }
 

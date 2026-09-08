@@ -55,7 +55,6 @@ const (
 	MaintenanceExpireMinutes                     = 10
 	AgentHttpTimeoutSeconds                      = 60
 	PseudoGTIDCoordinatesHistoryHeuristicMinutes = 2
-	DebugMetricsIntervalSeconds                  = 10
 	PseudoGTIDSchema                             = "_pseudo_gtid_"
 	PseudoGTIDIntervalSeconds                    = 5
 	PseudoGTIDExpireMinutes                      = 60
@@ -90,6 +89,9 @@ var deprecatedConfigurationVariables = []string{
 // Some of the parameteres have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
 type Configuration struct {
+	OTelTraceEndpoint    string  // Full OTLP HTTP /v1/traces URL; empty disables trace export.
+	OTelTraceSampleRatio float64 // Parent-based root sampling ratio in [0,1]. Restart required.
+
 	Debug                                      bool   // set debug mode (similar to --debug option)
 	EnableSyslog                               bool   // Direct logs to syslog in addition to stderr; initialization failure stops startup.
 	ListenAddress                              string // Where orchestrator HTTP should listen for TCP
@@ -158,8 +160,6 @@ type Configuration struct {
 	SnapshotTopologiesIntervalHours            uint     // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
 	DiscoveryMaxConcurrency                    uint     // Number of goroutines doing hosts discovery
 	DiscoveryQueueCapacity                     uint     // Buffer size of the discovery queue. Should be greater than the number of DB instances being discovered
-	DiscoveryQueueMaxStatisticsSize            int      // The maximum number of individual secondly statistics taken of the discovery queue
-	DiscoveryCollectionRetentionSeconds        uint     // Number of seconds to retain the discovery collection information
 	DiscoverySeeds                             []string // Hard coded array of hostname:port, ensuring orchestrator discovers these hosts upon startup, assuming not already known to orchestrator
 	InstanceBulkOperationsWaitTimeoutSeconds   uint     // Time to wait on a single instance when doing bulk (many instances) operation
 	HostnameResolveMethod                      string   // Method by which to "normalize" hostname ("none"/"default"/"cname")
@@ -266,10 +266,6 @@ type Configuration struct {
 	PostponeSlaveRecoveryOnLagMinutes          uint              // Synonym to PostponeReplicaRecoveryOnLagMinutes
 	PostponeReplicaRecoveryOnLagMinutes        uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after master/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                   []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
-	GraphiteAddr                               string            // Optional; address of graphite port. If supplied, metrics will be written here
-	GraphitePath                               string            // Prefix for graphite path. May include {hostname} magic placeholder
-	GraphiteConvertHostnameDotsToUnderscores   bool              // If true, then hostname's dots are converted to underscores before being used in graphite path
-	GraphitePollSeconds                        int               // Graphite writes interval. 0 disables.
 	URLPrefix                                  string            // URL prefix to run orchestrator on non-root web path, e.g. /orchestrator to put it behind nginx.
 	DiscoveryIgnoreReplicaHostnameFilters      []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnoreMasterHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering a master. Usage: pointing your master temporarily to replicate some data from external host
@@ -312,6 +308,7 @@ var readFileNames []string
 
 func newConfiguration() *Configuration {
 	return &Configuration{
+		OTelTraceSampleRatio:                       0.1,
 		Debug:                                      false,
 		EnableSyslog:                               false,
 		ListenAddress:                              ":3000",
@@ -362,8 +359,6 @@ func newConfiguration() *Configuration {
 		UseSuperReadOnly:                           false,
 		DiscoveryMaxConcurrency:                    300,
 		DiscoveryQueueCapacity:                     100000,
-		DiscoveryQueueMaxStatisticsSize:            120,
-		DiscoveryCollectionRetentionSeconds:        120,
 		DiscoverySeeds:                             []string{},
 		InstanceBulkOperationsWaitTimeoutSeconds:   10,
 		HostnameResolveMethod:                      "default",
@@ -460,10 +455,6 @@ func newConfiguration() *Configuration {
 		DelayMasterPromotionIfSQLThreadNotUpToDate: false,
 		PostponeSlaveRecoveryOnLagMinutes:          0,
 		OSCIgnoreHostnameFilters:                   []string{},
-		GraphiteAddr:                               "",
-		GraphitePath:                               "",
-		GraphiteConvertHostnameDotsToUnderscores:   true,
-		GraphitePollSeconds:                        60,
 		URLPrefix:                                  "",
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},
 		DiscoveryIgnoreReplicationUsernameFilters:  []string{},
@@ -494,6 +485,9 @@ func newConfiguration() *Configuration {
 }
 
 func (this *Configuration) postReadAdjustments() error {
+	if err := this.validateTelemetry(); err != nil {
+		return err
+	}
 	if this.MySQLOrchestratorCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
@@ -699,6 +693,11 @@ func (this *Configuration) IsMySQL() bool {
 
 func rejectRemovedConfigurationFields(fields map[string]json.RawMessage) error {
 	for field := range fields {
+		for _, removed := range []string{"GraphiteAddr", "GraphitePath", "GraphiteConvertHostnameDotsToUnderscores", "GraphitePollSeconds", "DiscoveryCollectionRetentionSeconds", "DiscoveryQueueMaxStatisticsSize"} {
+			if strings.EqualFold(field, removed) {
+				return fmt.Errorf("configuration field %q was removed; use Prometheus /metrics and Grafana instead", removed)
+			}
+		}
 		if strings.EqualFold(field, "ZkAddress") {
 			return fmt.Errorf("configuration field %q was removed; migrate ZooKeeper master publishing to Consul KV or an external failover hook before upgrading", "ZkAddress")
 		}
@@ -771,6 +770,9 @@ func applyFiles(fileNames []string, skipMissing bool) (*Configuration, error) {
 		}
 		appliedFiles = append(appliedFiles, fileName)
 	}
+	if telemetryConfigurationLocked && (candidate.OTelTraceEndpoint != Config.OTelTraceEndpoint || candidate.OTelTraceSampleRatio != Config.OTelTraceSampleRatio) {
+		return Config, fmt.Errorf("telemetry configuration changes require a process restart")
+	}
 	*Config = *candidate
 	for _, fileName := range appliedFiles {
 		log.Infof("Read config: %s", fileName)
@@ -810,6 +812,7 @@ func Reload(extraFileNames ...string) (*Configuration, error) {
 // MarkConfigurationLoaded is called once configuration has first been loaded.
 // Listeners on ConfigurationLoaded will get a notification
 func MarkConfigurationLoaded() {
+	telemetryConfigurationLocked = true
 	go func() {
 		for {
 			configurationLoaded <- true

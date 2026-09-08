@@ -1,5 +1,7 @@
 # Status Checks
 
+For node-local liveness, readiness and leader readiness, see [Observability](observability.md). The existing status endpoint described below retains its original behavior.
+
 There is a status endpoint located at `/api/status` that does a healthcheck of the system and reports back
 with HTTP status code 200 if everything is ok.  Otherwise it reports back HTTP status code 500.
 
