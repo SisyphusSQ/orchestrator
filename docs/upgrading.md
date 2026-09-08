@@ -33,8 +33,9 @@ Review the breaking changes on this page before replacing an existing `orchestra
 本地 golib 已合并到根模块，移除针对 `go/golib` 的独立依赖下载和测试步骤，
 使用 `make deps`、`make test-unit` 即可覆盖全部包。
 
-二进制名称、CLI 参数、配置搜索路径和 `resources/` 部署布局保持不变，
-本次目录调整不新增数据库或 Raft 格式迁移。详见[源码布局](build.md)。
+服务端二进制名称和配置搜索路径保持不变；Web 资源通过 `make binary` 内嵌，
+运行时不再依赖外置 `resources/` 前端目录。本次源码目录调整不新增数据库或
+Raft 格式迁移。详见[源码布局](build.md)。
 
 ### Observability replaces Graphite and raw metric APIs
 

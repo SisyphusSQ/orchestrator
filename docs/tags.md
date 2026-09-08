@@ -100,7 +100,7 @@ Note that we added `old-hardware` tag without value. It exports as `old-hardware
 
 ### Listing instance tags for a cluster
 
-For a given instance or cluster alias `-c topology-tags` or `api/topology-tags` lists the cluster topology with all known tags for each instance.
+For a given instance or cluster alias, `orch topology-tags` lists the cluster topology with all known tags for each instance. The underlying API route is `api/topology-tags`.
 
 Example:
 ```shell
@@ -119,7 +119,7 @@ db-host-01:3306     [0s,ok,5.7.23-log,rw,ROW,>>,GTID,P-GTID] [vttablet_alias=dc1
 
 ### Getting the value of a specific tag
 
-`-c tag-value` or `api/tag-value` return the value of a specific tag on an instance.
+`orch tag-value` or `api/tag-value` returns the value of a specific tag on an instance.
 
 Example:
 ```shell
@@ -137,12 +137,12 @@ tag no-such-tag not found for db-host-01:3306
 
 ### Searching instances by tags
 
-`-c tagged` or `api/tagged` lists instances by tags, as follows:
+`orch tagged` or `api/tagged` lists instances by tags, as follows:
 
-- `-c tagged --tag name=value`: list instances where `name` exists and equals `value`.
-- `-c tagged --tag name`: list instances where `name` exists, regardless of the value.
-- `-c tagged --tag name=`: list instances where `name` exists and has an empty value.
-- `-c tagged --tag name,role=backup`: list instances tagged by `name` (regardless of its value) and are _also_ tagged with `role=backup`
+- `orch tagged --tag name=value`: list instances where `name` exists and equals `value`.
+- `orch tagged --tag name`: list instances where `name` exists, regardless of the value.
+- `orch tagged --tag name=`: list instances where `name` exists and has an empty value.
+- `orch tagged --tag name,role=backup`: list instances tagged by `name` (regardless of its value) and also tagged with `role=backup`.
 - `-c tagged --tag !name`: list instances where no tag called `name` exists, regardless of its value
 - `-c tagged --tag ~name`: `~` is a synonym to `!`.
 - `-c tagged --tag name,~role`: list instances tagged by `name` (regardless of its value) and are _not_ tagged by `role` (regardless of its value)

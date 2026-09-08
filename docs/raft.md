@@ -113,7 +113,7 @@ As example, we can set:
 export ORCH_ENDPOINT="https://orchestrator.host1:3000/api https://orchestrator.host2:3000/api https://orchestrator.host3:3000/api"
 ```
 
-A call to `orch` will first check
+A call to `orch` first checks the configured nodes for a healthy leader route, selects one API endpoint, and then sends the business request once. It does not replay a request whose result may be unknown.
 
 Otherwise, if you already have a proxy, it's also possible for `orch` to work with the proxy, e.g.:
 
@@ -179,10 +179,6 @@ What happens when `DC2` gets network isolated?
 
 ![orchestrator/raft, 3 DCs, recovery](images/orchestrator-raft-3dc-recovery.png)
 
-### Roadmap
+### Historical design ideas
 
-Still ongoing and TODO:
-
-- Failure detection to require quorum agreement (i.e. a `DeadMaster` needs to be analyzed by multiple `orchestrator` nodes) in order to kick failover/recovery.
-
-- Support sharing of probing (mutually exclusive to the above): the `leader` will divide the list of servers to probe between all nodes. Potentially by data-center. This will reduce probing load (each MySQL server will be probed by a single node rather than all nodes). All `orchestrator` nodes will see same picture as opposed to independent views.
+Older versions of this page listed quorum-agreed failure detection and leader-assigned probing as roadmap ideas. They are not current behavior or delivery commitments. Current nodes probe independently, while only the quorum-confirmed leader registers and executes recovery. Track proposed behavior changes in this repository's Issues and require an explicit implementation and acceptance plan before relying on them.

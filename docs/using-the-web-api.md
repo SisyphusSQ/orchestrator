@@ -24,7 +24,7 @@ By way of example:
 
 The de-facto listing is the code, please see [api.go](../internal/http/api.go) (scroll down to `RegisterRequests`).
 
-You may also appreciate looking at [orch](orch.md) ([source code](https://github.com/openark/orchestrator/blob/master/bin/orch)) to see how command line interface is translated to API calls.
+You may also inspect [orch](orch.md) and its [command catalog](../tools/orch-cli/internal/cmd/catalog.json) to see how the current command line maps to API calls.
 
 Or, just use the [orch](orch.md) as your API client, this is what it was made for.
 

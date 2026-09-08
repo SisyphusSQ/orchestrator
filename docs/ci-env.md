@@ -1,6 +1,6 @@
 # CI environment
 
-An ancillary project, [orchestrator-ci-env](https://github.com/openark/orchestrator-ci-env), provides a MySQL replication environment with which one may evaluate/test `orchestrator`. Use cases:
+The configured ancillary project, [orchestrator-ci-env](https://github.com/percona/orchestrator-ci-env), provides a MySQL replication environment with which one may evaluate/test `orchestrator`. Use cases:
 
 - You want to check `orchestrator`'s behavior on a testing environment.
 - You want to test failover and master discovery.
@@ -15,11 +15,11 @@ You may do all of the above if you already have some staging environment with a 
 
 Clone `orchestrator-ci-env` via SSH or HTTPS:
 ```shell
-$ git clone git@github.com:openark/orchestrator-ci-env.git
+$ git clone git@github.com:percona/orchestrator-ci-env.git
 ```
 or
 ```shell
-$ git clone https://github.com/openark/orchestrator-ci-env.git
+$ git clone https://github.com/percona/orchestrator-ci-env.git
 ```
 
 # Run environment
@@ -61,7 +61,7 @@ Confirm `.Details.committed` and the `ci-node-1` voter with
 `GET /api/raft/configuration` before running topology commands. Do not replay
 the bootstrap request when its result is uncertain; use configuration readback.
 
-[`conf/orchestrator-ci-env.conf.json`](https://github.com/openark/orchestrator/blob/master/conf/orchestrator-ci-env.conf.json) is designed to work with `orchestrator-ci-env`.
+[`conf/orchestrator-ci-env.conf.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/conf/orchestrator-ci-env.conf.json) is designed to work with `orchestrator-ci-env`.
 
 You may choose to change the value of `SQLite3DataFile`, which is by default on `/tmp`.
 

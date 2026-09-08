@@ -11,33 +11,16 @@ If not, replace `127.0.0.1` with appropriate host name. Replace `orch_backend_pa
 
 仅需要命令行管理时，安装对应平台的 `orch` 二进制或 `orch` 的 RPM/DEB/TAR 包，将它放入 PATH。包内只包含 `/usr/bin/orch`；无需本机 MySQL、服务端配置和静态资源。配置 `ORCH_ENDPOINT` 后执行 `orch clusters`。以下数据库和服务部署步骤仅适用于服务端机器。
 
-#### Extract orchestrator binary and files
+#### Obtain the current binaries
 
-- Extract from tarball
+Use artifacts from this repository's [Releases page](https://github.com/SisyphusSQ/orchestrator/releases) when a release is published, or build the exact required revision with `make build`. Do not substitute an upstream or historical package with the same binary name: it may not contain the Raft-only server, standalone `orch`, or embedded Web console documented here.
 
-  Extract the archive you've downloaded from https://github.com/percona/orchestrator/tags
-  For example, let's assume you wish to install `orchestrator` under `/usr/local/orchestrator`:
+A source build produces `bin/orchestrator` and `bin/orch`. Install them into a directory on `PATH`, preserve executable permissions, and record the source revision:
 
-      sudo mkdir -p /usr/local
-      sudo cd /usr/local
-      sudo tar xzfv orchestrator-1.0.tar.gz
+    sudo install -m 0755 bin/orchestrator /usr/local/bin/orchestrator
+    sudo install -m 0755 bin/orch /usr/local/bin/orch
 
-- Install from `RPM`
-
-  Installs onto `/usr/local/orchestrator`. Execute:
-
-      sudo rpm -i orchestrator-1.0-1.x86_64.rpm
-
-
-- Install from `DEB`
-
-  Installs onto `/usr/local/orchestrator`. Execute:
-
-      sudo dpkg -i orchestrator_1.0_amd64.deb
-
-- Install from repository
-
-  `orchestrator` packages can be found in https://packagecloud.io/github/orchestrator
+RPM, DEB, and TGZ files built by `make package` are local artifacts until they have been explicitly published and read back from a Release.
 
 
 #### Setup backend MySQL server
@@ -51,7 +34,7 @@ Setup a MySQL server for backend, and invoke the following:
 `Orchestrator` uses a configuration file, located in either `/etc/orchestrator.conf.json` or relative path to binary `conf/orchestrator.conf.json` or
 `orchestrator.conf.json`.
 
-Tip: the installed package includes a file called `orchestrator.conf.json.sample` with some basic settings which you can use as baseline for `orchestrator.conf.json`. It is found in `/usr/local/orchestrator/orchestrator-sample.conf.json` and you may also find `/usr/local/orchestrator/orchestrator-sample-sqlite.conf.json` which has a SQLite-oriented configuration. Those sample files are also available [on the `orchestrator` repository](https://github.com/percona/orchestrator/tree/master/conf).
+Use the current [MySQL and SQLite samples](https://github.com/SisyphusSQ/orchestrator/tree/main/conf) as a baseline. A package may install copies under `/usr/local/orchestrator`; verify that those copies match the deployed binary revision.
 
 Edit `orchestrator.conf.json` to match the above as follows:
 
@@ -87,5 +70,4 @@ Replace `orch_host` with hostname or orchestrator machine (or do your wildcards 
 Consider moving `conf/orchestrator.conf.json` to `/etc/orchestrator.conf.json` (both locations are valid)
 
 Remote command-line operations use the independent `orch` binary; only service hosts need the `orchestrator` binary and configuration.
-To enjoy the rich web interface, including topology visualizations and drag-and-drop topology changes, you will need
-the `resources` directory and all that is underneath it. If you're unsure, don't touch; things are already in place.
+The React/Ant Design Web console is embedded in a binary built through `make binary` or `make build`. Runtime hosts do not need an external `resources/` or `web/` directory, nor Node.js.

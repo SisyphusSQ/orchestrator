@@ -33,7 +33,7 @@ Clusters' master entries are populated on:
   - `orch submit-masters-to-kv-stores` to submit all clusters' masters to KV, or
   - `orch submit-masters-to-kv-stores --alias mycluster` to submit the master of `mycluster` to KV
 
-    See [orch.md](orch) documentation. You may use the `orchestrator`
+    See [orch](orch.md) documentation. You may use the `orchestrator`
     command line invocation as well.
 
   Or you may directly accessing the API via:
