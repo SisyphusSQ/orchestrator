@@ -4,6 +4,17 @@ Review the breaking changes on this page before replacing an existing `orchestra
 
 ## Unreleased breaking changes
 
+### Go 源码迁移到 cmd 与 internal
+
+源码构建入口由 `go/cmd/orchestrator` 改为 `cmd/orchestrator`，推荐继续使用
+`make build`。全部内部包迁入 `internal/`，旧 `github.com/openark/orchestrator/go/*`
+导入路径不再提供兼容性；依赖旧包的外部 Go 项目需要调整集成方式。
+本地 golib 已合并到根模块，移除针对 `go/golib` 的独立依赖下载和测试步骤，
+使用 `make deps`、`make test-unit` 即可覆盖全部包。
+
+二进制名称、CLI 参数、配置搜索路径和 `resources/` 部署布局保持不变，
+本次目录调整不新增数据库或 Raft 格式迁移。详见[源码布局](build.md)。
+
 ### Observability replaces Graphite and raw metric APIs
 
 Graphite and the in-memory raw/aggregated metrics APIs are removed. Delete the

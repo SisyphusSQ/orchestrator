@@ -1,7 +1,7 @@
 # HTTP transport
 
 `orchestrator` uses Gin v1.12.0 as its HTTP routing engine. Gin is isolated
-behind the transport adapter in `go/http`: application handlers depend on the
+behind the transport adapter in `internal/http`: application handlers depend on the
 project-owned `Params`, `Responder`, `Principal`, `Handler`, and `Router`
 contracts rather than on `gin.Context` or other Gin types.
 
@@ -51,7 +51,7 @@ The project responder preserves the existing wire contract:
 
 ## Listener ownership
 
-`go/app` remains responsible for selecting the HTTP, HTTPS, or Unix socket
+`internal/app` remains responsible for selecting the HTTP, HTTPS, or Unix socket
 listener, loading TLS key pairs, starting the optional agent listener, and
 starting continuous discovery. The Gin adapter is a standard
 `net/http.Handler`, so it does not own sockets or TLS configuration.

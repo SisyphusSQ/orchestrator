@@ -7,6 +7,7 @@
   - Require a durable `RaftNodeID` independent of bind/advertise/DNS, bootstrap a single seed voter, and manage membership through ID-aware HTTP APIs (`/api/raft/configuration`, `/bootstrap`, `/members`, `/leadership/transfer`, `/snapshot`).
   - Use official FileSnapshotStore plus one Bolt store for logs and stable state, remove Yield/peer/health-report control paths, and report readiness from VerifyLeader, configuration suffrage, and last-contact.
 - optimization
+  - Move the executable to `cmd/orchestrator` and application packages to `internal`, merging the local golib implementation into the root Go module. Build the command package with `make build` and test all packages with `make test-unit`; the former `go/*` import paths are no longer supported. Runtime configuration and resource paths remain unchanged.
   - Replace Graphite, rcrowley/go-metrics and raw/aggregated Collection APIs with OpenTelemetry metrics and a node-local Prometheus endpoint; reject removed telemetry configuration keys and document the breaking upgrade.
   - Add bounded OTLP tracing, layered local health checks, and an importable Prometheus Grafana dashboard with collection, alert and Collector/Tempo examples.
   - Correct discovery queue/dead-instance gauges and backend wait/flush timing semantics while retaining discovery and recovery decisions.

@@ -6,7 +6,7 @@
 
 | 验证 | 结果与边界 |
 | --- | --- |
-| `make test-unit` | 根模块及 `go/golib` 通过；后续边界修复另运行涉及包的单元与 race 测试 |
+| `make test-unit` | 根模块及 `go/golib`（现为 `internal/golib`） 通过；后续边界修复另运行涉及包的单元与 race 测试 |
 | race | observability、discovery、HTTP、inst、app、config、logic、db、raft 涉及包通过 |
 | 指标契约 fixture | 结果 Counter、秒单位及 histogram sum、Gauge 回落、2100 个属性值的 overflow 保总量、恢复提前返回终态通过 |
 | 抓取与认证 | 真实 HTTP 客户端验证 basic auth、URLPrefix、GET/HEAD、旧路由 404；验证 gzip 可被标准客户端解码；业务队列锁被占用时仍可完成 Prometheus 抓取 |
@@ -35,7 +35,7 @@
 命令：
 
 ```sh
-go test -mod=readonly ./go/observability -run='^$' -bench=BenchmarkTelemetry -benchmem
+go test -mod=readonly ./internal/observability -run='^$' -bench=BenchmarkTelemetry -benchmem
 ```
 
 | 操作 | 时间 | 分配 |
