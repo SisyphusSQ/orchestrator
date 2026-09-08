@@ -15,6 +15,58 @@ Also consult the [Orchestrator first steps](first-steps.md) page.
 
 The two are (mostly) compatible. This document discusses the first option.
 
+## Commands, help and compatibility
+
+The Go binary uses Cobra subcommands. Command definitions, dispatch and help live in
+`cmd/orchestrator`; operations call the existing business packages under `internal`.
+
+```bash
+orchestrator clusters
+orchestrator discover -i db.example.com:3306 --debug
+orchestrator relocate --instance replica.example.com:3306 --destination primary.example.com:3306
+orchestrator http --config=/path/to/config.json --discovery=false
+orchestrator help discover
+orchestrator discover --help
+orchestrator --version
+```
+
+Existing `-c <command>` and `-c <command> cli` invocations remain supported, as do
+old command aliases such as `stop-slave` for `stop-replica`. Do not combine a native
+operation or `http` subcommand with `-c`; ambiguous invocations fail before startup.
+The independent Bash `orchestrator-client` continues to use its existing syntax.
+
+Flags may appear before or after the subcommand. Prefer `--config`, `--debug` and
+other double-hyphen long flags; registered legacy spellings such as `-config` and
+`-debug` still work. `-i`/`--i`, `-d`/`--d`, `-s`/`--s`, and `-c`/`--c` map to
+`--instance`, `--destination`, `--sibling`, and `--command`. Short flags must be
+separate words or use `=` (for example `-i db:3306` or `-i=db:3306`), not combined
+or attached to their values. This avoids interpreting a misspelled legacy long
+flag as a different short option. Boolean values use `=false` to disable a flag.
+String values, including values beginning with `-`, are passed through unchanged.
+`--` terminates flag parsing; unexpected positional arguments are rejected.
+
+No arguments, `help`, `--help`, `-c help`, and `-c <command> help` display help
+without loading configuration or initializing database, KV, or telemetry services.
+Help is written to stdout. Unknown help topics and malformed invocations return a
+nonzero exit code instead of silently displaying an empty topic or ignoring extra
+arguments. `--version` also skips startup and retains the two-line output: version,
+then Git commit. Operation output and configuration search order remain unchanged.
+
+Shell completion generation also runs without configuration or external services:
+
+```bash
+orchestrator completion bash
+orchestrator completion zsh
+orchestrator completion fish
+orchestrator completion powershell
+```
+
+Each command writes its completion script to stdout; install or source it using
+your shell's normal completion setup. Completion suggests commands and flags and
+does not query a running database topology.
+
+## Operation examples
+
 Following is a synopsis of command line samples. For simplicity, we assume `orchestrator` is in your path.
 If not, replace `orchestrator` with `/path/to/orchestrator`.
 
@@ -32,7 +84,8 @@ You may choose to use a different location for the configuration file, in which 
 
     orchestrator -c clusters --config=/path/to/config.file
 
-> `-c` stands for `command`, and is mandatory.
+> `-c` stands for `command` and is optional when using a native subcommand. For example,
+> `orchestrator clusters` and `orchestrator -c clusters` execute the same operation.
 
 Discover a new instance ("teach" `orchestrator` about your topology). `Orchestrator` will automatically recursively drill up the master chain (if any)
 and down the replicas chain (if any) to detect the entire topology:

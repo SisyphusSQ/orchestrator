@@ -18,21 +18,19 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/openark/orchestrator/internal/app"
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/inst"
-	"github.com/openark/orchestrator/internal/process"
-
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/openark/orchestrator/internal/observability"
+	"github.com/openark/orchestrator/internal/process"
 )
 
 var AppVersion, GitCommit string
@@ -71,75 +69,26 @@ func registerProcessCloseHooks(
 }
 
 func run() int {
-	configFile := flag.String("config", "", "config file name")
-	command := flag.String("c", "", "command, required. See full list of commands via 'orchestrator -c help'")
-	strict := flag.Bool("strict", false, "strict mode (more checks, slower)")
-	instance := flag.String("i", "", "instance, host_fqdn[:port] (e.g. db.company.com:3306, db.company.com)")
-	sibling := flag.String("s", "", "sibling instance, host_fqdn[:port]")
-	destination := flag.String("d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
-	owner := flag.String("owner", "", "operation owner")
-	reason := flag.String("reason", "", "operation reason")
-	duration := flag.String("duration", "", "maintenance duration (format: 59s, 59m, 23h, 6d, 4w)")
-	pattern := flag.String("pattern", "", "regular expression pattern")
-	clusterAlias := flag.String("alias", "", "cluster alias")
-	pool := flag.String("pool", "", "Pool logical name (applies for pool-related commands)")
-	hostnameFlag := flag.String("hostname", "", "Hostname/fqdn/CNAME/VIP (applies for hostname/resolve related commands)")
-	discovery := flag.Bool("discovery", true, "auto discovery mode")
-	quiet := flag.Bool("quiet", false, "quiet")
-	verbose := flag.Bool("verbose", false, "verbose")
-	debug := flag.Bool("debug", false, "debug mode (very verbose)")
-	stack := flag.Bool("stack", false, "add stack trace upon error")
-	config.RuntimeCLIFlags.SkipBinlogSearch = flag.Bool("skip-binlog-search", false, "when matching via Pseudo-GTID, only use relay logs. This can save the hassle of searching for a non-existend pseudo-GTID entry, for example in servers with replication filters.")
-	config.RuntimeCLIFlags.SkipUnresolve = flag.Bool("skip-unresolve", false, "Do not unresolve a host name")
-	config.RuntimeCLIFlags.SkipUnresolveCheck = flag.Bool("skip-unresolve-check", false, "Skip/ignore checking an unresolve mapping (via hostname_unresolve table) resolves back to same hostname")
-	config.RuntimeCLIFlags.Noop = flag.Bool("noop", false, "Dry run; do not perform destructing operations")
-	config.RuntimeCLIFlags.BinlogFile = flag.String("binlog", "", "Binary log file name")
-	config.RuntimeCLIFlags.Statement = flag.String("statement", "", "Statement/hint")
-	config.RuntimeCLIFlags.GrabElection = flag.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
-	config.RuntimeCLIFlags.PromotionRule = flag.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
-	config.RuntimeCLIFlags.Version = flag.Bool("version", false, "Print version and exit")
-	config.RuntimeCLIFlags.SkipContinuousRegistration = flag.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
-	config.RuntimeCLIFlags.EnableDatabaseUpdate = flag.Bool("enable-database-update", false, "Enable database update, overrides SkipOrchestratorDatabaseUpdate")
-	config.RuntimeCLIFlags.IgnoreRaftSetup = flag.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
-	config.RuntimeCLIFlags.Tag = flag.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
-	flag.Parse()
+	if err := execute(os.Args[1:], os.Stdout, os.Stderr, runCommand); err != nil {
+		log.Errorf("%v", err)
+		return 1
+	}
+	return 0
+}
+
+func runCommand(options *commandOptions, command string) error {
 	if err := process.HostnameError(); err != nil {
-		log.Fatalf("%v", err)
+		return err
 	}
-
-	if *destination != "" && *sibling != "" {
-		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
-	}
-	switch *config.RuntimeCLIFlags.PromotionRule {
-	case "prefer", "neutral", "prefer_not", "must_not":
-		{
-			// OK
-		}
-	default:
-		{
-			log.Fatalf("-promotion-rule only supports prefer|neutral|prefer_not|must_not")
-		}
-	}
-	if *destination == "" {
-		*destination = *sibling
-	}
-
+	config.RuntimeCLIFlags = options.runtime
 	log.SetLevel(log.ERROR)
-	if *verbose {
+	if options.verbose {
 		log.SetLevel(log.INFO)
 	}
-	if *debug {
+	if options.debug {
 		log.SetLevel(log.DEBUG)
 	}
-	if *stack {
-		log.SetPrintStackTrace(*stack)
-	}
-	if *config.RuntimeCLIFlags.Version {
-		fmt.Println(AppVersion)
-		fmt.Println(GitCommit)
-		return 0
-	}
-
+	log.SetPrintStackTrace(options.stack)
 	startText := "starting orchestrator"
 	if AppVersion != "" {
 		startText += ", version: " + AppVersion
@@ -150,13 +99,13 @@ func run() int {
 	log.Info(startText)
 
 	var configErr error
-	if len(*configFile) > 0 {
-		_, configErr = config.ForceRead(*configFile)
+	if len(options.configFile) > 0 {
+		_, configErr = config.ForceRead(options.configFile)
 	} else {
 		_, configErr = config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
 	}
 	if configErr != nil {
-		log.Fatalf("load configuration: %v", configErr)
+		return fmt.Errorf("load configuration: %w", configErr)
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
@@ -164,69 +113,36 @@ func run() int {
 	if config.Config.Debug {
 		log.SetLevel(log.DEBUG)
 	}
-	if *quiet {
+	if options.quiet {
 		// Override!!
 		log.SetLevel(log.ERROR)
 	}
 	if err := configureSyslog(config.Config.EnableSyslog, log.EnableSyslogWriter); err != nil {
-		log.Fatalf("%v", err)
+		return err
 	}
 	if config.Config.AuditToSyslog {
 		if err := inst.EnableAuditSyslog(); err != nil {
-			log.Fatalf("initialize audit syslog: %v", err)
+			return fmt.Errorf("initialize audit syslog: %w", err)
 		}
 	}
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	telemetry, err := observability.New(context.Background(), config.Config.OTelTraceEndpoint, config.Config.OTelTraceSampleRatio, AppVersion)
 	if err != nil {
-		log.Fatalf("initialize telemetry: %v", err)
+		return fmt.Errorf("initialize telemetry: %w", err)
 	}
 	telemetry.Install()
 	log.RegisterCloseHook(telemetry.Close)
 	config.MarkConfigurationLoaded()
 
-	if len(flag.Args()) == 0 && *command == "" {
-		// No command, no argument: just prompt
-		fmt.Print(app.AppPrompt)
-		return 0
+	if command == "http" {
+		if err := app.Http(options.discovery); err != nil {
+			return fmt.Errorf("run HTTP services: %w", err)
+		}
+		return nil
 	}
-
-	helpTopic := ""
-	if flag.Arg(0) == "help" {
-		if flag.Arg(1) != "" {
-			helpTopic = flag.Arg(1)
-		}
-		if helpTopic == "" {
-			helpTopic = *command
-		}
-		if helpTopic == "" {
-			// hacky way to make the CLI kick in as if the user typed `orchestrator -c help cli`
-			*command = "help"
-			flag.Args()[0] = "cli"
-		}
-	}
-
-	switch {
-	case helpTopic != "":
-		app.HelpCommand(helpTopic)
-	case len(flag.Args()) == 0 || flag.Arg(0) == "cli":
-		if err := app.CliWrapper(*command, *strict, *instance, *destination, *owner, *reason, *duration, *pattern, *clusterAlias, *pool, *hostnameFlag); err != nil {
-			log.Fatalf("%v", err)
-		}
-	case flag.Arg(0) == "http":
-		if err := app.Http(*discovery); err != nil {
-			log.Fatalf("run HTTP services: %v", err)
-		}
-	default:
-		fmt.Fprintln(os.Stderr, `Usage:
-  orchestrator --options... [cli|http]
-See complete list of commands:
-  orchestrator -c help
-Full blown documentation:
-  orchestrator`)
-		return 1
-	}
-	return 0
+	return runCLIWrapper(command, options.strict, options.instance, options.destination,
+		options.owner, options.reason, options.duration, options.pattern, options.clusterAlias,
+		options.pool, options.hostnameFlag)
 }
 
 func configureSyslog(enabled bool, enable func(string) error) error {
