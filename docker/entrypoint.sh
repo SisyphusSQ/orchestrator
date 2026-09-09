@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
-if [ ! -e /etc/orchestrator.conf.json ] ; then
-  : "${ORC_RAFT_NODE_ID:?set a stable unique ORC_RAFT_NODE_ID or mount /etc/orchestrator.conf.json}"
-  : "${ORC_RAFT_ADVERTISE:?set a reachable ORC_RAFT_ADVERTISE or mount /etc/orchestrator.conf.json}"
+if [ ! -e /etc/orchestrator.conf.yaml ] && [ ! -e /etc/orchestrator.conf.yml ] && [ ! -e /etc/orchestrator.conf.json ] ; then
+  : "${ORC_RAFT_NODE_ID:?set a stable unique ORC_RAFT_NODE_ID or mount /etc/orchestrator.conf.yaml}"
+  : "${ORC_RAFT_ADVERTISE:?set a reachable ORC_RAFT_ADVERTISE or mount /etc/orchestrator.conf.yaml}"
   jq -n \
     --arg id "$ORC_RAFT_NODE_ID" \
     --arg bind "${ORC_RAFT_BIND:-0.0.0.0:10008}" \

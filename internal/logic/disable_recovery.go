@@ -22,7 +22,7 @@ package logic
 // This is determined by looking in the table
 // orchestrator.global_recovery_disable for a value 1.  Note: for
 // recoveries to actually happen this must be configured explicitly
-// in orchestrator.conf.json. This setting is an emergency brake
+// in the orchestrator configuration file. This setting is an emergency brake
 // to quickly be able to prevent recoveries happening in some large
 // outage type situation.  Maybe this value should be cached etc
 // but we won't be doing that many recoveries at once so the load

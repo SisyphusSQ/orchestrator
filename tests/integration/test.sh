@@ -251,8 +251,8 @@ deploy_internal_db() {
 
 generate_config_file() {
   python3 - "$tests_path/orchestrator.conf.json" "$test_config_file" "$test_mysql_defaults_file" "$db_type" "$sqlite_file" <<'PYCONFIG'
-import json,re,sys
-text=open(sys.argv[1]).read(); config=json.loads(re.sub(r",\s*([}\]])",r"\1",text))
+import json,sys
+with open(sys.argv[1]) as f: config=json.load(f)
 config["MySQLOrchestratorCredentialsConfigFile"]=sys.argv[3]
 config["AuditLogFile"]=""
 config["BackendDB"]=sys.argv[4]

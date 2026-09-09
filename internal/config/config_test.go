@@ -22,40 +22,172 @@ func init() {
 
 func writeConfigFixture(t *testing.T, content string) string {
 	t.Helper()
+	return writeNamedConfigFixture(t, "orchestrator.conf.json", content)
+}
 
-	configPath := filepath.Join(t.TempDir(), "orchestrator.conf.json")
+func writeNamedConfigFixture(t *testing.T, name, content string) string {
+	t.Helper()
+	configPath := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("write config fixture: %v", err)
 	}
 	return configPath
 }
 
-func TestForceReadRejectsRemovedZkAddress(t *testing.T) {
+func TestDecodeConfigurationSupportsJSONAndYAML(t *testing.T) {
 	testCases := map[string]string{
-		"configured":       `{"ZkAddress":"zk-1:2181"}`,
-		"empty":            `{"ZkAddress":""}`,
-		"case-insensitive": `{"zkaddress":"zk-1:2181"}`,
+		"json": `{"Debug":true,"BackendDB":"sqlite3","SQLite3DataFile":"/tmp/orchestrator.db","RecoverMasterClusterFilters":[".*"],"ClusterNameToAlias":{"production":"main"}}`,
+		"yaml": "Debug: true\nBackendDB: sqlite3\nSQLite3DataFile: /tmp/orchestrator.db\nRecoverMasterClusterFilters:\n  - .*\nClusterNameToAlias:\n  production: main\n",
 	}
 	for name, content := range testCases {
 		t.Run(name, func(t *testing.T) {
-			_, err := ForceRead(writeConfigFixture(t, content))
-			if err == nil {
-				t.Fatal("expected configuration containing ZkAddress to fail")
+			configuration := newConfiguration()
+			if err := decodeConfiguration(strings.NewReader(content), configuration); err != nil {
+				t.Fatal(err)
 			}
-			for _, expected := range []string{"ZkAddress", "ZooKeeper", "Consul KV", "external failover hook"} {
-				if !strings.Contains(err.Error(), expected) {
-					t.Fatalf("expected failure error to contain %q, got: %v", expected, err)
-				}
+			if !configuration.Debug || configuration.BackendDB != "sqlite3" || configuration.SQLite3DataFile != "/tmp/orchestrator.db" {
+				t.Fatalf("decoded scalar values = %#v", configuration)
+			}
+			if len(configuration.RecoverMasterClusterFilters) != 1 || configuration.RecoverMasterClusterFilters[0] != ".*" {
+				t.Fatalf("decoded list = %v", configuration.RecoverMasterClusterFilters)
+			}
+			if configuration.ClusterNameToAlias["production"] != "main" {
+				t.Fatalf("decoded map = %v", configuration.ClusterNameToAlias)
 			}
 		})
 	}
 }
 
-func TestForceReadRejectsRemovedRaftSwitch(t *testing.T) {
-	for _, content := range []string{`{"RaftEnabled":true}`, `{"RaftEnabled":false}`, `{"raftenabled":null}`} {
-		if _, err := ForceRead(writeConfigFixture(t, content)); err == nil || !strings.Contains(err.Error(), "only Raft is supported") {
-			t.Fatalf("removed mode switch %s: %v", content, err)
+func TestDecodeConfigurationRejectsUnknownFields(t *testing.T) {
+	for _, field := range []string{
+		"FutureSetting",
+		"RaftEnabled",
+		"ZkAddress",
+		"SlaveLagQuery",
+		"RecoveryPeriodBlockMinutes",
+		"DetachLostSlavesAfterMasterFailover",
+		"MasterFailoverDetachSlaveMasterHost",
+		"PostponeSlaveRecoveryOnLagMinutes",
+		"OAuthClientId",
+		"OAuthClientSecret",
+		"OAuthScopes",
+		"ExpectFailureAnalysisConcensus",
+		"SeedAcceptableBytesDiff",
+		"MasterFailoverLostInstancesDowntimeMinutes",
+	} {
+		t.Run(field, func(t *testing.T) {
+			for format, content := range map[string]string{
+				"json": `{"` + field + `": null}`,
+				"yaml": field + ": null\n",
+			} {
+				t.Run(format, func(t *testing.T) {
+					err := decodeConfiguration(strings.NewReader(content), newConfiguration())
+					if err == nil || !strings.Contains(err.Error(), "unknown field") {
+						t.Fatalf("decode unknown field error = %v", err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestDecodeConfigurationRejectsDuplicateKeys(t *testing.T) {
+	for name, content := range map[string]string{
+		"json": `{"Debug": true, "Debug": false}`,
+		"yaml": "Debug: true\nDebug: false\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := decodeConfiguration(strings.NewReader(content), newConfiguration()); err == nil {
+				t.Fatal("duplicate configuration key accepted")
+			}
+		})
+	}
+}
+
+func TestDecodeConfigurationRejectsMultipleYAMLDocuments(t *testing.T) {
+	err := decodeConfiguration(strings.NewReader("Debug: true\n---\nDebug: false\n"), newConfiguration())
+	if err == nil || !strings.Contains(err.Error(), "multiple configuration documents") {
+		t.Fatalf("multiple documents error = %v", err)
+	}
+}
+
+func TestDecodeConfigurationRejectsTrailingContent(t *testing.T) {
+	for name, content := range map[string]string{
+		"json": `{"Debug": true} {"Debug": false}`,
+		"yaml": "Debug: true\ninvalid trailing scalar\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := decodeConfiguration(strings.NewReader(content), newConfiguration()); err == nil {
+				t.Fatal("trailing configuration content accepted")
+			}
+		})
+	}
+}
+
+func TestReadIntoUsesContentInsteadOfFileExtension(t *testing.T) {
+	for name, fixture := range map[string]struct {
+		fileName string
+		content  string
+	}{
+		"yaml in json file": {fileName: "orchestrator.conf.json", content: "Debug: true\n"},
+		"json in yaml file": {fileName: "orchestrator.conf.yaml", content: `{"Debug": true}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			configuration := newConfiguration()
+			if err := readInto(writeNamedConfigFixture(t, fixture.fileName, fixture.content), configuration); err != nil {
+				t.Fatal(err)
+			}
+			if !configuration.Debug {
+				t.Fatal("configuration content was not applied")
+			}
+		})
+	}
+}
+
+func TestReadIntoLayersJSONAndYAML(t *testing.T) {
+	configuration := newConfiguration()
+	if err := readInto(writeNamedConfigFixture(t, "base.json", `{"Debug": true, "ListenAddress": ":3000"}`), configuration); err != nil {
+		t.Fatal(err)
+	}
+	if err := readInto(writeNamedConfigFixture(t, "override.yaml", "Debug: false\n"), configuration); err != nil {
+		t.Fatal(err)
+	}
+	if configuration.Debug || configuration.ListenAddress != ":3000" {
+		t.Fatalf("layered configuration = Debug:%t ListenAddress:%q", configuration.Debug, configuration.ListenAddress)
+	}
+}
+
+func TestRepositoryConfigurationFilesDecode(t *testing.T) {
+	patterns := []string{
+		"../../conf/*.conf.json",
+		"../../conf/*.conf.yaml",
+		"../../tests/integration/orchestrator.conf.json",
+		"../../tests/system/orchestrator-ci-system.conf.json",
+		"../../tests/*/*/config.json",
+		"../../tests/*/*/*/config.json",
+	}
+	var files []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
 		}
+		files = append(files, matches...)
+	}
+	if len(files) == 0 {
+		t.Fatal("no repository configuration files found")
+	}
+	for _, fileName := range files {
+		t.Run(filepath.Base(fileName), func(t *testing.T) {
+			file, err := os.Open(fileName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			if err := decodeConfiguration(file, newConfiguration()); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -76,19 +208,6 @@ func TestRunningRaftRejectsIdentityReloadWithoutPartialChanges(t *testing.T) {
 	}
 }
 
-func TestForceReadAllowsOtherUnknownFields(t *testing.T) {
-	previous := *Config
-	previousReadFileNames := append([]string(nil), readFileNames...)
-	t.Cleanup(func() {
-		*Config = previous
-		readFileNames = previousReadFileNames
-	})
-	_, err := ForceRead(writeConfigFixture(t, `{"Debug":true,"FutureSetting":true}`))
-	if err != nil {
-		t.Fatalf("expected unrelated unknown configuration fields to remain accepted: %v", err)
-	}
-}
-
 func TestForceReadAllowsNonSeekableInput(t *testing.T) {
 	if os.Getenv(forceReadStdinChildEnv) != "" {
 		if _, err := ForceRead("/dev/stdin"); err != nil {
@@ -99,23 +218,19 @@ func TestForceReadAllowsNonSeekableInput(t *testing.T) {
 
 	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestForceReadAllowsNonSeekableInput$")
 	cmd.Env = append(os.Environ(), forceReadStdinChildEnv+"=1")
-	cmd.Stdin = strings.NewReader(`{"Debug":true}`)
+	cmd.Stdin = strings.NewReader("Debug: true\n")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("expected non-seekable configuration input to remain accepted, got %v: %s", err, output)
 	}
 }
 
-func TestForceReadReturnsMalformedJSONError(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "malformed.conf.json")
-	if err := os.WriteFile(configPath, []byte(`{"Debug":`), 0600); err != nil {
-		t.Fatalf("write config fixture: %v", err)
-	}
-
+func TestForceReadReturnsMalformedConfigurationError(t *testing.T) {
+	configPath := writeNamedConfigFixture(t, "malformed.conf.yaml", "Debug: [\n")
 	_, err := ForceRead(configPath)
 	if err == nil {
-		t.Fatal("ForceRead() returned nil for malformed JSON")
+		t.Fatal("ForceRead() returned nil for malformed configuration")
 	}
-	if !strings.Contains(err.Error(), "malformed.conf.json") {
+	if !strings.Contains(err.Error(), "malformed.conf.yaml") {
 		t.Fatalf("ForceRead() error = %q; want config path", err)
 	}
 }
@@ -145,142 +260,17 @@ func TestForceReadDoesNotApplyInvalidConfigurationPartially(t *testing.T) {
 	}
 }
 
-func TestReplicationLagQuery(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.SlaveLagQuery = "select 3"
-		c.ReplicationLagQuery = "select 4"
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNotNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.SlaveLagQuery = "select 3"
-		c.ReplicationLagQuery = "select 3"
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.SlaveLagQuery = "select 3"
-		c.ReplicationLagQuery = ""
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.ReplicationLagQuery, "select 3")
+func TestDetachLostReplicasAfterMasterFailoverDefault(t *testing.T) {
+	if !newConfiguration().DetachLostReplicasAfterMasterFailover {
+		t.Fatal("DetachLostReplicasAfterMasterFailover default changed")
 	}
 }
 
-func TestPostponeReplicaRecoveryOnLagMinutes(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.PostponeSlaveRecoveryOnLagMinutes = 3
-		c.PostponeReplicaRecoveryOnLagMinutes = 5
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNotNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.PostponeSlaveRecoveryOnLagMinutes = 3
-		c.PostponeReplicaRecoveryOnLagMinutes = 3
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-	}
-	{
-		c := newConfiguration()
-		c.PostponeSlaveRecoveryOnLagMinutes = 3
-		c.PostponeReplicaRecoveryOnLagMinutes = 0
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.PostponeReplicaRecoveryOnLagMinutes, uint(3))
-	}
-}
-
-func TestMasterFailoverDetachReplicaMasterHost(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.MasterFailoverDetachSlaveMasterHost = false
-		c.MasterFailoverDetachReplicaMasterHost = false
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectFalse(c.MasterFailoverDetachReplicaMasterHost)
-	}
-	{
-		c := newConfiguration()
-		c.MasterFailoverDetachSlaveMasterHost = false
-		c.MasterFailoverDetachReplicaMasterHost = true
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.MasterFailoverDetachReplicaMasterHost)
-	}
-	{
-		c := newConfiguration()
-		c.MasterFailoverDetachSlaveMasterHost = true
-		c.MasterFailoverDetachReplicaMasterHost = false
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.MasterFailoverDetachReplicaMasterHost)
-	}
-}
-
-func TestMasterFailoverDetachDetachLostReplicasAfterMasterFailover(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.DetachLostSlavesAfterMasterFailover = false
-		c.DetachLostReplicasAfterMasterFailover = false
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectFalse(c.DetachLostReplicasAfterMasterFailover)
-	}
-	{
-		c := newConfiguration()
-		c.DetachLostSlavesAfterMasterFailover = false
-		c.DetachLostReplicasAfterMasterFailover = true
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.DetachLostReplicasAfterMasterFailover)
-	}
-	{
-		c := newConfiguration()
-		c.DetachLostSlavesAfterMasterFailover = true
-		c.DetachLostReplicasAfterMasterFailover = false
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(c.DetachLostReplicasAfterMasterFailover)
-	}
-}
-
-func TestRecoveryPeriodBlock(t *testing.T) {
-	{
-		c := newConfiguration()
-		c.RecoveryPeriodBlockSeconds = 0
-		c.RecoveryPeriodBlockMinutes = 0
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RecoveryPeriodBlockSeconds, 0)
-	}
-	{
-		c := newConfiguration()
-		c.RecoveryPeriodBlockSeconds = 30
-		c.RecoveryPeriodBlockMinutes = 1
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RecoveryPeriodBlockSeconds, 30)
-	}
-	{
-		c := newConfiguration()
-		c.RecoveryPeriodBlockSeconds = 0
-		c.RecoveryPeriodBlockMinutes = 2
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RecoveryPeriodBlockSeconds, 120)
-	}
-	{
-		c := newConfiguration()
-		c.RecoveryPeriodBlockSeconds = 15
-		c.RecoveryPeriodBlockMinutes = 0
-		err := c.postReadAdjustments()
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RecoveryPeriodBlockSeconds, 15)
+func TestPostReadRejectsUnsupportedAuthenticationMethod(t *testing.T) {
+	configuration := newConfiguration()
+	configuration.AuthenticationMethod = "oauth"
+	if err := configuration.postReadAdjustments(); err == nil || !strings.Contains(err.Error(), "unsupported AuthenticationMethod") {
+		t.Fatalf("unsupported authentication method error = %v", err)
 	}
 }
 

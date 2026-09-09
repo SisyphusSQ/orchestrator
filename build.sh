@@ -150,7 +150,7 @@ function copy_resource_artifacts() {
 
   cd  $basedir
   rsync -qa --exclude=public --exclude=templates --exclude=web ./resources $build_path/orchestrator${prefix}/orchestrator/
-  rsync -qa ./conf/orchestrator-sample*.conf.json $build_path/orchestrator${prefix}/orchestrator/
+  rsync -qa ./conf/orchestrator-sample*.conf.yaml $build_path/orchestrator${prefix}/orchestrator/
 
   case $init_system in
     "sysv")

@@ -13,9 +13,6 @@ func TestRemovedTelemetryConfiguration(t *testing.T) {
 			}
 		})
 	}
-	if err := decodeConfiguration(strings.NewReader(`{"UnrelatedFutureField":1}`), newConfiguration()); err != nil {
-		t.Fatal(err)
-	}
 }
 func TestTelemetryConfigValidation(t *testing.T) {
 	for _, endpoint := range []string{"http://localhost:4318/v1/traces", "https://collector.example/v1/traces", ""} {

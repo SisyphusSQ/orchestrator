@@ -20,7 +20,7 @@
 make deps
 make web-deps
 make build
-bin/orchestrator server --config /absolute/path/orchestrator.conf.json
+bin/orchestrator server --config /absolute/path/orchestrator.conf.yaml
 ```
 
 单独构建客户端：
@@ -50,7 +50,7 @@ Quick build:
 make deps
 make web-deps
 make build
-bin/orchestrator server --config /absolute/path/orchestrator.conf.json
+bin/orchestrator server --config /absolute/path/orchestrator.conf.yaml
 ```
 
 Build only the client:

@@ -26,7 +26,6 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/process"
-	orcraft "github.com/openark/orchestrator/internal/raft"
 	"github.com/openark/orchestrator/internal/util"
 
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -794,36 +793,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			go auditInstanceAnalysisInChangelog(&a.AnalyzedInstanceKey, a.Analysis)
 		}
 	}
-	// TODO: result, err = getConcensusReplicationAnalysis(result)
 	return result, log.Errore(err)
-}
-
-func getConcensusReplicationAnalysis(analysisEntries []ReplicationAnalysis) ([]ReplicationAnalysis, error) {
-
-	if !config.Config.ExpectFailureAnalysisConcensus {
-		return analysisEntries, nil
-	}
-	concensusAnalysisEntries := []ReplicationAnalysis{}
-	peerAnalysisMap, err := ReadPeerAnalysisMap()
-	if err != nil {
-		return analysisEntries, err
-	}
-	quorumSize, err := orcraft.QuorumSize()
-	if err != nil {
-		return analysisEntries, err
-	}
-
-	for _, analysisEntry := range analysisEntries {
-		instanceAnalysis := NewInstanceAnalysis(&analysisEntry.AnalyzedInstanceKey, analysisEntry.Analysis)
-		analysisKey := instanceAnalysis.String()
-
-		peerAnalysisCount := peerAnalysisMap[analysisKey]
-		if 1+peerAnalysisCount >= quorumSize {
-			// this node and enough other nodes in agreement
-			concensusAnalysisEntries = append(concensusAnalysisEntries, analysisEntry)
-		}
-	}
-	return concensusAnalysisEntries, nil
 }
 
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.

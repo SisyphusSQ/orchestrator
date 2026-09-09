@@ -1,6 +1,6 @@
 # Requires Docker 17.09 or later (multi stage builds)
 #
-# Orchestrator will look for a configuration file at /etc/orchestrator.conf.json.
+# Orchestrator will look for a YAML or JSON configuration file under /etc/orchestrator.conf.
 # It will listen on port 3000.
 # If not present a minimal configuration will be generated using the following environment variables:
 #
