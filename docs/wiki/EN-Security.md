@@ -25,7 +25,7 @@ Separate TLS settings cover topology MySQL, metadata MySQL, optional Agent endpo
 
 ## Secret and privilege handling
 
-- Keep JSON configuration and private keys readable only by the service account.
+- Keep configuration files and private keys readable only by the service account.
 - Prefer credentials files, environment injection, or a secret manager over command-line secrets.
 - Never place tokens, passwords, or OTLP credentials in URLs, logs, metric labels, traces, Wiki pages, or issue attachments.
 - Give topology users read permissions needed for discovery and only the additional privileges required by enabled mutation/recovery features.

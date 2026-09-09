@@ -10,9 +10,9 @@ if [[ -e /etc/debian_version ]]; then
 fi
 
 if [[ -e /orchestrator/vagrant/.sqlite ]]; then
-  cp -fv /usr/local/orchestrator/orchestrator-sample-sqlite.conf.json /etc/orchestrator.conf.json
+  cp -fv /usr/local/orchestrator/orchestrator-sample-sqlite.conf.yaml /etc/orchestrator.conf.yaml
 else
-  cp -fv /usr/local/orchestrator/orchestrator-sample.conf.json /etc/orchestrator.conf.json
+  cp -fv /usr/local/orchestrator/orchestrator-sample.conf.yaml /etc/orchestrator.conf.yaml
 fi
 
 if [[ -e /etc/redhat-release ]]; then

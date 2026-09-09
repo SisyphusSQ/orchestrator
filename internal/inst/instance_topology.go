@@ -1832,7 +1832,7 @@ Cleanup:
 	AuditOperation("take-master", instanceKey, fmt.Sprintf("took master: %+v", masterInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakeMaster success.
-	// This only runs if there is a hook configured in orchestrator.conf.json
+	// This only runs if there is a hook configured in the orchestrator configuration file
 	demoted := masterInstance
 	successor := instance
 	if config.Config.PostTakeMasterProcesses != nil {

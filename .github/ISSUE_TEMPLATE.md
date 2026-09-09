@@ -4,7 +4,7 @@
  This is also the place to make a discussion before creating a PR.
 
  If this is a bug report, please provide a test case and the error output. Useful information:
- - your orchestrator.conf.json config file/contents
+ - your orchestrator configuration file/contents (remove secrets)
  - your topology (e.g. run `orch topology --alias my-cluster`)
  - what did you do?
  - what did you expect to happen?

@@ -48,12 +48,6 @@
   "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
   "ReadOnly": false,
   "AuthenticationMethod": "",
-  "OAuthClientID": "7bcec5c3853caf1c335e",
-  "OAuthClientSecret": "8e089355237f52e118b7f8110e5022caccd4abb0",
-  "OAuthScopes": [
-    "user:email",
-    "repo"
-  ],
   "HTTPAuthUser": "",
   "HTTPAuthPassword": "",
   "AuthUserHeader": "",
@@ -86,12 +80,10 @@
   "SSLCAFile": "",
   "SSLValidOUs": [],
   "StatusEndpoint": "/api/status",
-  "StatusSimpleHealth": true,
   "StatusOUVerify": false,
   "AgentPollMinutes": 60,
   "UnseenAgentForgetHours": 6,
   "StaleSeedFailMinutes": 60,
-  "SeedAcceptableBytesDiff": 8192,
   "PseudoGTIDPattern": "drop view if exists `test`.`_pseudo_gtid_hint__asc:",
   "PseudoGTIDPatternIsFixedSubstring": true,
   "PseudoGTIDMonotonicHint": "asc:",
@@ -100,8 +92,6 @@
   "SkipBinlogEventsContaining": [],
   "ReduceReplicationAnalysisCount": true,
   "FailureDetectionPeriodBlockMinutes": 60,
-  "AutoRecoveryGloballyEnabled": false,
-  "RecoveryPeriodBlockMinutes": 60,
   "RecoveryPeriodBlockSeconds": 3600,
   "RecoveryIgnoreHostnameFilters": [],
   "RecoverMasterClusterFilters": [
@@ -131,8 +121,7 @@
   "ApplyMySQLPromotionAfterMasterFailover": false,
   "PreventCrossDataCenterMasterFailover": false,
   "PreventCrossRegionMasterFailover": false,
-  "MasterFailoverLostInstancesDowntimeMinutes": 10,
-  "MasterFailoverDetachSlaveMasterHost": true,
-  "PostponeSlaveRecoveryOnLagMinutes": 0,
-  "OSCIgnoreHostnameFilters": [],
+  "MasterFailoverDetachReplicaMasterHost": true,
+  "PostponeReplicaRecoveryOnLagMinutes": 0,
+  "OSCIgnoreHostnameFilters": []
 }

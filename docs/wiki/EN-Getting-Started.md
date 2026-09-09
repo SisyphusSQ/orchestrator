@@ -23,19 +23,17 @@ make build
 
 ## Configure
 
-Start from `conf/orchestrator-sample-sqlite.conf.json`. At minimum, choose durable local paths and set real topology credentials:
+Start from `conf/orchestrator-sample-sqlite.conf.yaml`. At minimum, choose durable local paths and set real topology credentials:
 
-```json
-{
-  "RaftNodeID": "dev-1",
-  "RaftDataDir": "/absolute/path/orchestrator-raft",
-  "RaftBind": "127.0.0.1:10008",
-  "ListenAddress": "127.0.0.1:3000",
-  "BackendDB": "sqlite",
-  "SQLite3DataFile": "/absolute/path/orchestrator.sqlite3",
-  "MySQLTopologyUser": "orchestrator",
-  "MySQLTopologyPassword": "replace-me"
-}
+```yaml
+RaftNodeID: dev-1
+RaftDataDir: /absolute/path/orchestrator-raft
+RaftBind: 127.0.0.1:10008
+ListenAddress: 127.0.0.1:3000
+BackendDB: sqlite
+SQLite3DataFile: /absolute/path/orchestrator.sqlite3
+MySQLTopologyUser: orchestrator
+MySQLTopologyPassword: replace-me
 ```
 
 Protect the configuration file because it contains database credentials.
@@ -43,7 +41,7 @@ Protect the configuration file because it contains database credentials.
 ## Start and bootstrap
 
 ```sh
-bin/orchestrator server --config /absolute/path/orchestrator.conf.json
+bin/orchestrator server --config /absolute/path/orchestrator.conf.yaml
 ```
 
 In another terminal, bootstrap this one node exactly once:

@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -35,6 +36,14 @@ import (
 )
 
 var AppVersion, GitCommit string
+
+var defaultConfigurationBases = []string{
+	"/etc/orchestrator.conf",
+	"conf/orchestrator.conf",
+	"orchestrator.conf",
+}
+
+var configurationExtensions = []string{".yaml", ".yml", ".json"}
 
 // main is the application's entry point. It will either spawn a CLI or HTTP interfaces.
 func main() {
@@ -100,14 +109,8 @@ func runCommand(options *commandOptions, command string) error {
 	}
 	log.Info(startText)
 
-	var configErr error
-	if len(options.configFile) > 0 {
-		_, configErr = config.ForceRead(options.configFile)
-	} else {
-		_, configErr = config.Read("/etc/orchestrator.conf.json", "conf/orchestrator.conf.json", "orchestrator.conf.json")
-	}
-	if configErr != nil {
-		return fmt.Errorf("load configuration: %w", configErr)
+	if err := loadConfiguration(options.configFile); err != nil {
+		return fmt.Errorf("load configuration: %w", err)
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
 		config.Config.SkipOrchestratorDatabaseUpdate = false
@@ -184,6 +187,46 @@ func runCommand(options *commandOptions, command string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown server operation")
+}
+
+func loadConfiguration(explicitFile string) error {
+	if explicitFile != "" {
+		_, err := config.ForceRead(explicitFile)
+		return err
+	}
+	files, err := resolveDefaultConfigurationFiles(defaultConfigurationBases)
+	if err != nil {
+		return err
+	}
+	_, err = config.Read(files...)
+	return err
+}
+
+func resolveDefaultConfigurationFiles(bases []string) ([]string, error) {
+	files := make([]string, 0, len(bases))
+	for _, base := range bases {
+		var matches []string
+		for _, extension := range configurationExtensions {
+			fileName := base + extension
+			info, err := os.Stat(fileName)
+			switch {
+			case err == nil:
+				if !info.Mode().IsRegular() {
+					return nil, fmt.Errorf("configuration path %s is not a regular file", fileName)
+				}
+				matches = append(matches, fileName)
+			case errors.Is(err, os.ErrNotExist):
+				continue
+			default:
+				return nil, fmt.Errorf("inspect configuration %s: %w", fileName, err)
+			}
+		}
+		if len(matches) > 1 {
+			return nil, fmt.Errorf("ambiguous configuration for %s: %v", base, matches)
+		}
+		files = append(files, matches...)
+	}
+	return files, nil
 }
 
 func configureSyslog(enabled bool, enable func(string) error) error {

@@ -17,6 +17,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"gopkg.in/gcfg.v1"
 
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -69,27 +71,7 @@ const (
 	ConsulMaxTransactionOps                      = 64
 )
 
-var deprecatedConfigurationVariables = []string{
-	"DatabaselessMode__experimental",
-	"BufferBinlogEvents",
-	"BinlogFileHistoryDays",
-	"MaintenanceOwner",
-	"ReadLongRunningQueries",
-	"DiscoveryPollSeconds",
-	"ActiveNodeExpireSeconds",
-	"AuditPageSize",
-	"SlaveStartPostWaitMilliseconds",
-	"MySQLTopologyMaxPoolConnections",
-	"MaintenancePurgeDays",
-	"MaintenanceExpireMinutes",
-	"HttpTimeoutSeconds",
-	"AgentAutoDiscover",
-	"PseudoGTIDCoordinatesHistoryHeuristicMinutes",
-	"PseudoGTIDPreferIndependentMultiMatch",
-	"MaxOutdatedKeysToShow",
-}
-
-// Configuration makes for orchestrator configuration input, which can be provided by user via JSON formatted file.
+// Configuration makes for orchestrator configuration input, which can be provided by user via JSON or YAML.
 // Some of the parameteres have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
 type Configuration struct {
@@ -122,7 +104,6 @@ type Configuration struct {
 	RaftAdvertise                              string // Cluster-facing raft address (host:port). Defaults to normalized RaftBind.
 	RaftDataDir                                string
 	DefaultRaftPort                            int // if a raft bind/advertise address does not specify port, use this one
-	ExpectFailureAnalysisConcensus             bool
 	MySQLOrchestratorHost                      string
 	MySQLOrchestratorMaxPoolConnections        int // The maximum size of the connection pool to the Orchestrator backend.
 	MySQLOrchestratorPort                      uint
@@ -143,7 +124,6 @@ type Configuration struct {
 	MySQLTopologyReadTimeoutSeconds            int      // Number of seconds before topology mysql read operation is aborted (driver-side). Used for all but discovery queries.
 	MySQLConnectionLifetimeSeconds             int      // Number of seconds the mysql driver will keep database connection alive before recycling it
 	DefaultInstancePort                        int      // In case port was not specified on command line
-	SlaveLagQuery                              string   // Synonym to ReplicationLagQuery
 	ReplicationLagQuery                        string   // custom query to check on replica lg (e.g. heartbeat table). Must return a single row with a single numeric column, which is the lag.
 	ReplicationCredentialsQuery                string   // custom query to get replication credentials. Must return a single row, with five text columns: 1st is username, 2nd is password, 3rd is SSLCaCert, 4th is SSLCert, 5th is SSLKey. This is optional, and can be used by orchestrator to configure replication after master takeover or setup of co-masters. You need to ensure the orchestrator user has the privileges to run this query
 	DiscoverByShowSlaveHosts                   bool     // Attempt SHOW SLAVE HOSTS before PROCESSLIST
@@ -181,10 +161,7 @@ type Configuration struct {
 	AuditPurgeDays                             uint     // Days after which audit entries are purged from the database
 	RemoveTextFromHostnameDisplay              string   // Text to strip off the hostname on cluster/clusters pages
 	ReadOnly                                   bool
-	AuthenticationMethod                       string // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
-	OAuthClientId                              string
-	OAuthClientSecret                          string
-	OAuthScopes                                []string
+	AuthenticationMethod                       string            // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
 	HTTPAuthUser                               string            // Username for HTTP Basic authentication (blank disables authentication)
 	HTTPAuthPassword                           string            // Password for HTTP Basic authentication
 	AuthUserHeader                             string            // HTTP header indicating auth user, when AuthenticationMethod is "proxy"
@@ -227,7 +204,6 @@ type Configuration struct {
 	AgentPollMinutes                           uint              // Minutes between agent polling
 	UnseenAgentForgetHours                     uint              // Number of hours after which an unseen agent is forgotten
 	StaleSeedFailMinutes                       uint              // Number of minutes after which a stale (no progress) seed is considered failed.
-	SeedAcceptableBytesDiff                    int64             // Difference in bytes between seed source & target data size that is still considered as successful copy
 	SeedWaitSecondsBeforeSend                  int64             // Number of seconds for waiting before start send data command on agent
 	AutoPseudoGTID                             bool              // Should orchestrator automatically inject Pseudo-GTID entries to the masters
 	PseudoGTIDPattern                          string            // Pattern to look for in binary logs that makes for a unique entry (pseudo GTID). When empty, Pseudo-GTID based refactoring is disabled.
@@ -238,8 +214,7 @@ type Configuration struct {
 	SkipBinlogEventsContaining                 []string          // When scanning/comparing binlogs for Pseudo-GTID, skip entries containing given texts. These are NOT regular expressions (would consume too much CPU while scanning binlogs), just substrings to find.
 	ReduceReplicationAnalysisCount             bool              // When true, replication analysis will only report instances where possibility of handled problems is possible in the first place (e.g. will not report most leaf nodes, that are mostly uninteresting). When false, provides an entry for every known instance
 	FailureDetectionPeriodBlockMinutes         int               // The time for which an instance's failure discovery is kept "active", so as to avoid concurrent "discoveries" of the instance's failure; this precedes any recovery process, if any.
-	RecoveryPeriodBlockMinutes                 int               // (supported for backwards compatibility but please use newer `RecoveryPeriodBlockSeconds` instead) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on same instance as well as flapping
-	RecoveryPeriodBlockSeconds                 int               // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on same instance as well as flapping
+	RecoveryPeriodBlockSeconds                 int               // The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on same instance as well as flapping
 	RecoveryIgnoreHostnameFilters              []string          // Recovery analysis will completely ignore hosts matching given patterns
 	RecoverMasterClusterFilters                []string          // Only do master recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	RecoverIntermediateMasterClusterFilters    []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
@@ -255,18 +230,14 @@ type Configuration struct {
 	PostTakeMasterProcesses                    []string          // Processes to execute after a successful Take-Master event has taken place
 	RecoverNonWriteableMaster                  bool              // When 'true', orchestrator treats a read-only master as a failure scenario and attempts to make the master writeable
 	CoMasterRecoveryMustPromoteOtherCoMaster   bool              // When 'false', anything can get promoted (and candidates are preferred over others). When 'true', orchestrator will promote the other co-master or else fail
-	DetachLostSlavesAfterMasterFailover        bool              // synonym to DetachLostReplicasAfterMasterFailover
 	DetachLostReplicasAfterMasterFailover      bool              // Should replicas that are not to be lost in master recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
 	ApplyMySQLPromotionAfterMasterFailover     bool              // Should orchestrator take upon itself to apply MySQL master promotion: set read_only=0, detach replication, etc.
 	PreventCrossDataCenterMasterFailover       bool              // When true (default: false), cross-DC master failover are not allowed, orchestrator will do all it can to only fail over within same DC, or else not fail over at all.
 	PreventCrossRegionMasterFailover           bool              // When true (default: false), cross-region master failover are not allowed, orchestrator will do all it can to only fail over within same region, or else not fail over at all.
-	MasterFailoverLostInstancesDowntimeMinutes uint              // Number of minutes to downtime any server that was lost after a master failover (including failed master & lost replicas). 0 to disable
-	MasterFailoverDetachSlaveMasterHost        bool              // synonym to MasterFailoverDetachReplicaMasterHost
 	MasterFailoverDetachReplicaMasterHost      bool              // Should orchestrator issue a detach-replica-master-host on newly promoted master (this makes sure the new master will not attempt to replicate old master if that comes back to life). Defaults 'false'. Meaningless if ApplyMySQLPromotionAfterMasterFailover is 'true'.
 	FailMasterPromotionOnLagMinutes            uint              // when > 0, fail a master promotion if the candidate replica is lagging >= configured number of minutes.
 	FailMasterPromotionIfSQLThreadNotUpToDate  bool              // when true, and a master failover takes place, if candidate master has not consumed all relay logs, promotion is aborted with error
 	DelayMasterPromotionIfSQLThreadNotUpToDate bool              // when true, and a master failover takes place, if candidate master has not consumed all relay logs, delay promotion until the sql thread has caught up
-	PostponeSlaveRecoveryOnLagMinutes          uint              // Synonym to PostponeReplicaRecoveryOnLagMinutes
 	PostponeReplicaRecoveryOnLagMinutes        uint              // On crash recovery, replicas that are lagging more than given minutes are only resurrected late in the recovery process, after master/IM has been elected and processes executed. Value of 0 disables this feature
 	OSCIgnoreHostnameFilters                   []string          // OSC replicas recommendation will ignore replica hostnames matching given patterns
 	URLPrefix                                  string            // URL prefix to run orchestrator on non-root web path, e.g. /orchestrator to put it behind nginx.
@@ -329,7 +300,6 @@ func newConfiguration() *Configuration {
 		RaftAdvertise:                              "",
 		RaftDataDir:                                "",
 		DefaultRaftPort:                            10008,
-		ExpectFailureAnalysisConcensus:             true,
 		MySQLOrchestratorMaxPoolConnections:        128, // limit concurrent conns to backend DB
 		MySQLOrchestratorPort:                      3306,
 		MySQLTopologyUseMutualTLS:                  false,
@@ -419,7 +389,6 @@ func newConfiguration() *Configuration {
 		AgentPollMinutes:                           60,
 		UnseenAgentForgetHours:                     6,
 		StaleSeedFailMinutes:                       60,
-		SeedAcceptableBytesDiff:                    8192,
 		SeedWaitSecondsBeforeSend:                  2,
 		AutoPseudoGTID:                             false,
 		PseudoGTIDPattern:                          "",
@@ -430,7 +399,6 @@ func newConfiguration() *Configuration {
 		SkipBinlogEventsContaining:                 []string{},
 		ReduceReplicationAnalysisCount:             true,
 		FailureDetectionPeriodBlockMinutes:         60,
-		RecoveryPeriodBlockMinutes:                 60,
 		RecoveryPeriodBlockSeconds:                 3600,
 		RecoveryIgnoreHostnameFilters:              []string{},
 		RecoverMasterClusterFilters:                []string{},
@@ -447,16 +415,13 @@ func newConfiguration() *Configuration {
 		PostTakeMasterProcesses:                    []string{},
 		RecoverNonWriteableMaster:                  false,
 		CoMasterRecoveryMustPromoteOtherCoMaster:   true,
-		DetachLostSlavesAfterMasterFailover:        true,
+		DetachLostReplicasAfterMasterFailover:      true,
 		ApplyMySQLPromotionAfterMasterFailover:     true,
 		PreventCrossDataCenterMasterFailover:       false,
 		PreventCrossRegionMasterFailover:           false,
-		MasterFailoverLostInstancesDowntimeMinutes: 0,
-		MasterFailoverDetachSlaveMasterHost:        false,
 		FailMasterPromotionOnLagMinutes:            0,
 		FailMasterPromotionIfSQLThreadNotUpToDate:  false,
 		DelayMasterPromotionIfSQLThreadNotUpToDate: false,
-		PostponeSlaveRecoveryOnLagMinutes:          0,
 		OSCIgnoreHostnameFilters:                   []string{},
 		URLPrefix:                                  "",
 		DiscoveryIgnoreReplicaHostnameFilters:      []string{},
@@ -490,6 +455,11 @@ func newConfiguration() *Configuration {
 func (this *Configuration) postReadAdjustments() error {
 	if err := this.validateTelemetry(); err != nil {
 		return err
+	}
+	switch strings.ToLower(this.AuthenticationMethod) {
+	case "", "basic", "multi", "proxy", "token":
+	default:
+		return fmt.Errorf("unsupported AuthenticationMethod %q", this.AuthenticationMethod)
 	}
 	if this.MySQLOrchestratorCredentialsConfigFile != "" {
 		mySQLConfig := struct {
@@ -538,54 +508,12 @@ func (this *Configuration) postReadAdjustments() error {
 		}
 	}
 
-	if this.RecoveryPeriodBlockSeconds == 0 && this.RecoveryPeriodBlockMinutes > 0 {
-		// RecoveryPeriodBlockSeconds is a newer addition that overrides RecoveryPeriodBlockMinutes
-		// The code does not consider RecoveryPeriodBlockMinutes anymore, but RecoveryPeriodBlockMinutes
-		// still supported in config file for backwards compatibility
-		this.RecoveryPeriodBlockSeconds = this.RecoveryPeriodBlockMinutes * 60
-	}
-
-	{
-		if this.ReplicationLagQuery != "" && this.SlaveLagQuery != "" && this.ReplicationLagQuery != this.SlaveLagQuery {
-			return fmt.Errorf("config's ReplicationLagQuery and SlaveLagQuery are synonyms and cannot both be defined")
-		}
-		// ReplicationLagQuery is the replacement param to SlaveLagQuery
-		if this.ReplicationLagQuery == "" {
-			this.ReplicationLagQuery = this.SlaveLagQuery
-		}
-		// We reset SlaveLagQuery because we want to support multiple config file loading;
-		// One of the next config files may indicate a new value for ReplicationLagQuery.
-		// If we do not reset SlaveLagQuery, then the two will have a conflict.
-		this.SlaveLagQuery = ""
-	}
-
-	{
-		if this.DetachLostSlavesAfterMasterFailover {
-			this.DetachLostReplicasAfterMasterFailover = true
-		}
-	}
-
-	{
-		if this.MasterFailoverDetachSlaveMasterHost {
-			this.MasterFailoverDetachReplicaMasterHost = true
-		}
-	}
 	if this.FailMasterPromotionIfSQLThreadNotUpToDate && this.DelayMasterPromotionIfSQLThreadNotUpToDate {
 		return fmt.Errorf("Cannot have both FailMasterPromotionIfSQLThreadNotUpToDate and DelayMasterPromotionIfSQLThreadNotUpToDate enabled")
 	}
 	if this.FailMasterPromotionOnLagMinutes > 0 && this.ReplicationLagQuery == "" {
 		return fmt.Errorf("nonzero FailMasterPromotionOnLagMinutes requires ReplicationLagQuery to be set")
 	}
-	{
-		if this.PostponeReplicaRecoveryOnLagMinutes != 0 && this.PostponeSlaveRecoveryOnLagMinutes != 0 &&
-			this.PostponeReplicaRecoveryOnLagMinutes != this.PostponeSlaveRecoveryOnLagMinutes {
-			return fmt.Errorf("config's PostponeReplicaRecoveryOnLagMinutes and PostponeSlaveRecoveryOnLagMinutes are synonyms and cannot both be defined")
-		}
-		if this.PostponeSlaveRecoveryOnLagMinutes != 0 {
-			this.PostponeReplicaRecoveryOnLagMinutes = this.PostponeSlaveRecoveryOnLagMinutes
-		}
-	}
-
 	if this.URLPrefix != "" {
 		// Ensure the prefix starts with "/" and has no trailing one.
 		this.URLPrefix = strings.TrimLeft(this.URLPrefix, "/")
@@ -663,23 +591,6 @@ func (this *Configuration) IsMySQL() bool {
 	return this.BackendDB == "mysql" || this.BackendDB == ""
 }
 
-func rejectRemovedConfigurationFields(fields map[string]json.RawMessage) error {
-	for field := range fields {
-		if strings.EqualFold(field, "RaftEnabled") {
-			return fmt.Errorf("configuration field RaftEnabled was removed; only Raft is supported: remove the field and configure RaftNodeID, RaftDataDir and RaftBind")
-		}
-		for _, removed := range []string{"GraphiteAddr", "GraphitePath", "GraphiteConvertHostnameDotsToUnderscores", "GraphitePollSeconds", "DiscoveryCollectionRetentionSeconds", "DiscoveryQueueMaxStatisticsSize"} {
-			if strings.EqualFold(field, removed) {
-				return fmt.Errorf("configuration field %q was removed; use Prometheus /metrics and Grafana instead", removed)
-			}
-		}
-		if strings.EqualFold(field, "ZkAddress") {
-			return fmt.Errorf("configuration field %q was removed; migrate ZooKeeper master publishing to Consul KV or an external failover hook before upgrading", "ZkAddress")
-		}
-	}
-	return nil
-}
-
 // ValidateRaft validates the mandatory server runtime; offline admin commands do not start Raft.
 func (this *Configuration) ValidateRaft() error {
 	if this.RaftDataDir == "" {
@@ -713,18 +624,35 @@ func (this *Configuration) ValidateRaft() error {
 }
 
 func decodeConfiguration(reader io.Reader, configuration *Configuration) error {
-	var rawConfiguration json.RawMessage
-	if err := json.NewDecoder(reader).Decode(&rawConfiguration); err != nil {
+	yamlDecoder := yaml.NewDecoder(reader, yaml.UseOrderedMap())
+	var document any
+	if err := yamlDecoder.Decode(&document); err != nil {
+		return err
+	}
+	var extraDocument any
+	if err := yamlDecoder.Decode(&extraDocument); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("multiple configuration documents are not supported")
+		}
 		return err
 	}
 
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(rawConfiguration, &fields); err == nil {
-		if err := rejectRemovedConfigurationFields(fields); err != nil {
-			return err
-		}
+	jsonDocument, err := yaml.MarshalWithOptions(document, yaml.JSON())
+	if err != nil {
+		return err
 	}
-	return json.Unmarshal(rawConfiguration, configuration)
+	jsonDecoder := json.NewDecoder(bytes.NewReader(jsonDocument))
+	jsonDecoder.DisallowUnknownFields()
+	if err := jsonDecoder.Decode(configuration); err != nil {
+		return err
+	}
+	if err := jsonDecoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("trailing configuration content is not supported")
+		}
+		return err
+	}
+	return nil
 }
 
 // readInto applies one configuration file to the provided candidate.

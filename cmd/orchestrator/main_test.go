@@ -5,11 +5,66 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/openark/orchestrator/internal/golib/log"
 )
+
+func TestResolveDefaultConfigurationFiles(t *testing.T) {
+	root := t.TempDir()
+	systemBase := filepath.Join(root, "etc", "orchestrator.conf")
+	repositoryBase := filepath.Join(root, "conf", "orchestrator.conf")
+	workingBase := filepath.Join(root, "orchestrator.conf")
+	for _, directory := range []string{filepath.Dir(systemBase), filepath.Dir(repositoryBase)} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	systemFile := systemBase + ".json"
+	repositoryFile := repositoryBase + ".yaml"
+	workingFile := workingBase + ".yml"
+	for _, fileName := range []string{systemFile, repositoryFile, workingFile} {
+		if err := os.WriteFile(fileName, []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := resolveDefaultConfigurationFiles([]string{systemBase, repositoryBase, workingBase})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{systemFile, repositoryFile, workingFile}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolved files = %v; want %v", got, want)
+	}
+}
+
+func TestResolveDefaultConfigurationFilesRejectsAmbiguousFormats(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "orchestrator.conf")
+	for _, extension := range []string{".json", ".yaml"} {
+		if err := os.WriteFile(base+extension, []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, err := resolveDefaultConfigurationFiles([]string{base})
+	if err == nil || !strings.Contains(err.Error(), "ambiguous configuration") {
+		t.Fatalf("resolve ambiguous configuration error = %v", err)
+	}
+}
+
+func TestResolveDefaultConfigurationFilesAllowsNoFiles(t *testing.T) {
+	files, err := resolveDefaultConfigurationFiles([]string{filepath.Join(t.TempDir(), "orchestrator.conf")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("resolved files = %v; want none", files)
+	}
+}
 
 func TestConfigureSyslogReturnsInitializationError(t *testing.T) {
 	expectedErr := errors.New("syslog unavailable")

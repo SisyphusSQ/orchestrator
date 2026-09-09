@@ -2,20 +2,18 @@
 
 [English](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration) · **中文** · [Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-服务端从显式 `--config` 路径读取 JSON；未指定时依次查找 `/etc/orchestrator.conf.json`、`conf/orchestrator.conf.json` 和 `orchestrator.conf.json`。配置内含数据库与认证凭据，不应进入公开产物，并应限制文件访问权限。
+服务端可从显式 `--config` 路径读取 JSON 或 YAML，解析格式不依赖扩展名。未指定时依次检查 `/etc/orchestrator.conf`、`conf/orchestrator.conf` 和 `orchestrator.conf`，每个位置允许一个 `.yaml`、`.yml` 或 `.json` 文件；后加载的位置覆盖先加载的位置。同一位置存在多种格式会直接报错。未知字段、重复键、多份 YAML document 及尾随内容都会被拒绝；`dump-config` 仍输出 JSON。配置内含数据库与认证凭据，不应进入公开产物，并应限制文件访问权限。
 
 ## 必需的节点身份
 
 每次启动服务端都需要：
 
-```json
-{
-  "RaftNodeID": "node-1",
-  "RaftDataDir": "/var/lib/orchestrator/raft",
-  "RaftBind": "10.0.0.1:10008",
-  "RaftAdvertise": "10.0.0.1:10008",
-  "ListenAddress": ":3000"
-}
+```yaml
+RaftNodeID: node-1
+RaftDataDir: /var/lib/orchestrator/raft
+RaftBind: 10.0.0.1:10008
+RaftAdvertise: 10.0.0.1:10008
+ListenAddress: ":3000"
 ```
 
 `RaftNodeID` 是持久身份，不是网络地址。`RaftAdvertise` 默认使用规范化后的 `RaftBind`；位于 NAT 后时应显式设置。节点身份、Raft 路径与地址、HTTP 监听、已打开的数据库连接池以及 OpenTelemetry exporter 配置发生变化时都需要重启。
@@ -46,7 +44,7 @@
 ## 发现、分类与过滤
 
 - 发现周期、并发、实例过期、主机名解析和 seed 决定拓扑状态的新鲜度。启用恢复前应稳定 DNS 与 `report_host` 行为。
-- `DiscoveryIgnoreReplicaHostnameFilters`、`DiscoveryIgnoreMasterHostnameFilters` 与 `DiscoveryIgnorePrimaryKeyHostnameFilters` 会从特定发现路径排除匹配实例。过滤器属于策略而不是连通性诊断，需要用代表性主机名验证。
+- `DiscoveryIgnoreReplicaHostnameFilters` 与 `DiscoveryIgnoreMasterHostnameFilters` 会从特定发现路径排除匹配实例。过滤器属于策略而不是连通性诊断，需要用代表性主机名验证。
 - 集群别名、域名、机房、区域、环境标签、提升规则、延迟阈值和半同步状态都会影响候选分类，依赖自动恢复前应保持一致。
 - 拓扑兼容时优先使用 GTID。Pseudo-GTID 需要在相关可写主库上明确配置注入、保留时间与权限；缺少标记会降低调整和恢复能力。
 
@@ -60,4 +58,6 @@ Consul KV 继续通过官方 SDK 支持。必须配置 `ConsulAddress`；HTTPS �
 
 ## 已移除配置
 
-不要继续携带 `RaftEnabled`、`ZkAddress`、Graphite 配置、旧内存指标保留配置或 `deprecatedConfigurationVariables` 中列出的字段。服务端会拒绝已移除字段，避免退役行为静默失效。为兼容性，其他未知字段仍可能被接受，因此不能只以“成功启动”作为配置生效的验收依据。
+配置解析现在是严格模式：所有无法识别的字段都会被拒绝，包括已移除配置。请分别用 `ReplicationLagQuery`、`RecoveryPeriodBlockSeconds`、`DetachLostReplicasAfterMasterFailover`、`MasterFailoverDetachReplicaMasterHost` 和 `PostponeReplicaRecoveryOnLagMinutes` 替换 `SlaveLagQuery`、`RecoveryPeriodBlockMinutes`、`DetachLostSlavesAfterMasterFailover`、`MasterFailoverDetachSlaveMasterHost` 和 `PostponeSlaveRecoveryOnLagMinutes`。
+
+`OAuthClientId`、`OAuthClientSecret`、`OAuthScopes`、`ExpectFailureAnalysisConcensus`、`SeedAcceptableBytesDiff` 和 `MasterFailoverLostInstancesDowntimeMinutes` 没有替代项，应直接删除。OAuth 认证已不受支持；`AuthenticationMethod` 只接受 `basic`、`multi`、`proxy`、`token` 或空值。`RaftEnabled`、`ZkAddress`、Graphite 配置、旧内存指标保留配置，以及当前 `Configuration` 定义中不存在的其他字段也必须删除。

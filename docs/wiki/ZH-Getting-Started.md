@@ -23,19 +23,17 @@ make build
 
 ## 配置
 
-以 `conf/orchestrator-sample-sqlite.conf.json` 为起点。至少需要选择持久化路径并填写真实拓扑账号：
+以 `conf/orchestrator-sample-sqlite.conf.yaml` 为起点。至少需要选择持久化路径并填写真实拓扑账号：
 
-```json
-{
-  "RaftNodeID": "dev-1",
-  "RaftDataDir": "/absolute/path/orchestrator-raft",
-  "RaftBind": "127.0.0.1:10008",
-  "ListenAddress": "127.0.0.1:3000",
-  "BackendDB": "sqlite",
-  "SQLite3DataFile": "/absolute/path/orchestrator.sqlite3",
-  "MySQLTopologyUser": "orchestrator",
-  "MySQLTopologyPassword": "replace-me"
-}
+```yaml
+RaftNodeID: dev-1
+RaftDataDir: /absolute/path/orchestrator-raft
+RaftBind: 127.0.0.1:10008
+ListenAddress: 127.0.0.1:3000
+BackendDB: sqlite
+SQLite3DataFile: /absolute/path/orchestrator.sqlite3
+MySQLTopologyUser: orchestrator
+MySQLTopologyPassword: replace-me
 ```
 
 配置文件含数据库凭据，应限制访问权限。
@@ -43,7 +41,7 @@ make build
 ## 启动与 bootstrap
 
 ```sh
-bin/orchestrator server --config /absolute/path/orchestrator.conf.json
+bin/orchestrator server --config /absolute/path/orchestrator.conf.yaml
 ```
 
 在另一个终端中，只执行一次单节点 bootstrap：

@@ -10,7 +10,7 @@
 
 
 --
---  The following to be added to orchestrator.conf.json
+--  The following is to be added to the orchestrator configuration file
 --
 --  "PseudoGTIDPattern": "drop view if exists .*?`_pseudo_gtid_hint__",
 --  "PseudoGTIDMonotonicHint": "asc:",

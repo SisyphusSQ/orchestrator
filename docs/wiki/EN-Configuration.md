@@ -2,20 +2,18 @@
 
 **English** · [中文](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration) · [Wiki home](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-The server reads JSON configuration from an explicit `--config` path, or searches `/etc/orchestrator.conf.json`, `conf/orchestrator.conf.json`, then `orchestrator.conf.json`. Configuration contains database and authentication secrets; keep it outside public artifacts and restrict filesystem access.
+The server accepts JSON or YAML from an explicit `--config` path; the filename extension does not control parsing. Without `--config`, it checks `/etc/orchestrator.conf`, `conf/orchestrator.conf`, then `orchestrator.conf`, accepting one of `.yaml`, `.yml`, or `.json` at each location. Files found at later locations override earlier ones. More than one format at the same location is an error. Unknown fields, duplicate keys, multiple YAML documents, and trailing content are rejected. `dump-config` continues to emit JSON. Configuration contains database and authentication secrets; keep it outside public artifacts and restrict filesystem access.
 
 ## Required server identity
 
 Every server start requires:
 
-```json
-{
-  "RaftNodeID": "node-1",
-  "RaftDataDir": "/var/lib/orchestrator/raft",
-  "RaftBind": "10.0.0.1:10008",
-  "RaftAdvertise": "10.0.0.1:10008",
-  "ListenAddress": ":3000"
-}
+```yaml
+RaftNodeID: node-1
+RaftDataDir: /var/lib/orchestrator/raft
+RaftBind: 10.0.0.1:10008
+RaftAdvertise: 10.0.0.1:10008
+ListenAddress: ":3000"
 ```
 
 `RaftNodeID` is a durable identity, not an address. `RaftAdvertise` defaults to normalized `RaftBind`; set it explicitly behind NAT. These values, the HTTP listener, backend connection pools, and OpenTelemetry exporter configuration require a restart when changed.
@@ -46,7 +44,7 @@ Empty metadata databases are initialized from the executable [`docs/schema/mysql
 ## Discovery, classification, and filters
 
 - Discovery interval, concurrency, instance expiry, hostname resolution, and seed selection determine what topology state is considered current. Keep DNS and `report_host` behavior stable before enabling recovery.
-- `DiscoveryIgnoreReplicaHostnameFilters`, `DiscoveryIgnoreMasterHostnameFilters`, and `DiscoveryIgnorePrimaryKeyHostnameFilters` exclude matching instances from specific discovery paths. Filters are policy, not connectivity diagnostics; validate them against representative hostnames.
+- `DiscoveryIgnoreReplicaHostnameFilters` and `DiscoveryIgnoreMasterHostnameFilters` exclude matching instances from specific discovery paths. Filters are policy, not connectivity diagnostics; validate them against representative hostnames.
 - Cluster aliases, domains, data centers, regions, environment labels, promotion rules, lag limits, and semi-sync state affect candidate classification. Populate them consistently before relying on automated recovery.
 - GTID is preferred when topology compatibility permits. Pseudo-GTID requires deliberate injection, retention, and privileges on every relevant writable primary; missing markers reduce relocation and recovery options.
 
@@ -60,4 +58,6 @@ Application logs are text on stderr in `time<TAB>[LEVEL]<TAB>[caller]<TAB>messag
 
 ## Removed settings
 
-Do not carry forward `RaftEnabled`, `ZkAddress`, Graphite settings, legacy in-memory metric retention settings, or fields listed in `deprecatedConfigurationVariables`. Removed fields are rejected so retired behavior cannot fail silently. Unknown fields may still be accepted for compatibility, so acceptance must test intended behavior rather than treating startup alone as proof.
+Configuration parsing is strict: every unrecognized field is rejected, including removed settings. Replace `SlaveLagQuery`, `RecoveryPeriodBlockMinutes`, `DetachLostSlavesAfterMasterFailover`, `MasterFailoverDetachSlaveMasterHost`, and `PostponeSlaveRecoveryOnLagMinutes` with `ReplicationLagQuery`, `RecoveryPeriodBlockSeconds`, `DetachLostReplicasAfterMasterFailover`, `MasterFailoverDetachReplicaMasterHost`, and `PostponeReplicaRecoveryOnLagMinutes` respectively.
+
+`OAuthClientId`, `OAuthClientSecret`, `OAuthScopes`, `ExpectFailureAnalysisConcensus`, `SeedAcceptableBytesDiff`, and `MasterFailoverLostInstancesDowntimeMinutes` have no replacement and must be deleted. OAuth authentication is not supported; `AuthenticationMethod` accepts only `basic`, `multi`, `proxy`, `token`, or an empty value. Also remove `RaftEnabled`, `ZkAddress`, Graphite settings, legacy in-memory metric retention settings, and other fields absent from the current `Configuration` definition.
