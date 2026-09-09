@@ -26,6 +26,7 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/process"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/openark/orchestrator/internal/util"
 
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -115,8 +116,13 @@ func initializeAnalysisDaoPostConfiguration() {
 // GetReplicationAnalysis will check for replication problems (dead master; unreachable master; etc)
 func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
+	policy := recoverypolicy.Current(clusterName)
 
-	args := []interface{}{config.Config.ReasonableLockedSemiSyncMasterSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName}
+	lockedSeconds := policy.ReasonableLockedSemiSyncMasterSeconds
+	if lockedSeconds == 0 {
+		lockedSeconds = policy.ReasonableReplicationLagSeconds
+	}
+	args := []interface{}{lockedSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), policy.ReasonableReplicationLagSeconds, clusterName}
 	analysisQueryReductionClause := ``
 
 	if config.Config.ReduceReplicationAnalysisCount {
@@ -608,11 +614,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 					a.Description = "Semi sync master seems to be locked, more samplings needed to validate"
 				}
 				//
-			} else if config.Config.EnforceExactSemiSyncReplicas && a.IsMaster && a.SemiSyncMasterEnabled && a.SemiSyncMasterStatus && a.SemiSyncMasterWaitForReplicaCount > 0 && a.SemiSyncMasterClients > a.SemiSyncMasterWaitForReplicaCount {
+			} else if policy.EnforceExactSemiSyncReplicas && a.IsMaster && a.SemiSyncMasterEnabled && a.SemiSyncMasterStatus && a.SemiSyncMasterWaitForReplicaCount > 0 && a.SemiSyncMasterClients > a.SemiSyncMasterWaitForReplicaCount {
 				a.Analysis = MasterWithTooManySemiSyncReplicas
 				a.Description = "Semi sync master has more semi sync replicas than configured"
 				//
-			} else if a.IsMaster && a.LastCheckValid && a.IsReadOnly && a.CountValidReplicatingReplicas > 0 && config.Config.RecoverNonWriteableMaster {
+			} else if a.IsMaster && a.LastCheckValid && a.IsReadOnly && a.CountValidReplicatingReplicas > 0 && policy.RecoverNonWriteableMaster {
 				a.Analysis = NoWriteableMasterStructureWarning
 				a.Description = "Master with replicas is read_only"
 				//
@@ -715,7 +721,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			if a.Analysis == NoProblem && len(a.StructureAnalysis) == 0 && !hints.IncludeNoProblem {
 				return
 			}
-			for _, filter := range config.Config.RecoveryIgnoreHostnameFilters {
+			for _, filter := range policy.RecoveryIgnoreHostnameFilters {
 				if matched, _ := regexp.MatchString(filter, a.AnalyzedInstanceKey.Hostname); matched {
 					return
 				}

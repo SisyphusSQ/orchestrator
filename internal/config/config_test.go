@@ -36,8 +36,8 @@ func writeNamedConfigFixture(t *testing.T, name, content string) string {
 
 func TestDecodeConfigurationSupportsJSONAndYAML(t *testing.T) {
 	testCases := map[string]string{
-		"json": `{"Debug":true,"BackendDB":"sqlite3","SQLite3DataFile":"/tmp/orchestrator.db","RecoverMasterClusterFilters":[".*"],"ClusterNameToAlias":{"production":"main"}}`,
-		"yaml": "Debug: true\nBackendDB: sqlite3\nSQLite3DataFile: /tmp/orchestrator.db\nRecoverMasterClusterFilters:\n  - .*\nClusterNameToAlias:\n  production: main\n",
+		"json": `{"Debug":true,"BackendDB":"sqlite3","SQLite3DataFile":"/tmp/orchestrator.db","DiscoverySeeds":["db:3306"],"ClusterNameToAlias":{"production":"main"}}`,
+		"yaml": "Debug: true\nBackendDB: sqlite3\nSQLite3DataFile: /tmp/orchestrator.db\nDiscoverySeeds:\n  - db:3306\nClusterNameToAlias:\n  production: main\n",
 	}
 	for name, content := range testCases {
 		t.Run(name, func(t *testing.T) {
@@ -48,8 +48,8 @@ func TestDecodeConfigurationSupportsJSONAndYAML(t *testing.T) {
 			if !configuration.Debug || configuration.BackendDB != "sqlite3" || configuration.SQLite3DataFile != "/tmp/orchestrator.db" {
 				t.Fatalf("decoded scalar values = %#v", configuration)
 			}
-			if len(configuration.RecoverMasterClusterFilters) != 1 || configuration.RecoverMasterClusterFilters[0] != ".*" {
-				t.Fatalf("decoded list = %v", configuration.RecoverMasterClusterFilters)
+			if len(configuration.DiscoverySeeds) != 1 || configuration.DiscoverySeeds[0] != "db:3306" {
+				t.Fatalf("decoded list = %v", configuration.DiscoverySeeds)
 			}
 			if configuration.ClusterNameToAlias["production"] != "main" {
 				t.Fatalf("decoded map = %v", configuration.ClusterNameToAlias)
@@ -61,6 +61,39 @@ func TestDecodeConfigurationSupportsJSONAndYAML(t *testing.T) {
 func TestDecodeConfigurationRejectsUnknownFields(t *testing.T) {
 	for _, field := range []string{
 		"FutureSetting",
+		"ReasonableReplicationLagSeconds",
+		"ProblemIgnoreHostnameFilters",
+		"VerifyReplicationFilters",
+		"ReasonableMaintenanceReplicationLagSeconds",
+		"PromotionIgnoreHostnameFilters",
+		"FailureDetectionPeriodBlockMinutes",
+		"RecoveryPeriodBlockSeconds",
+		"RecoveryIgnoreHostnameFilters",
+		"RecoverMasterClusterFilters",
+		"RecoverIntermediateMasterClusterFilters",
+		"OnFailureDetectionProcesses",
+		"PreGracefulTakeoverProcesses",
+		"PreFailoverProcesses",
+		"PostFailoverProcesses",
+		"PostUnsuccessfulFailoverProcesses",
+		"PostMasterFailoverProcesses",
+		"PostIntermediateMasterFailoverProcesses",
+		"PostGracefulTakeoverProcesses",
+		"PostTakeMasterProcesses",
+		"RecoverNonWriteableMaster",
+		"CoMasterRecoveryMustPromoteOtherCoMaster",
+		"DetachLostReplicasAfterMasterFailover",
+		"ApplyMySQLPromotionAfterMasterFailover",
+		"PreventCrossDataCenterMasterFailover",
+		"PreventCrossRegionMasterFailover",
+		"MasterFailoverDetachReplicaMasterHost",
+		"FailMasterPromotionOnLagMinutes",
+		"FailMasterPromotionIfSQLThreadNotUpToDate",
+		"DelayMasterPromotionIfSQLThreadNotUpToDate",
+		"PostponeReplicaRecoveryOnLagMinutes",
+		"EnforceExactSemiSyncReplicas",
+		"RecoverLockedSemiSyncMaster",
+		"ReasonableLockedSemiSyncMasterSeconds",
 		"RaftEnabled",
 		"ZkAddress",
 		"SlaveLagQuery",
@@ -257,12 +290,6 @@ func TestForceReadDoesNotApplyInvalidConfigurationPartially(t *testing.T) {
 	}
 	if _, found := Config.ClusterNameToAlias["new"]; found {
 		t.Fatal("ForceRead() partially applied a map entry from an invalid configuration")
-	}
-}
-
-func TestDetachLostReplicasAfterMasterFailoverDefault(t *testing.T) {
-	if !newConfiguration().DetachLostReplicasAfterMasterFailover {
-		t.Fatal("DetachLostReplicasAfterMasterFailover default changed")
 	}
 }
 

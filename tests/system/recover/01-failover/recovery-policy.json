@@ -1,0 +1,9 @@
+{
+  "autoMasterRecovery": false,
+  "autoIntermediateMasterRecovery": true,
+  "failureDetectionPeriodBlockMinutes": 5,
+  "recoveryPeriodBlockSeconds": 5,
+  "failMasterPromotionOnLagMinutes": 1,
+  "recoverNonWriteableMaster": true,
+  "preventCrossRegionMasterFailover": true
+}

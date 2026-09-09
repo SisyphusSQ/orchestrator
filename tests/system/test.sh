@@ -99,6 +99,11 @@ test_step() {
     orch api "reload-configuration?config=$real_config_path" | jq -r '.Code'
   fi
 
+  if [ -f $test_path/recovery-policy.json ] ; then
+    echo "- applying recovery policy: $test_path/recovery-policy.json"
+    "$tests_path/apply-recovery-policy" "$test_path/recovery-policy.json"
+  fi
+
   if [ -f $test_path/setup ] ; then
     bash $test_path/setup 1> $setup_teardown_logfile 2>&1
     if [ $? -ne 0 ] ; then

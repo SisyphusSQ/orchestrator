@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -e
+
+policy_patch_file="${1:-$(dirname "$0")/recovery-policy.json}"
+endpoint="${ORCH_HTTP_ENDPOINT:-http://127.0.0.1:3000}"
+
+current=$(curl -fsS "$endpoint/api/recovery-policy/global/*")
+request=$(jq --slurpfile patch "$policy_patch_file" '
+  .Details as $document |
+  {
+    scopeType: "global",
+    scopeKey: "*",
+    expectedRevision: $document.revision,
+    overrides: $patch[0],
+    changeReason: "system test policy"
+  }
+' <<<"$current")
+response=$(curl -fsS -X POST "$endpoint/api/recovery-policy" \
+  -H "Content-Type: application/json" \
+  --data-binary "$request")
+jq -e '.Code == "OK"' <<<"$response" >/dev/null

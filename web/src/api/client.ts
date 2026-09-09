@@ -28,6 +28,7 @@ async function request<T>(
   path: string,
   mutation: boolean,
   signal?: AbortSignal,
+  body?: unknown,
 ): Promise<T> {
   let response: Response;
   try {
@@ -42,7 +43,11 @@ async function request<T>(
             AbortSignal.timeout(mutation ? 120000 : 30000),
           ])
         : AbortSignal.timeout(mutation ? 120000 : 30000),
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
     if (
@@ -103,3 +108,5 @@ export const query = <T>(path: string, signal?: AbortSignal) =>
   request<T>(path, false, signal);
 export const execute = <T = unknown>(path: string) =>
   request<Envelope<T>>(path, true);
+export const executeJSON = <T = unknown>(path: string, body: unknown) =>
+  request<Envelope<T>>(path, true, undefined, body);

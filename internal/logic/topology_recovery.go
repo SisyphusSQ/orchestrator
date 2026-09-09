@@ -36,6 +36,7 @@ import (
 	"github.com/openark/orchestrator/internal/os"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/openark/orchestrator/internal/util"
 	"github.com/patrickmn/go-cache"
 
@@ -109,6 +110,8 @@ type TopologyRecovery struct {
 	RecoveryEndTimestamp       string
 	ProcessingNodeHostname     string
 	ProcessingNodeToken        string
+	PolicyRevision             int64
+	HookAssignmentRevision     int64
 	Acknowledged               bool
 	AcknowledgedAt             string
 	AcknowledgedBy             string
@@ -129,6 +132,7 @@ func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *Topology
 	topologyRecovery.ParticipatingInstanceKeys = *inst.NewInstanceKeyMap()
 	topologyRecovery.AllErrors = []string{}
 	topologyRecovery.RecoveryType = NotMasterRecovery
+	topologyRecovery.PolicyRevision, topologyRecovery.HookAssignmentRevision, _ = recoverypolicy.Revisions(context.Background(), replicationAnalysis.ClusterDetails.ClusterName)
 	return topologyRecovery
 }
 
@@ -384,6 +388,42 @@ func executeProcessesContext(ctx context.Context, processes []string, descriptio
 	return err
 }
 
+func executeHookPhaseContext(ctx context.Context, phase, description string, topologyRecovery *TopologyRecovery) error {
+	clusterName := ""
+	if topologyRecovery != nil {
+		clusterName = topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName
+	}
+	hooks, _, err := recoverypolicy.EffectiveHooks(ctx, clusterName)
+	if err != nil {
+		return fmt.Errorf("resolve %s hooks: %w", description, err)
+	}
+	profiles := hooks[phase]
+	if len(profiles) == 0 {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("No %s hooks to run", description))
+		return nil
+	}
+	for _, profile := range profiles {
+		for index, rawCommand := range profile.Commands {
+			command, _ := prepareCommand(rawCommand, topologyRecovery)
+			commandCtx, cancel := context.WithTimeout(ctx, time.Duration(profile.TimeoutSeconds)*time.Second)
+			start := time.Now()
+			output, commandErr := os.CommandRunContext(commandCtx, command, applyEnvironmentVariables(topologyRecovery), profile.OutputLimitBytes)
+			output = recoverypolicy.RedactOutput(output)
+			cancel()
+			message := fmt.Sprintf("%s profile=%s revision=%d command=%d/%d duration=%s output=%q", description, profile.ID, profile.Revision, index+1, len(profile.Commands), time.Since(start).Round(time.Millisecond), output)
+			if commandErr != nil {
+				AuditTopologyRecovery(topologyRecovery, message+fmt.Sprintf(" error=%v", commandErr))
+				if profile.FailurePolicy == "abort" {
+					return commandErr
+				}
+				continue
+			}
+			AuditTopologyRecovery(topologyRecovery, message+" status=completed")
+		}
+	}
+	return nil
+}
+
 func recoverDeadMasterInBinlogServerTopology(topologyRecovery *TopologyRecovery) (promotedReplica *inst.Instance, err error) {
 	failedMasterKey := &topologyRecovery.AnalysisEntry.AnalyzedInstanceKey
 
@@ -504,7 +544,7 @@ func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRec
 
 	inst.AuditOperation("recover-dead-master", failedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcessesContext(ctx, config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeHookPhaseContext(ctx, "pre_failover", "PreFailoverProcesses", topologyRecovery); err != nil {
 			return false, nil, lostReplicas, topologyRecovery.AddError(err)
 		}
 	}
@@ -556,7 +596,7 @@ func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRec
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: - lost replica: %+v", replica.Key))
 	}
 
-	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterMasterFailover {
+	if promotedReplica != nil && len(lostReplicas) > 0 && recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName).DetachLostReplicasAfterMasterFailover {
 		postponedFunction := func() error {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
@@ -598,12 +638,13 @@ func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRec
 }
 
 func MasterFailoverGeographicConstraintSatisfied(analysisEntry *inst.ReplicationAnalysis, suggestedInstance *inst.Instance) (satisfied bool, dissatisfiedReason string) {
-	if config.Config.PreventCrossDataCenterMasterFailover {
+	policy := recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName)
+	if policy.PreventCrossDataCenterMasterFailover {
 		if suggestedInstance.DataCenter != analysisEntry.AnalyzedInstanceDataCenter {
 			return false, fmt.Sprintf("PreventCrossDataCenterMasterFailover: will not promote server in %s when failed server in %s", suggestedInstance.DataCenter, analysisEntry.AnalyzedInstanceDataCenter)
 		}
 	}
-	if config.Config.PreventCrossRegionMasterFailover {
+	if policy.PreventCrossRegionMasterFailover {
 		if suggestedInstance.Region != analysisEntry.AnalyzedInstanceRegion {
 			return false, fmt.Sprintf("PreventCrossRegionMasterFailover: will not promote server in %s when failed server in %s", suggestedInstance.Region, analysisEntry.AnalyzedInstanceRegion)
 		}
@@ -823,6 +864,7 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 // checkAndRecoverDeadMaster checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
 func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	policy := recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName)
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedMasterRecovery) {
 		return false, nil, nil
 	}
@@ -856,16 +898,16 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 			return nil, fmt.Errorf("RecoverDeadMaster: failed %+v promotion; %s", promotedReplica.Key, reason)
 		}
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promoted replica lag seconds: %+v", promotedReplica.ReplicationLagSeconds.Int64))
-		if config.Config.FailMasterPromotionOnLagMinutes > 0 &&
-			time.Duration(promotedReplica.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailMasterPromotionOnLagMinutes)*time.Minute {
+		if policy.FailMasterPromotionOnLagMinutes > 0 &&
+			time.Duration(promotedReplica.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(policy.FailMasterPromotionOnLagMinutes)*time.Minute {
 			// candidate replica lags too much
-			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailMasterPromotionOnLagMinutes, promotedReplica.Key, promotedReplica.ReplicationLagSeconds.Int64)
+			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", policy.FailMasterPromotionOnLagMinutes, promotedReplica.Key, promotedReplica.ReplicationLagSeconds.Int64)
 		}
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promoted replica sql thread up-to-date: %+v", promotedReplica.SQLThreadUpToDate()))
-		if config.Config.FailMasterPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
+		if policy.SQLThreadPromotionPolicy == "reject" && !promotedReplica.SQLThreadUpToDate() {
 			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", promotedReplica.Key)
 		}
-		if config.Config.DelayMasterPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
+		if policy.SQLThreadPromotionPolicy == "wait" && !promotedReplica.SQLThreadUpToDate() {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: waiting for SQL thread on %+v", promotedReplica.Key))
 			if _, err := inst.WaitForSQLThreadUpToDate(&promotedReplica.Key, 0, 0); err != nil {
 				return nil, fmt.Errorf("DelayMasterPromotionIfSQLThreadNotUpToDate error: %+v", err)
@@ -888,7 +930,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: successfully promoted %+v", promotedReplica.Key))
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: promoted server coordinates: %+v", promotedReplica.SelfBinlogCoordinates))
 
-		if config.Config.ApplyMySQLPromotionAfterMasterFailover || analysisEntry.CommandHint == inst.GracefulMasterTakeoverCommandHint {
+		if policy.ApplyMySQLPromotionAfterMasterFailover || analysisEntry.CommandHint == inst.GracefulMasterTakeoverCommandHint {
 			// on GracefulMasterTakeoverCommandHint it makes utter sense to RESET SLAVE ALL and read_only=0, and there is no sense in not doing so.
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: will apply MySQL changes to promoted master"))
 			{
@@ -929,7 +971,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 			err := kv.DistributePairs(kvPairs)
 			log.Errore(err)
 		}
-		if config.Config.MasterFailoverDetachReplicaMasterHost {
+		if policy.MasterFailoverDetachReplicaMasterHost {
 			postponedFunction := func() error {
 				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: detaching master host on promoted master"))
 				inst.DetachReplicaMasterHost(&promotedReplica.Key)
@@ -954,7 +996,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 		if !skipProcesses {
 			// Execute post master-failover processes
-			executeProcessesContext(recoveryCtx, config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
+			_ = executeHookPhaseContext(recoveryCtx, "post_master_failover", "PostMasterFailoverProcesses", topologyRecovery)
 		}
 	} else {
 		recoveryResult = "failure"
@@ -1113,7 +1155,7 @@ func RecoverDeadIntermediateMasterContext(ctx context.Context, topologyRecovery 
 
 	inst.AuditOperation("recover-dead-intermediate-master", failedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcessesContext(ctx, config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeHookPhaseContext(ctx, "pre_failover", "PreFailoverProcesses", topologyRecovery); err != nil {
 			return nil, topologyRecovery.AddError(err)
 		}
 	}
@@ -1216,7 +1258,7 @@ func RecoverDeadReplicationGroupMemberWithReplicas(topologyRecovery *TopologyRec
 	failedGroupMemberInstanceKey := &analysisEntry.AnalyzedInstanceKey
 	inst.AuditOperation("recover-dead-replication-group-member-with-replicas", failedGroupMemberInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeHookPhaseContext(context.Background(), "pre_failover", "PreFailoverProcesses", topologyRecovery); err != nil {
 			return nil, topologyRecovery.AddError(err)
 		}
 	}
@@ -1269,7 +1311,7 @@ func checkAndRecoverDeadIntermediateMaster(analysisEntry inst.ReplicationAnalysi
 			// Execute post intermediate-master-failover processes
 			topologyRecovery.SuccessorKey = &promotedReplica.Key
 			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
-			executeProcessesContext(recoveryCtx, config.Config.PostIntermediateMasterFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
+			_ = executeHookPhaseContext(recoveryCtx, "post_intermediate_master_failover", "PostIntermediateMasterFailoverProcesses", topologyRecovery)
 		}
 	} else {
 		recoveryResult = "failure"
@@ -1286,6 +1328,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 	defer func() { observability.EndSpan(span, err) }()
 	topologyRecovery.Type = CoMasterRecovery
 	analysisEntry := &topologyRecovery.AnalysisEntry
+	policy := recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName)
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
 	otherCoMasterKey := &analysisEntry.AnalyzedInstanceMasterKey
 	otherCoMaster, found, _ := inst.ReadInstance(otherCoMasterKey)
@@ -1294,7 +1337,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 	}
 	inst.AuditOperation("recover-dead-co-master", failedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcessesContext(ctx, config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeHookPhaseContext(ctx, "pre_failover", "PreFailoverProcesses", topologyRecovery); err != nil {
 			return nil, lostReplicas, topologyRecovery.AddError(err)
 		}
 	}
@@ -1322,7 +1365,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 	topologyRecovery.AddError(err)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
-	mustPromoteOtherCoMaster := config.Config.CoMasterRecoveryMustPromoteOtherCoMaster
+	mustPromoteOtherCoMaster := policy.CoMasterRecoveryMustPromoteOtherCoMaster
 	if !otherCoMaster.ReadOnly {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadCoMaster: other co-master %+v is writeable hence has to be promoted", otherCoMaster.Key))
 		mustPromoteOtherCoMaster = true
@@ -1347,7 +1390,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 		}
 	}
 	if promotedReplica != nil {
-		if config.Config.DelayMasterPromotionIfSQLThreadNotUpToDate {
+		if policy.SQLThreadPromotionPolicy == "wait" {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Waiting to ensure the SQL thread catches up on %+v", promotedReplica.Key))
 			if _, err := inst.WaitForSQLThreadUpToDate(&promotedReplica.Key, 0, 0); err != nil {
 				return promotedReplica, lostReplicas, err
@@ -1376,7 +1419,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 		topologyRecovery.AddError(log.Errore(err))
 	}
 
-	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterMasterFailover {
+	if promotedReplica != nil && len(lostReplicas) > 0 && policy.DetachLostReplicasAfterMasterFailover {
 		postponedFunction := func() error {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadCoMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
@@ -1404,6 +1447,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 // checkAndRecoverDeadCoMaster checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
 func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (bool, *TopologyRecovery, error) {
+	policy := recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName)
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedMasterRecovery) {
 		return false, nil, nil
@@ -1427,13 +1471,13 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 	}
 	topologyRecovery.LostReplicas.AddInstances(lostReplicas)
 	if promotedReplica != nil {
-		if config.Config.FailMasterPromotionIfSQLThreadNotUpToDate && !promotedReplica.SQLThreadUpToDate() {
+		if policy.SQLThreadPromotionPolicy == "reject" && !promotedReplica.SQLThreadUpToDate() {
 			return false, nil, log.Errorf("Promoted replica %+v: sql thread is not up to date (relay logs still unapplied). Aborting promotion", promotedReplica.Key)
 		}
 		// success
 		recoveryResult = "success"
 
-		if config.Config.ApplyMySQLPromotionAfterMasterFailover {
+		if policy.ApplyMySQLPromotionAfterMasterFailover {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: will apply MySQL changes to promoted master"))
 			inst.SetReadOnly(&promotedReplica.Key, false)
 		}
@@ -1441,7 +1485,7 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 			// Execute post intermediate-master-failover processes
 			topologyRecovery.SuccessorKey = &promotedReplica.Key
 			topologyRecovery.SuccessorAlias = promotedReplica.InstanceAlias
-			executeProcessesContext(recoveryCtx, config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", topologyRecovery, false)
+			_ = executeHookPhaseContext(recoveryCtx, "post_master_failover", "PostMasterFailoverProcesses", topologyRecovery)
 		}
 	} else {
 		recoveryResult = "failure"
@@ -1452,7 +1496,7 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 // checkAndRecoverNonWriteableMaster attempts to recover from a read only master by turning it writeable.
 // This behavior is feature protected, see config.Config.RecoverNonWriteableMaster
 func checkAndRecoverNonWriteableMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	if !config.Config.RecoverNonWriteableMaster {
+	if !recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName).RecoverNonWriteableMaster {
 		return false, nil, nil
 	}
 
@@ -1464,7 +1508,7 @@ func checkAndRecoverNonWriteableMaster(analysisEntry inst.ReplicationAnalysis, c
 
 	inst.AuditOperation("recover-non-writeable-master", &analysisEntry.AnalyzedInstanceKey, "problem found; will recover")
 	if !skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", topologyRecovery, true); err != nil {
+		if err := executeHookPhaseContext(context.Background(), "pre_failover", "PreFailoverProcesses", topologyRecovery); err != nil {
 			return false, topologyRecovery, topologyRecovery.AddError(err)
 		}
 	}
@@ -1478,15 +1522,16 @@ func checkAndRecoverNonWriteableMaster(analysisEntry inst.ReplicationAnalysis, c
 
 // checkAndRecoverLockedSemiSyncMaster
 func checkAndRecoverLockedSemiSyncMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	policy := recoverypolicy.Current(analysisEntry.ClusterDetails.ClusterName)
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, true, true)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverLockedSemiSyncMaster.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
-	if config.Config.EnforceExactSemiSyncReplicas {
+	if policy.EnforceExactSemiSyncReplicas {
 		return recoverSemiSyncReplicas(topologyRecovery, analysisEntry, true)
 	}
-	if config.Config.RecoverLockedSemiSyncMaster {
+	if policy.RecoverLockedSemiSyncMaster {
 		return recoverSemiSyncReplicas(topologyRecovery, analysisEntry, false)
 	}
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no action taken to recover locked semi sync master on %+v. Enable RecoverLockedSemiSyncMaster or EnforceExactSemiSyncReplicas change this behavior.", analysisEntry.AnalyzedInstanceKey))
@@ -1585,7 +1630,7 @@ func checkAndRecoverDeadGroupMemberWithReplicas(analysisEntry inst.ReplicationAn
 			topologyRecovery.SuccessorKey = &recoveredToGroupMember.Key
 			topologyRecovery.SuccessorAlias = recoveredToGroupMember.InstanceAlias
 			// For the same reasons that were mentioned above, we re-use the post intermediate master fail-over hooks
-			executeProcessesContext(recoveryCtx, config.Config.PostIntermediateMasterFailoverProcesses, "PostIntermediateMasterFailoverProcesses", topologyRecovery, false)
+			_ = executeHookPhaseContext(recoveryCtx, "post_intermediate_master_failover", "PostIntermediateMasterFailoverProcesses", topologyRecovery)
 		}
 	} else {
 		recoveryResult = "failure"
@@ -1696,7 +1741,7 @@ func checkAndExecuteFailureDetectionProcesses(analysisEntry inst.ReplicationAnal
 	if skipProcesses {
 		return true, false, nil
 	}
-	err = executeProcesses(config.Config.OnFailureDetectionProcesses, "OnFailureDetectionProcesses", NewTopologyRecovery(analysisEntry), true)
+	err = executeHookPhaseContext(context.Background(), "failure_detection", "OnFailureDetectionProcesses", NewTopologyRecovery(analysisEntry))
 	return true, true, err
 }
 
@@ -1881,11 +1926,11 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	if !skipProcesses {
 		if topologyRecovery.SuccessorKey == nil {
 			// Execute general unsuccessful post failover processes
-			executeProcesses(config.Config.PostUnsuccessfulFailoverProcesses, "PostUnsuccessfulFailoverProcesses", topologyRecovery, false)
+			_ = executeHookPhaseContext(context.Background(), "post_unsuccessful_failover", "PostUnsuccessfulFailoverProcesses", topologyRecovery)
 		} else {
 			// Execute general post failover processes
 			inst.EndDowntime(topologyRecovery.SuccessorKey)
-			executeProcesses(config.Config.PostFailoverProcesses, "PostFailoverProcesses", topologyRecovery, false)
+			_ = executeHookPhaseContext(context.Background(), "post_failover", "PostFailoverProcesses", topologyRecovery)
 		}
 	}
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Waiting for %d postponed functions", topologyRecovery.PostponedFunctionsContainer.Len()))
@@ -2163,7 +2208,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		SuccessorKey:  &designatedInstance.Key,
 		AnalysisEntry: analysisEntry,
 	}
-	if err := executeProcesses(config.Config.PreGracefulTakeoverProcesses, "PreGracefulTakeoverProcesses", preGracefulTakeoverTopologyRecovery, true); err != nil {
+	if err := executeHookPhaseContext(context.Background(), "pre_graceful_takeover", "PreGracefulTakeoverProcesses", preGracefulTakeoverTopologyRecovery); err != nil {
 		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
 	}
 
@@ -2173,7 +2218,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	}
 	demotedMasterSelfBinlogCoordinates := &clusterMaster.SelfBinlogCoordinates
 	log.Infof("GracefulMasterTakeover: Will wait for %+v to reach master coordinates %+v", designatedInstance.Key, *demotedMasterSelfBinlogCoordinates)
-	if designatedInstance, _, err = inst.WaitForExecBinlogCoordinatesToReach(&designatedInstance.Key, demotedMasterSelfBinlogCoordinates, time.Duration(config.Config.ReasonableMaintenanceReplicationLagSeconds)*time.Second); err != nil {
+	if designatedInstance, _, err = inst.WaitForExecBinlogCoordinatesToReach(&designatedInstance.Key, demotedMasterSelfBinlogCoordinates, time.Duration(recoverypolicy.Current(clusterName).ReasonableMaintenanceReplicationLagSeconds)*time.Second); err != nil {
 		return nil, nil, err
 	}
 	promotedMasterCoordinates = &designatedInstance.SelfBinlogCoordinates
@@ -2221,7 +2266,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 			err = startReplicationErr
 		}
 	}
-	executeProcesses(config.Config.PostGracefulTakeoverProcesses, "PostGracefulTakeoverProcesses", topologyRecovery, false)
+	_ = executeHookPhaseContext(context.Background(), "post_graceful_takeover", "PostGracefulTakeoverProcesses", topologyRecovery)
 
 	return topologyRecovery, promotedMasterCoordinates, err
 }

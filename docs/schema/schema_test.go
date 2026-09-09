@@ -107,8 +107,8 @@ func TestStatementsAreIndependentCopies(t *testing.T) {
 	if len(first) == 0 || len(first) != len(second) {
 		t.Fatalf("statement counts = %d/%d", len(first), len(second))
 	}
-	if len(first) != 125 {
-		t.Fatalf("statement count = %d; want 125", len(first))
+	if len(first) != 128 {
+		t.Fatalf("statement count = %d; want 128", len(first))
 	}
 	first[0] = "changed"
 	if second[0] == first[0] {

@@ -1,4 +1,3 @@
 {
-  "ReplicationLagQuery": "select 61",
-  "FailMasterPromotionOnLagMinutes": 1
+  "ReplicationLagQuery": "select 61"
 }

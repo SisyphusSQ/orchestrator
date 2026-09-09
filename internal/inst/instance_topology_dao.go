@@ -27,6 +27,7 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	orchestratordb "github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/openark/orchestrator/internal/util"
 	"github.com/patrickmn/go-cache"
 )
@@ -320,7 +321,7 @@ func WaitForSQLThreadUpToDate(instanceKey *InstanceKey, overallTimeout time.Dura
 		overallTimeout = 24 * time.Hour
 	}
 	if staleCoordinatesTimeout == 0 {
-		staleCoordinatesTimeout = time.Duration(config.Config.ReasonableReplicationLagSeconds) * time.Second
+		staleCoordinatesTimeout = time.Duration(recoverypolicy.Current("").ReasonableReplicationLagSeconds) * time.Second
 	}
 	generalTimer := time.NewTimer(overallTimeout)
 	staleTimer := time.NewTimer(staleCoordinatesTimeout)
@@ -612,13 +613,14 @@ func MaybeDisableSemiSyncMaster(replicaInstance *Instance) (*Instance, error) {
 func MaybeEnableSemiSyncReplica(replicaInstance *Instance) (*Instance, error) {
 	// Backwards compatible logic: Enable semi-sync if SemiSyncPriority > 0 (formerly SemiSyncEnforced)
 	// Note that this logic NEVER enables semi-sync if the promotion rule is "must_not".
-	if !config.Config.EnforceExactSemiSyncReplicas && !config.Config.RecoverLockedSemiSyncMaster {
+	policy := recoverypolicy.Current(replicaInstance.ClusterName)
+	if !policy.EnforceExactSemiSyncReplicas && !policy.RecoverLockedSemiSyncMaster {
 		return maybeEnableSemiSyncReplicaLegacy(replicaInstance)
 	}
 
 	// New logic: If EnforceExactSemiSyncReplicas or RecoverLockedSemiSyncMaster are set, we enable semi-sync only if the
 	// given replica instance is in the list of replicas to have semi-sync enabled (according to the priority).
-	_, _, actions, err := AnalyzeSemiSyncReplicaTopology(&replicaInstance.MasterKey, &replicaInstance.Key, config.Config.EnforceExactSemiSyncReplicas)
+	_, _, actions, err := AnalyzeSemiSyncReplicaTopology(&replicaInstance.MasterKey, &replicaInstance.Key, policy.EnforceExactSemiSyncReplicas)
 	if err != nil {
 		return replicaInstance, log.Errorf("semi-sync: %s", err.Error())
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/process"
 	"github.com/openark/orchestrator/internal/raft"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/openark/orchestrator/internal/util"
 )
 
@@ -42,6 +43,8 @@ type topologyRecoveryRow struct {
 	Successful             bool           `gorm:"column:is_successful"`
 	ProcessingNodeHostname string         `gorm:"column:processing_node_hostname"`
 	ProcessingNodeToken    string         `gorm:"column:processcing_node_token"`
+	PolicyRevision         int64          `gorm:"column:policy_revision"`
+	HookAssignmentRevision int64          `gorm:"column:hook_assignment_revision"`
 	SuccessorHostname      string         `gorm:"column:successor_hostname"`
 	SuccessorPort          int            `gorm:"column:successor_port"`
 	SuccessorAlias         string         `gorm:"column:successor_alias"`
@@ -102,6 +105,8 @@ func topologyRecoveryFromRow(row topologyRecoveryRow) *TopologyRecovery {
 	topologyRecovery.IsSuccessful = row.Successful
 	topologyRecovery.ProcessingNodeHostname = row.ProcessingNodeHostname
 	topologyRecovery.ProcessingNodeToken = row.ProcessingNodeToken
+	topologyRecovery.PolicyRevision = row.PolicyRevision
+	topologyRecovery.HookAssignmentRevision = row.HookAssignmentRevision
 	topologyRecovery.AnalysisEntry.AnalyzedInstanceKey = inst.InstanceKey{Hostname: row.Hostname, Port: row.Port}
 	topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(row.Analysis)
 	topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = row.ClusterName
@@ -235,7 +240,7 @@ func ClearActiveFailureDetections() error {
 				in_active_period = 1
 				AND start_active_period < NOW() - INTERVAL ? MINUTE
 			`,
-		config.Config.FailureDetectionPeriodBlockMinutes,
+		recoverypolicy.Current("").FailureDetectionPeriodBlockMinutes,
 	)
 	return log.Errore(err)
 }
@@ -281,6 +286,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					end_active_period_unixtime,
 					processing_node_hostname,
 					processcing_node_token,
+					policy_revision,
+					hook_assignment_revision,
 					analysis,
 					cluster_name,
 					cluster_alias,
@@ -302,6 +309,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
+					?,
+					?,
 					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
@@ -309,6 +318,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		topologyRecovery.UID,
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 		process.ThisHostname, util.ProcessToken.Hash,
+		topologyRecovery.PolicyRevision, topologyRecovery.HookAssignmentRevision,
 		string(analysisEntry.Analysis),
 		analysisEntry.ClusterDetails.ClusterName,
 		analysisEntry.ClusterDetails.ClusterAlias,
@@ -391,7 +401,7 @@ func ClearActiveRecoveries() error {
 				in_active_period = 1
 				AND start_active_period < NOW() - INTERVAL ? SECOND
 			`,
-		config.Config.RecoveryPeriodBlockSeconds,
+		recoverypolicy.Current("").RecoveryPeriodBlockSeconds,
 	)
 	return log.Errore(err)
 }
@@ -651,6 +661,8 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
       is_successful,
       processing_node_hostname,
       processcing_node_token,
+			policy_revision,
+			hook_assignment_revision,
       ifnull(successor_hostname, '') as successor_hostname,
       ifnull(successor_port, 0) as successor_port,
       ifnull(successor_alias, '') as successor_alias,

@@ -26,6 +26,7 @@ import (
 	orchestratordb "github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/golib/math"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -516,7 +517,7 @@ func SearchEntryInInstanceBinlogs(instance *Instance, entryText string, monotoni
 					break
 				}
 				log.Debugf("lag is too high on %+v. Throttling the search for pseudo gtid entry", instance.Key)
-				time.Sleep(time.Duration(config.Config.ReasonableMaintenanceReplicationLagSeconds) * time.Second)
+				time.Sleep(time.Duration(recoverypolicy.Current(instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds) * time.Second)
 			}
 		}
 		var resultCoordinates BinlogCoordinates

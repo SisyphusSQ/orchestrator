@@ -41,6 +41,7 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/kv"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/openark/orchestrator/internal/util"
 
 	"github.com/openark/orchestrator/internal/observability"
@@ -1609,7 +1610,7 @@ func readInstanceRow(row instanceBackendRow) *Instance {
 		instance.Problems = append(instance.Problems, "not_recently_checked")
 	} else if instance.ReplicationThreadsExist() && !instance.ReplicaRunning() {
 		instance.Problems = append(instance.Problems, "not_replicating")
-	} else if instance.ReplicationLagSeconds.Valid && math.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(config.Config.ReasonableReplicationLagSeconds) {
+	} else if instance.ReplicationLagSeconds.Valid && math.AbsInt64(instance.ReplicationLagSeconds.Int64-int64(instance.SQLDelay)) > int64(recoverypolicy.Current(instance.ClusterName).ReasonableReplicationLagSeconds) {
 		instance.Problems = append(instance.Problems, "replication_lag")
 	}
 	if instance.GtidErrant != "" {
@@ -1817,6 +1818,7 @@ func ReadUnseenInstances() ([](*Instance), error) {
 
 // ReadProblemInstances reads all instances with problems
 func ReadProblemInstances(clusterName string) ([](*Instance), error) {
+	policy := recoverypolicy.Current(clusterName)
 	condition := `
 			cluster_name LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 			and (
@@ -1831,7 +1833,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 			)
 		`
 
-	args := []interface{}{clusterName, clusterName, config.Config.InstancePollSeconds * 5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds}
+	args := []interface{}{clusterName, clusterName, config.Config.InstancePollSeconds * 5, policy.ReasonableReplicationLagSeconds, policy.ReasonableReplicationLagSeconds}
 	instances, err := readInstancesByCondition(condition, args, "")
 	if err != nil {
 		return instances, err
@@ -1842,7 +1844,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 		if instance.IsDowntimed {
 			skip = true
 		}
-		if FiltersMatchInstanceKey(&instance.Key, config.Config.ProblemIgnoreHostnameFilters) {
+		if FiltersMatchInstanceKey(&instance.Key, policy.ProblemIgnoreHostnameFilters) {
 			skip = true
 		}
 		if !skip {
@@ -3504,7 +3506,7 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := config.Config.ReasonableReplicationLagSeconds * 2
+	expireSeconds := recoverypolicy.Current("").ReasonableReplicationLagSeconds * 2
 	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
 		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
 	}

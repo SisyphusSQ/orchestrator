@@ -11,6 +11,7 @@
 - `basic`：一个配置的 HTTP 用户名/密码。
 - `multi`：配置的高权限凭据，以及只读用户。
 - `proxy`：信任认证反向代理写入的身份头；`PowerAuthUsers` 控制写权限。
+- 恢复策略与 Hook 使用更窄的 `ConfigurationAdminUsers` / `ConfigurationAdminGroups` 权限；Hook 以 Orchestrator 进程身份执行。
 - `token`：由本地管理命令签发 access token。
 - 空认证方式：不做认证，只应在有充分网络隔离的环境使用。
 - `ReadOnly: true`：无论认证方式如何，都禁止 HTTP/Web 写操作。

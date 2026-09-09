@@ -6,7 +6,7 @@ Failure detection and recovery are separate stages. Every ready Raft node probes
 
 ## Configure policy before enabling automation
 
-- Define which clusters may recover with `RecoverMasterClusterFilters` and `RecoverIntermediateMasterClusterFilters`.
+- Enable automated recovery globally or for an explicit cluster alias in Web → Recovery Settings. Cluster overrides take precedence over global values and code defaults.
 - Exclude hosts with `RecoveryIgnoreHostnameFilters`.
 - Configure promotion rules, data-center/region constraints, replication lag thresholds, and GTID/Pseudo-GTID behavior.
 - Treat pre/post-failover hooks as production code: bound their runtime, make failures visible, and avoid hidden non-idempotent retries.

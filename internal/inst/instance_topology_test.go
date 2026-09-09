@@ -258,14 +258,13 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 	}
 	{
 		instances, _ := generateTestInstances()
-		config.Config.PromotionIgnoreHostnameFilters = []string{
+		promotionIgnoreHostnameFilters := []string{
 			"i7",
 			"i8[0-9]0",
 		}
 		for _, instance := range instances {
-			test.S(t).ExpectTrue(IsBannedFromBeingCandidateReplica(instance))
+			test.S(t).ExpectTrue(isBannedFromBeingCandidateReplica(instance, promotionIgnoreHostnameFilters))
 		}
-		config.Config.PromotionIgnoreHostnameFilters = []string{}
 	}
 }
 

@@ -11,7 +11,7 @@ The bilingual Wiki is the complete maintained documentation set. Repository link
 - [Configuration](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration): Raft identity, backends, discovery, recovery policy, KV, logging, and removed settings.
 - [Raft operations](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Raft-Operations): cluster formation, membership, replacement, quorum, health, and backup boundaries.
 - [orch CLI](https://github.com/SisyphusSQ/orchestrator/wiki/EN-orch-CLI), [Web console](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Web-Console), and [HTTP API](https://github.com/SisyphusSQ/orchestrator/wiki/EN-HTTP-API): supported management interfaces and failure semantics.
-- [Failure recovery](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Failure-Recovery): analysis, policy, candidate selection, GTID/Pseudo-GTID, hooks, and acceptance.
+- [Failure recovery](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Failure-Recovery) and [Recovery settings](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Recovery-Configuration): analysis, 23 page-managed policies, nine hook phases, candidate selection, and acceptance.
 - [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability) and [Security](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Security): node-local telemetry, authentication, TLS, credentials, and privilege boundaries.
 - [Upgrading](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Upgrading) and [Development](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Development): breaking-change ledger, rollback, source layout, build, test, and publication workflows.
 

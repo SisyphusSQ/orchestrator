@@ -17,8 +17,12 @@
 package http
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -34,8 +38,10 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/logic"
+	orchos "github.com/openark/orchestrator/internal/os"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 )
 
 // APIResponseCode is an OK/ERROR response code
@@ -3033,12 +3039,12 @@ func (this *HttpAPI) RegisterCandidate(params Params, r Responder, req *http.Req
 
 // AutomatedRecoveryFilters retuens list of clusters which are configured with automated recovery
 func (this *HttpAPI) AutomatedRecoveryFilters(params Params, r Responder, req *http.Request) {
-	automatedRecoveryMap := make(map[string]interface{})
-	automatedRecoveryMap["RecoverMasterClusterFilters"] = config.Config.RecoverMasterClusterFilters
-	automatedRecoveryMap["RecoverIntermediateMasterClusterFilters"] = config.Config.RecoverIntermediateMasterClusterFilters
-	automatedRecoveryMap["RecoveryIgnoreHostnameFilters"] = config.Config.RecoveryIgnoreHostnameFilters
-
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Automated recovery configuration details"), Details: automatedRecoveryMap})
+	doc, err := recoverypolicy.GetPolicy(req.Context(), recoverypolicy.ScopeGlobal, recoverypolicy.GlobalKey)
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Automated recovery configuration details", Details: doc.Effective})
 }
 
 // AuditFailureDetection provides list of topology_failure_detection entries
@@ -3376,6 +3382,206 @@ func (this *HttpAPI) CheckGlobalRecoveries(params Params, r Responder, req *http
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Global recoveries %+v", details), Details: details})
 }
 
+func decodeConfigurationBody(req *http.Request, target interface{}) error {
+	const maxBodyBytes = 1 << 20
+	body, err := io.ReadAll(io.LimitReader(req.Body, maxBodyBytes+1))
+	if err != nil {
+		return fmt.Errorf("read JSON body: %w", err)
+	}
+	if len(body) > maxBodyBytes {
+		return fmt.Errorf("JSON body exceeds %d bytes", maxBodyBytes)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("invalid JSON body: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("invalid trailing JSON content")
+	}
+	return nil
+}
+
+func configurationUser(req *http.Request, user Principal) string {
+	if id := getUserId(req, user); id != "" {
+		return id
+	}
+	return "local-session"
+}
+
+func (this *HttpAPI) RecoveryPolicy(params Params, r Responder, req *http.Request) {
+	doc, err := recoverypolicy.GetPolicy(req.Context(), params["scopeType"], params["scopeKey"])
+	if err != nil {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery policy", Details: doc})
+}
+
+func (this *HttpAPI) SaveRecoveryPolicy(_ Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForConfiguration(req, user) {
+		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
+		return
+	}
+	var command recoverypolicy.SavePolicyCommand
+	if err := decodeConfigurationBody(req, &command); err != nil {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	command.UpdatedBy = configurationUser(req, user)
+	if strings.TrimSpace(command.ChangeReason) == "" {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: "changeReason is required"})
+		return
+	}
+	if _, err := orcraft.PublishCommand("save-recovery-policy", command); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, recoverypolicy.ErrRevisionConflict) {
+			status = http.StatusConflict
+		}
+		RespondStatus(r, status, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
+		return
+	}
+	doc, err := recoverypolicy.GetPolicy(req.Context(), command.ScopeType, command.ScopeKey)
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery policy saved", Details: doc})
+}
+
+func (this *HttpAPI) RecoveryHookProfiles(_ Params, r Responder, req *http.Request) {
+	profiles, err := recoverypolicy.ListHookProfiles(req.Context())
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery hook profiles", Details: profiles})
+}
+
+func (this *HttpAPI) SaveRecoveryHookProfile(_ Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForConfiguration(req, user) {
+		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
+		return
+	}
+	var command recoverypolicy.SaveHookProfileCommand
+	if err := decodeConfigurationBody(req, &command); err != nil {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	command.Profile.UpdatedBy = configurationUser(req, user)
+	if strings.TrimSpace(command.Profile.ChangeReason) == "" {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: "changeReason is required"})
+		return
+	}
+	if _, err := orcraft.PublishCommand("save-recovery-hook-profile", command); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, recoverypolicy.ErrRevisionConflict) {
+			status = http.StatusConflict
+		}
+		RespondStatus(r, status, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
+		return
+	}
+	profiles, err := recoverypolicy.ListHookProfiles(req.Context())
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery hook profile saved", Details: profiles})
+}
+
+func (this *HttpAPI) TestRecoveryHookProfile(_ Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForConfiguration(req, user) {
+		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
+		return
+	}
+	var request struct {
+		ProfileID string `json:"profileId"`
+	}
+	if err := decodeConfigurationBody(req, &request); err != nil {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	profiles, err := recoverypolicy.ListHookProfiles(req.Context())
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	var selected *recoverypolicy.HookProfile
+	for index := range profiles {
+		if profiles[index].ID == request.ProfileID {
+			selected = &profiles[index]
+			break
+		}
+	}
+	if selected == nil || !selected.Enabled {
+		RespondStatus(r, http.StatusNotFound, &APIResponse{Code: ERROR, Message: "enabled hook profile not found"})
+		return
+	}
+	type result struct {
+		Command  int    `json:"command"`
+		Duration string `json:"duration"`
+		Output   string `json:"output"`
+		Error    string `json:"error,omitempty"`
+	}
+	results := make([]result, 0, len(selected.Commands))
+	for index, command := range selected.Commands {
+		commandCtx, cancel := context.WithTimeout(req.Context(), time.Duration(selected.TimeoutSeconds)*time.Second)
+		start := time.Now()
+		output, commandErr := orchos.CommandRunContext(commandCtx, command, os.Environ(), selected.OutputLimitBytes)
+		cancel()
+		item := result{Command: index + 1, Duration: time.Since(start).Round(time.Millisecond).String(), Output: recoverypolicy.RedactOutput(output)}
+		if commandErr != nil {
+			item.Error = commandErr.Error()
+		}
+		results = append(results, item)
+		inst.AuditOperation("test-recovery-hook", nil, fmt.Sprintf("profile=%s revision=%d command=%d error=%v", selected.ID, selected.Revision, index+1, commandErr))
+		if commandErr != nil && selected.FailurePolicy == "abort" {
+			break
+		}
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery hook test completed", Details: results})
+}
+
+func (this *HttpAPI) RecoveryHookAssignments(params Params, r Responder, req *http.Request) {
+	assignments, err := recoverypolicy.ListHookAssignments(req.Context(), params["scopeType"], params["scopeKey"])
+	if err != nil {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery hook assignments", Details: assignments})
+}
+
+func (this *HttpAPI) SaveRecoveryHookAssignment(_ Params, r Responder, req *http.Request, user Principal) {
+	if !isAuthorizedForConfiguration(req, user) {
+		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
+		return
+	}
+	var command recoverypolicy.SaveHookAssignmentCommand
+	if err := decodeConfigurationBody(req, &command); err != nil {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	command.Assignment.UpdatedBy = configurationUser(req, user)
+	if strings.TrimSpace(command.Assignment.ChangeReason) == "" {
+		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: "changeReason is required"})
+		return
+	}
+	if _, err := orcraft.PublishCommand("save-recovery-hook-assignment", command); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, recoverypolicy.ErrRevisionConflict) {
+			status = http.StatusConflict
+		}
+		RespondStatus(r, status, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
+		return
+	}
+	assignments, err := recoverypolicy.ListHookAssignments(req.Context(), command.Assignment.ScopeType, command.Assignment.ScopeKey)
+	if err != nil {
+		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
+		return
+	}
+	Respond(r, &APIResponse{Code: OK, Message: "Recovery hook assignment saved", Details: assignments})
+}
+
 func (this *HttpAPI) getSynonymPath(path string) (synonymPath string) {
 	pathBase := strings.Split(path, "/")[0]
 	if synonym, ok := apiSynonyms[pathBase]; ok {
@@ -3590,6 +3796,13 @@ func (this *HttpAPI) RegisterRequests(m *Router) {
 	this.registerAPIRequest(m, "end-downtime/:host/:port", this.EndDowntime)
 
 	// Recovery:
+	this.registerAPIMethod(m, http.MethodGet, "recovery-policy/:scopeType/:scopeKey", this.RecoveryPolicy, true)
+	this.registerAPIMethod(m, http.MethodPost, "recovery-policy", this.SaveRecoveryPolicy, true)
+	this.registerAPIMethod(m, http.MethodGet, "recovery-hook-profiles", this.RecoveryHookProfiles, true)
+	this.registerAPIMethod(m, http.MethodPost, "recovery-hook-profiles", this.SaveRecoveryHookProfile, true)
+	this.registerAPIMethod(m, http.MethodPost, "recovery-hook-test", this.TestRecoveryHookProfile, true)
+	this.registerAPIMethod(m, http.MethodGet, "recovery-hook-assignments/:scopeType/:scopeKey", this.RecoveryHookAssignments, true)
+	this.registerAPIMethod(m, http.MethodPost, "recovery-hook-assignments", this.SaveRecoveryHookAssignment, true)
 	this.registerAPIRequest(m, "replication-analysis", this.ReplicationAnalysis)
 	this.registerAPIRequest(m, "replication-analysis/:clusterName", this.ReplicationAnalysisForCluster)
 	this.registerAPIRequest(m, "replication-analysis/instance/:host/:port", this.ReplicationAnalysisForKey)

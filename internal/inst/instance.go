@@ -27,6 +27,7 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/golib/math"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 )
 
 const ReasonableDiscoveryLatency = 500 * time.Millisecond
@@ -488,7 +489,8 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 			return false, fmt.Errorf("Cannot replicate from %+v binlog format on %+v to %+v on %+v", other.Binlog_format, other.Key, this.Binlog_format, this.Key)
 		}
 	}
-	if config.Config.VerifyReplicationFilters {
+	policy := recoverypolicy.Current(this.ClusterName)
+	if policy.VerifyReplicationFilters {
 		if other.HasReplicationFilters && !this.HasReplicationFilters {
 			return false, fmt.Errorf("%+v has replication filters", other.Key)
 		}
@@ -499,7 +501,7 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 	if this.ServerUUID == other.ServerUUID && this.ServerUUID != "" && !this.IsBinlogServer() {
 		return false, fmt.Errorf("Identical server UUID: %+v, %+v both have %s", other.Key, this.Key, this.ServerUUID)
 	}
-	if this.SQLDelay < other.SQLDelay && int64(other.SQLDelay) > int64(config.Config.ReasonableMaintenanceReplicationLagSeconds) {
+	if this.SQLDelay < other.SQLDelay && int64(other.SQLDelay) > int64(policy.ReasonableMaintenanceReplicationLagSeconds) {
 		return false, fmt.Errorf("%+v has higher SQL_Delay (%+v seconds) than %+v does (%+v seconds)", other.Key, other.SQLDelay, this.Key, this.SQLDelay)
 	}
 	return true, warningMsg
@@ -520,11 +522,12 @@ func (this *Instance) CanReplicateFromEx(other *Instance, logContext string) (bo
 
 // HasReasonableMaintenanceReplicationLag returns true when the replica lag is reasonable, and maintenance operations should have a green light to go.
 func (this *Instance) HasReasonableMaintenanceReplicationLag() bool {
+	threshold := recoverypolicy.Current(this.ClusterName).ReasonableMaintenanceReplicationLagSeconds
 	// replicas with SQLDelay are a special case
 	if this.SQLDelay > 0 {
-		return math.AbsInt64(this.SecondsBehindMaster.Int64-int64(this.SQLDelay)) <= int64(config.Config.ReasonableMaintenanceReplicationLagSeconds)
+		return math.AbsInt64(this.SecondsBehindMaster.Int64-int64(this.SQLDelay)) <= int64(threshold)
 	}
-	return this.SecondsBehindMaster.Int64 <= int64(config.Config.ReasonableMaintenanceReplicationLagSeconds)
+	return this.SecondsBehindMaster.Int64 <= int64(threshold)
 }
 
 // CanMove returns true if this instance's state allows it to be repositioned. For example,
@@ -607,7 +610,7 @@ func (this *Instance) LagStatusString() string {
 	if this.IsReplica() && !this.SecondsBehindMaster.Valid {
 		return "null"
 	}
-	if this.IsReplica() && this.ReplicationLagSeconds.Int64 > int64(config.Config.ReasonableMaintenanceReplicationLagSeconds) {
+	if this.IsReplica() && this.ReplicationLagSeconds.Int64 > int64(recoverypolicy.Current(this.ClusterName).ReasonableMaintenanceReplicationLagSeconds) {
 		return fmt.Sprintf("%+vs", this.ReplicationLagSeconds.Int64)
 	}
 	return fmt.Sprintf("%+vs", this.ReplicationLagSeconds.Int64)

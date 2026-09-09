@@ -11,6 +11,7 @@ Supported policies include:
 - `basic`: one configured HTTP username/password.
 - `multi`: the configured power credential plus a read-only user.
 - `proxy`: trust an identity header set by an authenticating reverse proxy; `PowerAuthUsers` controls writers.
+- Recovery policies and hooks require the narrower `ConfigurationAdminUsers` / `ConfigurationAdminGroups` permission; hooks run as the Orchestrator process identity.
 - `token`: access tokens issued by the local administrative command.
 - empty method: unauthenticated access; use only inside an adequately isolated environment.
 - `ReadOnly: true`: disable HTTP/Web writes regardless of the authentication method.

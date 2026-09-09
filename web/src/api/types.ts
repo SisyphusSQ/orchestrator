@@ -170,12 +170,71 @@ export interface WebConfig {
   urlPrefix: string;
   userId: string;
   authorizedForAction: boolean;
+  authorizedForConfiguration: boolean;
   agentsEnabled: boolean;
   pseudoGTIDEnabled: boolean;
   removeTextFromHostnameDisplay: string;
   webMessage: string;
   auditPageSize: number;
   auditEnabled: boolean;
+}
+
+export interface RecoveryPolicy {
+  autoMasterRecovery: boolean;
+  autoIntermediateMasterRecovery: boolean;
+  recoveryIgnoreHostnameFilters: string[];
+  promotionIgnoreHostnameFilters: string[];
+  problemIgnoreHostnameFilters: string[];
+  failureDetectionPeriodBlockMinutes: number;
+  recoveryPeriodBlockSeconds: number;
+  reasonableReplicationLagSeconds: number;
+  reasonableMaintenanceReplicationLagSeconds: number;
+  verifyReplicationFilters: boolean;
+  failMasterPromotionOnLagMinutes: number;
+  sqlThreadPromotionPolicy: "allow" | "wait" | "reject";
+  recoverNonWriteableMaster: boolean;
+  coMasterRecoveryMustPromoteOtherCoMaster: boolean;
+  detachLostReplicasAfterMasterFailover: boolean;
+  applyMySQLPromotionAfterMasterFailover: boolean;
+  preventCrossDataCenterMasterFailover: boolean;
+  preventCrossRegionMasterFailover: boolean;
+  masterFailoverDetachReplicaMasterHost: boolean;
+  postponeReplicaRecoveryOnLagMinutes: number;
+  enforceExactSemiSyncReplicas: boolean;
+  recoverLockedSemiSyncMaster: boolean;
+  reasonableLockedSemiSyncMasterSeconds: number;
+}
+export interface RecoveryPolicyDocument {
+  scopeType: "global" | "cluster";
+  scopeKey: string;
+  revision: number;
+  overrides: Partial<RecoveryPolicy>;
+  inherited: RecoveryPolicy;
+  effective: RecoveryPolicy;
+  updatedBy?: string;
+  changeReason?: string;
+  updatedAt?: string;
+}
+export interface HookProfile {
+  id: string;
+  name: string;
+  commands: string[];
+  timeoutSeconds: number;
+  failurePolicy: "abort" | "continue";
+  outputLimitBytes: number;
+  enabled: boolean;
+  revision: number;
+  updatedBy?: string;
+  changeReason?: string;
+}
+export interface HookAssignment {
+  scopeType: "global" | "cluster";
+  scopeKey: string;
+  phase: string;
+  mode: "inherit" | "replace" | "disable";
+  profileIds: string[];
+  revision: number;
+  changeReason?: string;
 }
 export interface Envelope<T> {
   Code: "OK" | "ERROR";

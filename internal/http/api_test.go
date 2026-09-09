@@ -2,6 +2,7 @@ package http
 
 import (
 	nethttp "net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -14,6 +15,29 @@ func init() {
 	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
+}
+
+func TestDecodeConfigurationBodyIsStrictAndBounded(t *testing.T) {
+	type body struct {
+		Value int `json:"value"`
+	}
+	for name, content := range map[string]string{
+		"unknown field": `{"value":1,"future":true}`,
+		"trailing JSON": `{"value":1} {}`,
+		"oversized":     `{"value":1,"padding":"` + strings.Repeat("x", (1<<20)+1) + `"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(nethttp.MethodPost, "/api/recovery-policy", strings.NewReader(content))
+			if err := decodeConfigurationBody(req, &body{}); err == nil {
+				t.Fatal("invalid request body accepted")
+			}
+		})
+	}
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/recovery-policy", strings.NewReader(`{"value":1}`))
+	var decoded body
+	if err := decodeConfigurationBody(req, &decoded); err != nil || decoded.Value != 1 {
+		t.Fatalf("valid request body decode = %#v, %v", decoded, err)
+	}
 }
 
 func TestGetSynonymPath(t *testing.T) {
@@ -68,12 +92,12 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	web := HttpWeb{URLPrefix: "/orchestrator"}
 	registeredAPIsBefore := len(registeredPaths)
 	api.RegisterRequests(standard)
-	if got, want := len(registeredPaths)-registeredAPIsBefore, 256; got != want {
+	if got, want := len(registeredPaths)-registeredAPIsBefore, 263; got != want {
 		t.Fatalf("registered API routes = %d, want %d", got, want)
 	}
 	RegisterObservability(standard, "/orchestrator")
 	web.RegisterRequests(standard)
-	if got, want := len(standard.logicalRoutes), 382; got != want {
+	if got, want := len(standard.logicalRoutes), 390; got != want {
 		t.Fatalf("standard logical routes = %d, want %d", got, want)
 	}
 
@@ -88,7 +112,7 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	if got, want := len(agents.logicalRoutes), 6; got != want {
 		t.Fatalf("agent logical routes = %d, want %d", got, want)
 	}
-	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 388; got != want {
+	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 396; got != want {
 		t.Fatalf("total logical routes = %d, want %d", got, want)
 	}
 

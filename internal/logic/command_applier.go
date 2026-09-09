@@ -17,12 +17,14 @@
 package logic
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/openark/orchestrator/internal/attributes"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/kv"
 	"github.com/openark/orchestrator/internal/raft"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 
 	"github.com/openark/orchestrator/internal/golib/log"
 )
@@ -102,6 +104,24 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 		return applier.leaderURI(value)
 	case "set-cluster-alias-manual-override":
 		return applier.setClusterAliasManualOverride(value)
+	case "save-recovery-policy":
+		var command recoverypolicy.SavePolicyCommand
+		if err := json.Unmarshal(value, &command); err != nil {
+			return err
+		}
+		return recoverypolicy.SavePolicy(context.Background(), command)
+	case "save-recovery-hook-profile":
+		var command recoverypolicy.SaveHookProfileCommand
+		if err := json.Unmarshal(value, &command); err != nil {
+			return err
+		}
+		return recoverypolicy.SaveHookProfile(context.Background(), command)
+	case "save-recovery-hook-assignment":
+		var command recoverypolicy.SaveHookAssignmentCommand
+		if err := json.Unmarshal(value, &command); err != nil {
+			return err
+		}
+		return recoverypolicy.SaveHookAssignment(context.Background(), command)
 	}
 	return log.Errorf("Unknown command op: %s", op)
 }

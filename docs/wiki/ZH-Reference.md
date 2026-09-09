@@ -11,7 +11,7 @@
 - [配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration)：Raft 身份、元数据库、发现、恢复策略、KV、日志和已移除字段。
 - [Raft 运维](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Raft-Operations)：建群、成员变更、节点替换、多数派、健康与备份边界。
 - [orch 命令行](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)、[Web 控制台](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Web-Console)和 [HTTP API](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-HTTP-API)：受支持的管理入口及失败语义。
-- [故障恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Failure-Recovery)：分析、策略、候选选择、GTID/Pseudo-GTID、hooks 和验收。
+- [故障恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Failure-Recovery)与[恢复配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Recovery-Configuration)：分析、23 项页面策略、9 个 Hook 阶段、候选选择和验收。
 - [可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)与[安全](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Security)：节点本地遥测、认证、TLS、凭据和权限边界。
 - [升级](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)与[开发](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Development)：不兼容变更台账、回滚、源码布局、构建、测试和发布流程。
 
