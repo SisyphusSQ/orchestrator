@@ -64,3 +64,14 @@ bin/orch --endpoint http://127.0.0.1:3000 topology --cluster db.example.com:3306
 ```
 
 Open `http://127.0.0.1:3000/web/clusters`. Check `/health/live`, `/health/ready`, and `/metrics` on the same node. Before production, continue with [Configuration](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration), [Raft operations](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Raft-Operations), [Security](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Security), and [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability).
+
+## Production preflight
+
+- Use three or five voters across intentional failure domains; do not promote this single-node data directory into an improvised HA design.
+- Give every node independent Raft and metadata storage, stable identity, reachable advertise addresses, supervised process startup, and tested backup/restore procedures.
+- Create a dedicated topology account on every managed MySQL server. Start with discovery permissions, then add only privileges required by explicitly enabled topology changes and recovery.
+- Define hostname resolution, discovery filters, cluster aliases, data-center/region classification, promotion rules, recovery filters, hooks, audit retention, and fencing before enabling automatic recovery.
+- Put Web/API and Raft on controlled networks. Validate the actual proxy, TLS/mTLS, authentication, URL prefix, read-only roles, metrics scraping, log collection, and alert routing.
+- Exercise one representative discovery, read, controlled write, failure analysis, and rollback in an isolated topology. Read back MySQL, orchestrator, Raft, audit, and external routing/KV state independently.
+
+Configuration samples are starting points, not production policy. Review every field against [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go) and keep credentials out of version control.

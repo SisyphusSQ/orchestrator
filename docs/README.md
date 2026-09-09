@@ -1,42 +1,31 @@
 # Documentation / 文档
 
-The current user and operator documentation is maintained bilingually in [`docs/wiki/`](wiki/README.md) and published to the [GitHub Wiki](https://github.com/SisyphusSQ/orchestrator/wiki). The repository copy is the source of truth; do not edit the Wiki as an independent documentation branch.
+Current user, operator, and developer documentation is maintained bilingually in [`docs/wiki/`](wiki/README.md) and published to the [GitHub Wiki](https://github.com/SisyphusSQ/orchestrator/wiki). The repository copy is the source of truth; the published Wiki is a delivery mirror.
 
-当前用户与运维文档以中英文双语形式维护在 [`docs/wiki/`](wiki/README.md)，并发布到 [GitHub Wiki](https://github.com/SisyphusSQ/orchestrator/wiki)。仓库内容是唯一事实源，不应把 Wiki 网页维护成另一套文档。
+当前用户、运维和开发文档以中英文双语形式维护在 [`docs/wiki/`](wiki/README.md)，并发布到 [GitHub Wiki](https://github.com/SisyphusSQ/orchestrator/wiki)。仓库内容是唯一事实源，远端 Wiki 是发布镜像。
 
-## Current guides / 当前指南
+## Maintained assets / 受维护资产
 
-| Topic | English | 中文 |
-| --- | --- | --- |
-| Overview / 项目概览 | [Overview](wiki/EN-Overview.md) | [项目概览](wiki/ZH-Overview.md) |
-| Getting started / 快速开始 | [Getting started](wiki/EN-Getting-Started.md) | [快速开始](wiki/ZH-Getting-Started.md) |
-| Configuration / 配置 | [Configuration](wiki/EN-Configuration.md) | [配置](wiki/ZH-Configuration.md) |
-| Raft operations / Raft 运维 | [Raft operations](wiki/EN-Raft-Operations.md) | [Raft 运维](wiki/ZH-Raft-Operations.md) |
-| CLI | [orch CLI](wiki/EN-orch-CLI.md) | [orch 命令行](wiki/ZH-orch-CLI.md) |
-| Web console / Web 控制台 | [Web console](wiki/EN-Web-Console.md) | [Web 控制台](wiki/ZH-Web-Console.md) |
-| HTTP API | [HTTP API](wiki/EN-HTTP-API.md) | [HTTP API](wiki/ZH-HTTP-API.md) |
-| Failure recovery / 故障恢复 | [Failure recovery](wiki/EN-Failure-Recovery.md) | [故障恢复](wiki/ZH-Failure-Recovery.md) |
-| Observability / 可观测性 | [Observability](wiki/EN-Observability.md) | [可观测性](wiki/ZH-Observability.md) |
-| Security / 安全 | [Security](wiki/EN-Security.md) | [安全](wiki/ZH-Security.md) |
-| Upgrading / 升级 | [Upgrading](wiki/EN-Upgrading.md) | [升级](wiki/ZH-Upgrading.md) |
-| Development / 开发 | [Development](wiki/EN-Development.md) | [开发](wiki/ZH-Development.md) |
-| Reference / 参考资料 | [Reference](wiki/EN-Reference.md) | [参考资料](wiki/ZH-Reference.md) |
+| Path / 路径 | Responsibility / 职责 |
+| --- | --- |
+| [`wiki/`](wiki/README.md) | Reviewable bilingual Wiki source and publication manifest / 可审查的双语 Wiki 源文件及发布清单 |
+| [`schema/`](schema/README.md) | Executable metadata schema, compatibility matrix, and migration guide / 可执行元数据库 Schema、兼容矩阵及迁移指南 |
+| [`verification/`](verification/README.md) | Issue-specific validation records not published as user documentation / 不作为用户文档发布的 Issue 验证记录 |
 
-## Detailed reference / 深度参考
+Project history, removed documentation, and superseded behavior remain available through Git history. Do not add a second archive of stale pages under `docs/`.
 
-The older top-level Markdown files under `docs/` preserve detailed design, historical behavior, configuration notes, and migration evidence. They remain useful references, but they are not the current Wiki navigation contract and may use historical terminology. Start from the bilingual guides above; follow a reference link only when you need the deeper detail.
+项目历史、已删除文档和被替代的行为可从 Git 历史查询。不要在 `docs/` 下再建立一套长期旧文档归档。
 
-`docs/` 顶层的既有 Markdown 文件保留了详细设计、历史行为、配置说明和迁移证据。它们仍可作为深度参考，但不再充当当前 Wiki 导航契约，其中可能含有历史术语。请先从上方双语指南进入，只在需要细节时再查阅对应参考页。
+## Maintenance / 维护
 
-- Runtime and deployment: [execution](execution.md), [Raft configuration](configuration-raft.md), [Raft deployment](deployment-raft.md), [high availability](high-availability.md)
-- Operations: [failure detection](failure-detection.md), [topology recovery](topology-recovery.md), [status checks](status-checks.md), [observability](observability.md)
-- Interfaces: [orch](orch.md), [HTTP API](using-the-web-api.md), [Web console](web.md)
-- Configuration: [configuration topics](configuration.md), [sample](configuration-sample.md), [security](security.md), [TLS](ssl-and-tls.md)
-- Development: [metadata schema](schema/README.md), [build](build.md), [CI](ci.md), [contributors](developers.md)
-- Verification records: [verification index](verification/README.md)
+- Update both `EN-*.md` and `ZH-*.md` pages when behavior changes.
+- Keep `docs/wiki/managed-pages.txt`, `Home.md`, and `_Sidebar.md` synchronized with the published page set.
+- Run `make test-docs` during development. It checks links, the Wiki manifest and bilingual pairing, maintained directory boundaries, and the absence of legacy top-level pages.
+- Publish a clean committed revision with `script/publish-wiki`. The script updates only managed pages and does not force-push.
+- Keep one-off acceptance evidence under `docs/verification/`; keep executable schema contracts under `docs/schema/`.
 
-## Maintenance
-
-- Run `make test-docs` while editing. It checks local links, images, Wiki manifests, page reachability, and English/Chinese pairing.
-- Run `script/publish-wiki` only after the GitHub Wiki has an initial page and the source change is committed. The script clones the Wiki into a temporary directory, updates only files named by the managed manifest, commits the source revision, and pushes without force.
-- Keep commands, configuration fields, routes, and version-sensitive claims grounded in current code. Put one-off validation evidence under `docs/verification/`, not in the Wiki navigation.
+- 行为变化时同时更新 `EN-*.md` 与 `ZH-*.md`。
+- 保持 `docs/wiki/managed-pages.txt`、`Home.md`、`_Sidebar.md` 与发布页面集合一致。
+- 开发阶段运行 `make test-docs`，检查链接、Wiki 清单、双语配对、受维护目录边界和遗留顶层页面回归。
+- 使用 `script/publish-wiki` 发布干净且已提交的 revision；脚本只更新受管页面且不 force-push。
+- 一次性验收证据放入 `docs/verification/`，可执行 Schema 契约放入 `docs/schema/`。

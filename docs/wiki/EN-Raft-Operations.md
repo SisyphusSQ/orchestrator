@@ -36,6 +36,20 @@ Use `raft-add-member`, `raft-remove-member --id <stable-id>`, and `raft-transfer
 
 Remove a failed voter only while the remaining voters still have quorum. Prefer adding and catching up a replacement before removing a healthy member. A re-provisioned node gets a new durable identity unless its complete Raft state is restored consistently.
 
+## Identity, storage, and replacement
+
+`RaftNodeID` is independent of DNS and network addresses. The Raft directory contains `raft.db`, `node-id`, and `snapshots/`; `node-id` is part of the persistent state. Startup fails when log or snapshot state exists without its matching identity rather than silently binding that state to a new ID. Identity, data directory, bind, and advertise changes require restart and cannot be applied by reload.
+
+Every Raft member has an independent MySQL or SQLite metadata backend. A backend copy can seed a replacement, but it does not create Raft membership and another member's Raft directory must not be cloned casually. To replace `node-3`, start a clean node with a new stable ID, add it through the leader, confirm committed membership and catch-up, then remove `node-3` by ID.
+
+Back up the metadata backend and Raft directory as separate consistency domains. Restoring only one side may produce stale application state or an invalid consensus member. A node with intact state can normally restart and catch up; an empty re-provisioned node must be added explicitly and must not be bootstrapped as a second cluster.
+
+## Network and deployment
+
+`RaftBind` is the local listener; `RaftAdvertise` is the address peers use. Set advertise explicitly behind NAT and allow the Raft port only between members. `HTTPAdvertise` can provide the externally reachable Web/API origin when automatic leader URL derivation is wrong.
+
+Clients may use a leader-aware proxy or healthy nodes that proxy supported business calls. Load balancers should use `/health/leader-ready` when routing only to the leader, or `/health/ready` when follower proxying is intended. Never infer quorum or committed membership from process liveness.
+
 ## Health and traffic
 
 - `/health/live`: process is serving HTTP.
@@ -45,3 +59,5 @@ Remove a failed voter only while the remaining voters still have quorum. Prefer 
 - `/api/raft/configuration`: local membership and leadership readback.
 
 Followers discover topology and can proxy supported requests. Only the leader performs recovery and coordinated writes. When quorum is lost, do not bypass Raft by writing directly to a metadata database.
+
+For a three-voter cluster quorum is two; for five voters it is three. Place voters so a single expected failure domain cannot retain an isolated minority as the service entry point. Raft protects orchestrator coordination, but application routing and MySQL fencing remain separate controls.

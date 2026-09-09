@@ -6,7 +6,7 @@ Current `main` can contain changes newer than the latest published release. Trea
 
 ## Preflight
 
-1. Record the exact source/release revision and read all newer entries in [`docs/upgrading.md`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/upgrading.md).
+1. Record the exact source/release revision and review every ledger entry below that is newer than the deployed revision.
 2. Back up every node's Raft directory and independent metadata backend using procedures that preserve each store's consistency.
 3. Inventory all configuration layers, generated service arguments, automation scripts, monitoring rules, reverse proxies, and external hooks/KV consumers.
 4. Exercise startup, quorum, discovery, a representative read and write, recovery policy, Web/API authentication, metrics, and rollback in an isolated environment.
@@ -22,6 +22,40 @@ Current `main` can contain changes newer than the latest published release. Trea
 - Web assets are embedded; remove deployment assumptions that require an external frontend resources directory.
 - Source packages moved to `cmd/` and `internal/`; historical public Go import paths are not preserved.
 - HTTP transport, backend DAO, and logging implementations changed. Validate authentication/proxy behavior, representative database paths, log parsing, and syslog availability.
+
+## Current change ledger
+
+### Canonical metadata schema
+
+New empty metadata databases initialize from [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql), using the common MySQL 5.7–8.0, TiDB, and OceanBase MySQL-mode subset and deriving SQLite structure from the same authority. New databases receive `canonical-v1`; existing databases continue the historical ordered patch stream and receive `legacy-v1`. The upgrade does not rebuild large existing tables, convert charsets, rename old indexes, or delete compatibility tables.
+
+Back up every node's independent backend. Test the exact target product/version in an isolated empty database, then read back `orchestrator_schema_migrations`, `orchestrator_db_deployments`, managed table count, and representative reads/writes. Never import `mysql.sql` into a non-empty database. For rollback of a newly created canonical database, prefer restoring the pre-upgrade backup; older binaries do not understand the marker and may replay legacy patches.
+
+### Raft-only server
+
+Non-Raft, shared-backend election, and semi-HA paths are removed. Existing Raft members keep identity, logs, snapshots, and independent backends; change configuration and the start command, restart, and do not bootstrap again. A former non-Raft deployment must stop old discovery/recovery/writes, prepare independent backends and identities, form a new Raft cluster, validate it, then cut traffic. Do not run old and new recovery systems concurrently.
+
+### Standalone HTTP client
+
+The shell client, database-connected business CLI, `-c`/`cli`, aliases, and their environment variables are removed. Install `orch`, configure `ORCH_ENDPOINT`, and replace start scripts with `orchestrator server`; local maintenance belongs under `orchestrator admin`. Rollback restores matching server/client binaries, configuration, and automation together. Do not assume mixed versions are safe for newly added commands or write-result contracts.
+
+### Source, Web, and HTTP transport
+
+Go sources moved from `go/` to `cmd/` and `internal/`; old public import paths are not compatibility APIs. `make binary` embeds the React Web assets, so runtime deployment no longer reads external frontend resources. Gin v1.12.0 is isolated behind the project transport adapter; route synonyms, trailing slash/HEAD behavior, authentication, prefixes, TLS/mTLS, Raft proxy termination, and HTTP/HTTPS/Unix listeners remain contracts that must be exercised through the real proxy.
+
+### Backend DAO and connection lifecycle
+
+GORM handles stable backend DAO reads/writes for MySQL and SQLite while reusing the one process-owned pool. It does not run `AutoMigrate`; ordered SQL remains schema authority. `LastInsertId`, topology, snapshots, Raft, and dynamic result paths retain explicit adapters. Backend, discovery, and topology-operation pools close on shutdown and are not rebuilt by `SIGHUP`; restart after endpoint, credential, TLS, timeout, packet, lifetime, or pool-size changes.
+
+### Observability and logging
+
+Prometheus/OpenTelemetry replaces Graphite and raw/aggregated Collection APIs. Remove all six retired fields listed in [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability), scrape every node, and update dashboards and alert rules. This change adds no schema or Raft format migration.
+
+Zap text output is `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`; update parsers. `EnableSyslog` or `AuditToSyslog` initialization failure now stops startup, and audit sink write failures are visible. Writes are synchronous rather than one goroutine per entry, so validate sink latency under representative load.
+
+### Consul and ZooKeeper
+
+Built-in ZooKeeper publishing and `ZkAddress` are removed. Migrate consumers to Consul or an external recovery hook before upgrade. Consul now uses the official SDK, sends ACL tokens only in `X-Consul-Token`, verifies HTTPS by default, and fails startup on client/TLS construction errors. Configure trusted CAs, server name, and paired mTLS files before replacing a build that relied on skipped verification. Cross-datacenter writes may partially succeed and are not rolled back; timed-out writes are not replayed automatically. Consul settings require restart.
 
 ## Rollout and rollback
 

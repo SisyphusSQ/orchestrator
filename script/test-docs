@@ -152,9 +152,19 @@ done
 [[ "$manifest_count" -eq "$source_count" ]] ||
   fail "Wiki manifest count $manifest_count does not match managed source count $source_count"
 
-echo "# Checking documentation classification"
-[[ ! -e docs/orch-validation.md ]] ||
-  fail "issue-specific validation must live under docs/verification"
+echo "# Checking documentation boundaries"
+while IFS= read -r legacy_page; do
+  fail "legacy top-level documentation must be migrated to the Wiki or a durable asset directory: $legacy_page"
+done < <(find docs -maxdepth 1 -type f -name '*.md' ! -name 'README.md' -print | sort)
+
+if [[ -d docs/images ]]; then
+  while IFS= read -r legacy_image; do
+    fail "orphaned legacy documentation image must be removed: $legacy_image"
+  done < <(find docs/images -type f -print | sort)
+fi
+
+[[ -f docs/README.md ]] || fail "documentation index is missing"
+[[ -f docs/wiki/README.md ]] || fail "versioned Wiki source index is missing"
 [[ -f docs/verification/orch-cli-too-426.md ]] ||
   fail "moved TOO-426 verification record is missing"
 

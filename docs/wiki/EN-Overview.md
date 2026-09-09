@@ -26,3 +26,5 @@ This fork is intentionally Raft-only:
 The project still supports topology discovery, GTID and Pseudo-GTID aware refactoring, planned takeovers, automated recovery, auditing, tags, Consul KV publishing, authentication, TLS, and optional Agent endpoints. Availability and safety depend on correct topology permissions, recovery filters, Raft quorum, and deployment validation.
 
 Historical shared-backend election, non-Raft server mode, the old database-connected CLI, and the shell client are not available. Read [Upgrading](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Upgrading) before replacing an older binary.
+
+This repository continues the open-source orchestrator project originally created at GitHub and later maintained by Percona. The implementation is distributed under the Apache License 2.0; see [`LICENSE`](https://github.com/SisyphusSQ/orchestrator/blob/main/LICENSE) for the complete terms.

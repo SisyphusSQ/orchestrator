@@ -3,15 +3,16 @@
 ## Unreleased
 
 - raft
-  - 将 Raft 收敛为唯一服务端运行模式，保留单节点与多节点部署，以及各节点独立的 MySQL/SQLite 元数据库；移除共享数据库选主、`RaftEnabled`、`continuous`、`--grab-election` 和旧选主 API。升级配置与新集群 bootstrap 步骤见 `docs/upgrading.md`。
+  - 将 Raft 收敛为唯一服务端运行模式，保留单节点与多节点部署，以及各节点独立的 MySQL/SQLite 元数据库；移除共享数据库选主、`RaftEnabled`、`continuous`、`--grab-election` 和旧选主 API。升级配置与新集群 bootstrap 步骤见[升级指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)。
   - 让 Raft 生命周期独立于自动发现，关闭 discovery 后仍支持成员管理、状态复制和领导权转移；补齐运行时关闭、配置重载、就绪状态和 Web 操作入口。
   - Replace the 2017 openark Raft fork with official `github.com/hashicorp/raft` v1.7.3 and `github.com/hashicorp/raft-boltdb/v2` v2.3.1 for newly created clusters.
   - Require a durable `RaftNodeID` independent of bind/advertise/DNS, bootstrap a single seed voter, and manage membership through ID-aware HTTP APIs (`/api/raft/configuration`, `/bootstrap`, `/members`, `/leadership/transfer`, `/snapshot`).
   - Use official FileSnapshotStore plus one Bolt store for logs and stable state, remove Yield/peer/health-report control paths, and report readiness from VerifyLeader, configuration suffrage, and last-contact.
 - optimization
+  - 将当前项目文档收敛到双语 GitHub Wiki，以 `docs/wiki/` 作为版本化来源；删除重复的历史 Markdown 和孤立图片，仅保留 Wiki 源文件、元数据 schema 与专项验证记录。
   - Consolidate the executable DDL for 47 metadata tables in `docs/schema/mysql.sql`, with `utf8mb4`, Chinese comments, and `idx_` / `unq_` index names. New databases use syntax shared by MySQL 5.7–8.0, TiDB, and OceanBase MySQL mode; existing databases retain the historical patch stream with an explicit migration marker, and SQLite initialization uses the same source.
   - Raise the server and independent client build baseline to Go 1.26.8 to fix reachable standard-library vulnerabilities reported by govulncheck on 1.26.5; keep third-party module versions unchanged.
-  - Split the Go HTTP client into the independent `tools/orch-cli` module and `orch` binary. Remove the Shell client and direct business CLI without a compatibility layer; server startup is now `orchestrator server`, with local maintenance under `admin`. Add missing diagnostic APIs, explicit write-result uncertainty, independent builds and command/API coverage. See `docs/orch.md` and `docs/upgrading.md`.
+  - Split the Go HTTP client into the independent `tools/orch-cli` module and `orch` binary. Remove the Shell client and direct business CLI without a compatibility layer; server startup is now `orchestrator server`, with local maintenance under `admin`. Add missing diagnostic APIs, explicit write-result uncertainty, independent builds and command/API coverage. See the [orch CLI](https://github.com/SisyphusSQ/orchestrator/wiki/EN-orch-CLI) and [upgrade guide](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Upgrading).
   - Move the executable to `cmd/orchestrator` and application packages to `internal`, merging the local golib implementation into the root Go module. Build the command package with `make build` and test all packages with `make test-unit`; the former `go/*` import paths are no longer supported. Runtime configuration and resource paths remain unchanged.
   - Replace Graphite, rcrowley/go-metrics and raw/aggregated Collection APIs with OpenTelemetry metrics and a node-local Prometheus endpoint; reject removed telemetry configuration keys and document the breaking upgrade.
   - Add bounded OTLP tracing, layered local health checks, and an importable Prometheus Grafana dashboard with collection, alert and Collector/Tempo examples.

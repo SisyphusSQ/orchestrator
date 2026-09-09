@@ -36,6 +36,20 @@
 
 只有剩余投票节点仍能形成多数派时，才移除故障 voter。替换健康成员时，优先加入并追平新节点，再删除旧节点。重装节点默认使用新的持久身份，除非完整且一致地恢复了其 Raft 状态。
 
+## 身份、存储与节点替换
+
+`RaftNodeID` 与 DNS 和网络地址相互独立。Raft 目录包含 `raft.db`、`node-id` 和 `snapshots/`，其中 `node-id` 是持久状态的一部分。存在日志或快照但缺少匹配身份时，启动会失败，而不是把旧状态静默绑定到新 ID。身份、数据目录、bind 和 advertise 变化都需要重启，不能通过 reload 生效。
+
+每个 Raft 成员使用独立的 MySQL 或 SQLite 元数据库。元数据库副本可以用于准备替代节点，但不会自动建立 Raft 成员关系，也不能随意克隆其他成员的 Raft 目录。替换 `node-3` 时，应使用新的稳定 ID 启动干净节点，通过 Leader 加入，确认配置已提交且状态追平后，再按 ID 移除 `node-3`。
+
+元数据库和 Raft 目录是两个一致性域，需要分别备份。只恢复一侧可能得到陈旧业务状态或无效共识成员。保留完整状态的节点通常可重启并追平；空白重建节点必须显式加入，不能 bootstrap 出第二个集群。
+
+## 网络与部署
+
+`RaftBind` 是本地监听地址，`RaftAdvertise` 是其他成员访问该节点的地址。位于 NAT 后时显式设置 advertise，Raft 端口只对成员开放。自动推导 Leader URL 不正确时，可用 `HTTPAdvertise` 指定外部可达的 Web/API origin。
+
+客户端可以使用 Leader-aware 代理，也可以访问能代理业务请求的健康节点。只路由 Leader 时负载均衡使用 `/health/leader-ready`；允许 Follower 代理时使用 `/health/ready`。不能根据进程存活推断多数派或成员配置已经提交。
+
 ## 健康与流量
 
 - `/health/live`：进程正在提供 HTTP。
@@ -45,3 +59,5 @@
 - `/api/raft/configuration`：读取本地成员与领导状态。
 
 Follower 参与拓扑发现，并可转发受支持的请求；只有 Leader 执行恢复和受协调写入。失去多数派时，不得绕过 Raft 直接写元数据库。
+
+三 voter 集群的多数派为二，五 voter 集群的多数派为三。投票节点布局应确保单个预期故障域不能把隔离少数派继续暴露为服务入口。Raft 保护 orchestrator 协调，但应用流量路由和 MySQL fencing 仍是独立控制面。

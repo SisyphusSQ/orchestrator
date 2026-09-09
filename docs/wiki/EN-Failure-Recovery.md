@@ -14,6 +14,14 @@ Failure detection and recovery are separate stages. Every ready Raft node probes
 
 A detected problem does not automatically mean a safe replacement exists. Candidate eligibility, replication state, filters, quorum, and current topology all participate in the decision.
 
+## Detection and candidate semantics
+
+Analysis distinguishes dead primaries, dead intermediate primaries, co-primary failures, unreachable members, stopped or lagging replication, and structural warnings. Some observations are informational and intentionally do not trigger recovery. A failure becomes actionable only after the configured detection window, valid topology evidence, and recovery policy agree.
+
+Promotion rules (`must`, `prefer`, `neutral`, `prefer_not`, and `must_not`), data-center/region policy, version compatibility, errant GTIDs, replication filters, SQL delay, and lag determine candidate eligibility. `must_not` prevents promotion but does not remove an instance from discovery. Keep classification metadata current rather than trying to correct it during an incident.
+
+GTID relocation is preferred when supported and compatible. Pseudo-GTID relies on equivalent markers inserted into binary logs and must be configured before failure. Automated injection requires privileges and a writable source; manual injection must run on every writable primary at a stable interval. Expired or missing markers can make file-position matching impossible.
+
 ## Manual operations
 
 Inspect analysis first:
@@ -30,6 +38,12 @@ orch recover --instance failed-primary.example.com:3306
 ```
 
 Planned maintenance should use maintenance/downtime markers and, where appropriate, graceful takeover instead of simulating a crash. A forced failover intentionally discards the current primary and has a larger blast radius.
+
+Maintenance suppresses automated actions around an intentional instance operation; downtime changes how known problems are surfaced. Neither changes MySQL state by itself. Recovery acknowledgements close operator attention records but do not repair topology. Anti-flapping blocks, active recovery records, and postponed operations must be inspected before forcing another attempt.
+
+Tags are operational metadata in `key` or `key=value` form and can drive searches or external policy. Tag writes, candidate registration, downtime, maintenance, and recoveries are business mutations even where a compatibility route uses GET; automation must use command semantics rather than HTTP method alone.
+
+Recovery hooks receive incident context through documented environment variables. Run them with least privilege, bounded timeout, durable logging, and explicit ownership. A successful topology change with a failed hook is not an entirely successful external cutover.
 
 ## Acceptance and unknown results
 
