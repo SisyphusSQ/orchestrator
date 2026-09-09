@@ -6,7 +6,7 @@ The production Web console is a React, TypeScript, and Ant Design application em
 
 `make binary` builds the frontend into `web/dist/`, synchronizes it to the embed source under `web/assets/`, then builds the server. `make build` additionally builds `bin/orch`. Direct `go build` does not prepare production Web assets. Docker uses a separate Node build stage and copies the result into the Go stage; the final runtime image does not contain Node. Missing embedded assets return an explicit 503 instead of reading from the working directory.
 
-Open `/web/clusters` under the configured service origin. If `URLPrefix` is `/orchestrator`, use `/orchestrator/web/clusters`.
+Open `/web/clusters` under the configured service origin. If `server.urlPrefix` is `/orchestrator`, use `/orchestrator/web/clusters`.
 
 ## Operator workflow
 

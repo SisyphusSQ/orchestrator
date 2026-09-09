@@ -68,12 +68,12 @@ func (f *deadInstancesFilter) RegisterInstance(instanceKey *InstanceKey) {
 
 	instance, exists := f.deadInstances[*instanceKey]
 	if exists {
-		delayFactor = config.Config.DeadInstancePollSecondsMultiplyFactor * instance.DelayFactor
+		delayFactor = config.Config.Topology.Discovery.DeadPollSecondsFactor * instance.DelayFactor
 		previousTry = instance.TryCnt
 	}
 
-	maxDelay := time.Duration(config.Config.DeadInstancePollSecondsMax) * time.Second
-	currentDelay := time.Duration(delayFactor*float32(config.Config.InstancePollSeconds)) * time.Second
+	maxDelay := time.Duration(config.Config.Topology.Discovery.DeadPollMaxSeconds) * time.Second
+	currentDelay := time.Duration(delayFactor*float32(config.Config.Topology.Discovery.PollSeconds)) * time.Second
 
 	// needed only for the debug log below
 	delayFactorTmp := delayFactor
@@ -92,7 +92,7 @@ func (f *deadInstancesFilter) RegisterInstance(instanceKey *InstanceKey) {
 	}
 	f.deadInstances[*instanceKey] = instance
 
-	if config.Config.DeadInstanceDiscoveryLogsEnabled {
+	if config.Config.Topology.Discovery.DeadLogsEnabled {
 		log.Debugf("Dead instance registered %v:%v. Iteration: %v. Current delay factor: %v (next check in %v (on %v))",
 			instanceKey.Hostname, instanceKey.Port, instance.TryCnt, delayFactorTmp, currentDelay, instance.NextCheckTime)
 	}
@@ -105,7 +105,7 @@ func (f *deadInstancesFilter) UnregisterInstance(instanceKey *InstanceKey) {
 
 	instance, exists := f.deadInstances[*instanceKey]
 	if exists {
-		if config.Config.DeadInstanceDiscoveryLogsEnabled {
+		if config.Config.Topology.Discovery.DeadLogsEnabled {
 			log.Debugf("Dead instance unregistered: %v:%v after iteration: %v",
 				instanceKey.Hostname, instanceKey.Port, instance.TryCnt)
 		}
@@ -133,7 +133,7 @@ func (f *deadInstancesFilter) InstanceRecheckNeeded(instanceKey *InstanceKey) (b
 		return exists, false
 	}
 
-	if config.Config.DeadInstanceDiscoveryLogsEnabled {
+	if config.Config.Topology.Discovery.DeadLogsEnabled {
 		log.Debugf("Dead instance recheck: %v:%v. Iteration: %v",
 			instanceKey.Hostname, instanceKey.Port, instance.TryCnt)
 	}

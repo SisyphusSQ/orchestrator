@@ -38,7 +38,7 @@ Remove a failed voter only while the remaining voters still have quorum. Prefer 
 
 ## Identity, storage, and replacement
 
-`RaftNodeID` is independent of DNS and network addresses. The Raft directory contains `raft.db`, `node-id`, and `snapshots/`; `node-id` is part of the persistent state. Startup fails when log or snapshot state exists without its matching identity rather than silently binding that state to a new ID. Identity, data directory, bind, and advertise changes require restart and cannot be applied by reload.
+`raft.nodeID` is independent of DNS and network addresses. The Raft directory contains `raft.db`, `node-id`, and `snapshots/`; `node-id` is part of the persistent state. Startup fails when log or snapshot state exists without its matching identity rather than silently binding that state to a new ID. Identity, data directory, bind, and advertise changes require restart and cannot be applied by reload.
 
 Every Raft member has an independent MySQL or SQLite metadata backend. A backend copy can seed a replacement, but it does not create Raft membership and another member's Raft directory must not be cloned casually. To replace `node-3`, start a clean node with a new stable ID, add it through the leader, confirm committed membership and catch-up, then remove `node-3` by ID.
 
@@ -46,7 +46,7 @@ Back up the metadata backend and Raft directory as separate consistency domains.
 
 ## Network and deployment
 
-`RaftBind` is the local listener; `RaftAdvertise` is the address peers use. Set advertise explicitly behind NAT and allow the Raft port only between members. `HTTPAdvertise` can provide the externally reachable Web/API origin when automatic leader URL derivation is wrong.
+`raft.bind` is the local listener; `raft.advertise` is the address peers use. Set advertise explicitly behind NAT and allow the Raft port only between members. `server.httpAdvertise` can provide the externally reachable Web/API origin when automatic leader URL derivation is wrong.
 
 Clients may use a leader-aware proxy or healthy nodes that proxy supported business calls. Load balancers should use `/health/leader-ready` when routing only to the leader, or `/health/ready` when follower proxying is intended. Never infer quorum or committed membership from process liveness.
 

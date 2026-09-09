@@ -1,3 +1,7 @@
 {
-  "ReplicationCredentialsQuery": "SELECT 'ci' AS user, 'ci' AS password, '' AS sslCaCert, '' AS sslCert, '' AS sslKey"
+  "topology": {
+    "replication": {
+      "credentialsQuery": "SELECT 'ci' AS user, 'ci' AS password, '' AS sslCaCert, '' AS sslCert, '' AS sslKey"
+    }
+  }
 }

@@ -59,7 +59,7 @@ func ExpireCandidateInstances() error {
 		_, err := db.ExecOrchestrator(`
 				delete from candidate_database_instance
 				where last_suggested < NOW() - INTERVAL ? MINUTE
-				`, config.Config.CandidateInstanceExpireMinutes,
+				`, config.Config.Topology.Candidate.ExpireMinutes,
 		)
 		return log.Errore(err)
 	}
@@ -99,7 +99,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 		LastSuggested       string `gorm:"column:last_suggested"`
 		PromotionRuleExpiry string `gorm:"column:promotion_rule_expiry"`
 	}
-	rows, err := db.QueryOrchestratorRows[candidateRow](context.Background(), query, config.Config.CandidateInstanceExpireMinutes)
+	rows, err := db.QueryOrchestratorRows[candidateRow](context.Background(), query, config.Config.Topology.Candidate.ExpireMinutes)
 	for _, row := range rows {
 		cdi := CandidateDatabaseInstance{
 			Hostname:            row.Hostname,

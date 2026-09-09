@@ -2,7 +2,7 @@
 
 **English** · [中文](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability) · [Wiki home](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-Each HTTP listener exposes node-local Prometheus metrics and health snapshots. These routes honor `URLPrefix`, existing authentication, TLS, and mTLS, and are never proxied to the Raft leader.
+Each HTTP listener exposes node-local Prometheus metrics and health snapshots. These routes honor `server.urlPrefix`, existing authentication, TLS, and mTLS, and are never proxied to the Raft leader.
 
 | Route | Meaning | Healthy response |
 | --- | --- | --- |
@@ -34,8 +34,12 @@ All durations use seconds; counters end in `_total`; gauges may decrease. Discov
 
 ```json
 {
-  "OTelTraceEndpoint": "https://collector.example.com/v1/traces",
-  "OTelTraceSampleRatio": 0.1
+  "observability": {
+    "tracing": {
+      "endpoint": "https://collector.example.com/v1/traces",
+      "sampleRatio": 0.1
+    }
+  }
 }
 ```
 

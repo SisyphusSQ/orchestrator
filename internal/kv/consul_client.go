@@ -12,7 +12,7 @@ import (
 	"github.com/openark/orchestrator/internal/golib/log"
 )
 
-const consulTLSSkipVerifyWarning = "Consul TLS certificate verification is disabled by ConsulTLSSkipVerify"
+const consulTLSSkipVerifyWarning = "Consul TLS certificate verification is disabled by consul.tls.skipVerify"
 
 // consulClientOptions is the project-owned Consul client contract. The config
 // package and KVStore interface do not expose HashiCorp SDK types.
@@ -32,17 +32,17 @@ type consulClientOptions struct {
 
 func consulClientOptionsFromConfig(cfg *config.Configuration) consulClientOptions {
 	return consulClientOptions{
-		Address:            cfg.ConsulAddress,
-		Scheme:             cfg.ConsulScheme,
-		Token:              cfg.ConsulAclToken,
-		Datacenter:         cfg.ConsulDatacenter,
-		TLSCAFile:          cfg.ConsulTLSCAFile,
-		TLSCAPath:          cfg.ConsulTLSCAPath,
-		TLSCertFile:        cfg.ConsulTLSCertFile,
-		TLSPrivateKeyFile:  cfg.ConsulTLSPrivateKeyFile,
-		TLSServerName:      cfg.ConsulTLSServerName,
-		TLSSkipVerify:      cfg.ConsulTLSSkipVerify,
-		HTTPTimeoutSeconds: cfg.ConsulHttpTimeoutSeconds,
+		Address:            cfg.Consul.Address,
+		Scheme:             cfg.Consul.Scheme,
+		Token:              cfg.Consul.ACLToken,
+		Datacenter:         cfg.Consul.Datacenter,
+		TLSCAFile:          cfg.Consul.TLS.CAFile,
+		TLSCAPath:          cfg.Consul.TLS.CAPath,
+		TLSCertFile:        cfg.Consul.TLS.CertFile,
+		TLSPrivateKeyFile:  cfg.Consul.TLS.PrivateKeyFile,
+		TLSServerName:      cfg.Consul.TLS.ServerName,
+		TLSSkipVerify:      cfg.Consul.TLS.SkipVerify,
+		HTTPTimeoutSeconds: cfg.Consul.HTTPTimeoutSeconds,
 	}
 }
 

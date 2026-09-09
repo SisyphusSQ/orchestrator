@@ -25,7 +25,7 @@ import (
 )
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
+	config.Config.Topology.Hostname.ResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }
@@ -144,11 +144,11 @@ func TestCanReplicateFrom(t *testing.T) {
 	test.S(t).ExpectNotNil(err)
 	test.S(t).ExpectEquals(canReplicate, false)
 
-	config.Config.LowerReplicaVersionAllowed = true
+	config.Config.Topology.Compatibility.LowerReplicaVersionAllowed = true
 	canReplicate, err = i56.CanReplicateFrom(&i80)
 	test.S(t).ExpectNotNil(err)
 	test.S(t).ExpectEquals(canReplicate, true)
-	config.Config.LowerReplicaVersionAllowed = false
+	config.Config.Topology.Compatibility.LowerReplicaVersionAllowed = false
 
 	iStatement := Instance{Key: key1, Binlog_format: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
 	iRow := Instance{Key: key2, Binlog_format: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}

@@ -54,7 +54,7 @@ func TestInitKVStoresAddsTxnStoreForAlias(t *testing.T) {
 	server := buildConsulTestServer(t, nil)
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulKVStoreProvider = "consul_txn"
+	config.Config.Consul.KV.Provider = "consul_txn"
 
 	if err := InitKVStores(); err != nil {
 		t.Fatalf("InitKVStores(): %v", err)
@@ -72,7 +72,7 @@ func TestInitKVStoresReturnsTLSFileError(t *testing.T) {
 	ResetKVStoresForTest()
 	t.Cleanup(ResetKVStoresForTest)
 	configureConsulTest(t, "https://127.0.0.1:8501", false)
-	config.Config.ConsulTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	config.Config.Consul.TLS.CAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
 
 	err := InitKVStores()
 	if err == nil {
@@ -90,9 +90,9 @@ func TestInitKVStoresOnceKeepsFirstResult(t *testing.T) {
 	if err := InitKVStores(); err != nil {
 		t.Fatalf("first init: %v", err)
 	}
-	config.Config.ConsulAddress = "https://127.0.0.1:8501"
-	config.Config.ConsulScheme = "https"
-	config.Config.ConsulTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	config.Config.Consul.Address = "https://127.0.0.1:8501"
+	config.Config.Consul.Scheme = "https"
+	config.Config.Consul.TLS.CAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
 	if err := InitKVStores(); err != nil {
 		t.Fatalf("second init should reuse the first success, got %v", err)
 	}

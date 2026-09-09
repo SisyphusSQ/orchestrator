@@ -17,47 +17,47 @@ import (
 
 func preserveMySQLConfig(t *testing.T) {
 	t.Helper()
-	previousOrchestratorUser := config.Config.MySQLOrchestratorUser
-	previousOrchestratorPassword := config.Config.MySQLOrchestratorPassword
-	previousOrchestratorHost := config.Config.MySQLOrchestratorHost
-	previousOrchestratorPort := config.Config.MySQLOrchestratorPort
-	previousOrchestratorDatabase := config.Config.MySQLOrchestratorDatabase
-	previousOrchestratorReadTimeout := config.Config.MySQLOrchestratorReadTimeoutSeconds
-	previousOrchestratorRejectReadOnly := config.Config.MySQLOrchestratorRejectReadOnly
-	previousOrchestratorMaxAllowedPacket := config.Config.MySQLOrchestratorMaxAllowedPacket
-	previousTopologyUser := config.Config.MySQLTopologyUser
-	previousTopologyPassword := config.Config.MySQLTopologyPassword
-	previousTopologyMaxAllowedPacket := config.Config.MySQLTopologyMaxAllowedPacket
-	previousConnectTimeout := config.Config.MySQLConnectTimeoutSeconds
+	previousOrchestratorUser := config.Config.Metadata.MySQL.User
+	previousOrchestratorPassword := config.Config.Metadata.MySQL.Password
+	previousOrchestratorHost := config.Config.Metadata.MySQL.Host
+	previousOrchestratorPort := config.Config.Metadata.MySQL.Port
+	previousOrchestratorDatabase := config.Config.Metadata.MySQL.Database
+	previousOrchestratorReadTimeout := config.Config.Metadata.MySQL.ReadTimeoutSeconds
+	previousOrchestratorRejectReadOnly := config.Config.Metadata.MySQL.RejectReadOnly
+	previousOrchestratorMaxAllowedPacket := config.Config.Metadata.MySQL.MaxAllowedPacket
+	previousTopologyUser := config.Config.Topology.MySQL.User
+	previousTopologyPassword := config.Config.Topology.MySQL.Password
+	previousTopologyMaxAllowedPacket := config.Config.Topology.MySQL.MaxAllowedPacket
+	previousConnectTimeout := config.Config.MySQL.ConnectTimeoutSeconds
 	t.Cleanup(func() {
-		config.Config.MySQLOrchestratorUser = previousOrchestratorUser
-		config.Config.MySQLOrchestratorPassword = previousOrchestratorPassword
-		config.Config.MySQLOrchestratorHost = previousOrchestratorHost
-		config.Config.MySQLOrchestratorPort = previousOrchestratorPort
-		config.Config.MySQLOrchestratorDatabase = previousOrchestratorDatabase
-		config.Config.MySQLOrchestratorReadTimeoutSeconds = previousOrchestratorReadTimeout
-		config.Config.MySQLOrchestratorRejectReadOnly = previousOrchestratorRejectReadOnly
-		config.Config.MySQLOrchestratorMaxAllowedPacket = previousOrchestratorMaxAllowedPacket
-		config.Config.MySQLTopologyUser = previousTopologyUser
-		config.Config.MySQLTopologyPassword = previousTopologyPassword
-		config.Config.MySQLTopologyMaxAllowedPacket = previousTopologyMaxAllowedPacket
-		config.Config.MySQLConnectTimeoutSeconds = previousConnectTimeout
+		config.Config.Metadata.MySQL.User = previousOrchestratorUser
+		config.Config.Metadata.MySQL.Password = previousOrchestratorPassword
+		config.Config.Metadata.MySQL.Host = previousOrchestratorHost
+		config.Config.Metadata.MySQL.Port = previousOrchestratorPort
+		config.Config.Metadata.MySQL.Database = previousOrchestratorDatabase
+		config.Config.Metadata.MySQL.ReadTimeoutSeconds = previousOrchestratorReadTimeout
+		config.Config.Metadata.MySQL.RejectReadOnly = previousOrchestratorRejectReadOnly
+		config.Config.Metadata.MySQL.MaxAllowedPacket = previousOrchestratorMaxAllowedPacket
+		config.Config.Topology.MySQL.User = previousTopologyUser
+		config.Config.Topology.MySQL.Password = previousTopologyPassword
+		config.Config.Topology.MySQL.MaxAllowedPacket = previousTopologyMaxAllowedPacket
+		config.Config.MySQL.ConnectTimeoutSeconds = previousConnectTimeout
 	})
 }
 
 func TestNewOrchestratorMySQLConfigMapsApprovedFields(t *testing.T) {
 	preserveMySQLConfig(t)
-	config.Config.MySQLOrchestratorUser = "backend-user"
-	config.Config.MySQLOrchestratorPassword = "backend-secret"
-	config.Config.MySQLOrchestratorHost = "backend.example"
-	config.Config.MySQLOrchestratorPort = 3307
-	config.Config.MySQLOrchestratorDatabase = "orchestrator"
-	config.Config.MySQLConnectTimeoutSeconds = 3
-	config.Config.MySQLOrchestratorReadTimeoutSeconds = 7
-	config.Config.MySQLOrchestratorRejectReadOnly = true
-	config.Config.MySQLOrchestratorMaxAllowedPacket = 123456
+	config.Config.Metadata.MySQL.User = "backend-user"
+	config.Config.Metadata.MySQL.Password = "backend-secret"
+	config.Config.Metadata.MySQL.Host = "backend.example"
+	config.Config.Metadata.MySQL.Port = 3307
+	config.Config.Metadata.MySQL.Database = "orchestrator"
+	config.Config.MySQL.ConnectTimeoutSeconds = 3
+	config.Config.Metadata.MySQL.ReadTimeoutSeconds = 7
+	config.Config.Metadata.MySQL.RejectReadOnly = true
+	config.Config.Metadata.MySQL.MaxAllowedPacket = 123456
 
-	backend := newOrchestratorMySQLConfig(config.Config.MySQLOrchestratorDatabase)
+	backend := newOrchestratorMySQLConfig(config.Config.Metadata.MySQL.Database)
 	if backend.User != "backend-user" || backend.Passwd != "backend-secret" {
 		t.Fatal("backend config did not preserve the configured credentials")
 	}
@@ -85,11 +85,11 @@ func TestNewOrchestratorMySQLConfigMapsApprovedFields(t *testing.T) {
 
 func TestNewTopologyMySQLConfigUsesTopologyPacketLimit(t *testing.T) {
 	preserveMySQLConfig(t)
-	config.Config.MySQLTopologyUser = "topology-user"
-	config.Config.MySQLTopologyPassword = "topology-secret"
-	config.Config.MySQLConnectTimeoutSeconds = 5
-	config.Config.MySQLTopologyMaxAllowedPacket = 654321
-	config.Config.MySQLOrchestratorMaxAllowedPacket = 111111
+	config.Config.Topology.MySQL.User = "topology-user"
+	config.Config.Topology.MySQL.Password = "topology-secret"
+	config.Config.MySQL.ConnectTimeoutSeconds = 5
+	config.Config.Topology.MySQL.MaxAllowedPacket = 654321
+	config.Config.Metadata.MySQL.MaxAllowedPacket = 111111
 
 	topology := newTopologyMySQLConfig("mysql.example", 3310, 11*time.Second)
 	if topology.User != "topology-user" || topology.Passwd != "topology-secret" {
@@ -108,8 +108,8 @@ func TestNewTopologyMySQLConfigUsesTopologyPacketLimit(t *testing.T) {
 
 func TestTopologyPoolKeySeparatesConnectionBehavior(t *testing.T) {
 	preserveMySQLConfig(t)
-	config.Config.MySQLTopologyUser = "topology-user"
-	config.Config.MySQLTopologyPassword = "first-secret"
+	config.Config.Topology.MySQL.User = "topology-user"
+	config.Config.Topology.MySQL.Password = "first-secret"
 	firstConfig := newTopologyMySQLConfig("mysql.example", 3306, 2*time.Second)
 
 	discoveryKey := newTopologyPoolKey(topologyConnectionDiscovery, firstConfig)
@@ -118,7 +118,7 @@ func TestTopologyPoolKeySeparatesConnectionBehavior(t *testing.T) {
 		t.Fatal("discovery and operation produced the same pool key")
 	}
 
-	config.Config.MySQLTopologyPassword = "second-secret"
+	config.Config.Topology.MySQL.Password = "second-secret"
 	secondConfig := newTopologyMySQLConfig("mysql.example", 3306, 2*time.Second)
 	secondKey := newTopologyPoolKey(topologyConnectionDiscovery, secondConfig)
 	if discoveryKey == secondKey {
@@ -285,20 +285,20 @@ func TestPoolRegistryPropagatesCanceledContextAndCloses(t *testing.T) {
 }
 
 func TestOpenOrchestratorContextReusesAndClosesRuntimeOwnedSQLitePool(t *testing.T) {
-	previousBackendDB := config.Config.BackendDB
-	previousSQLiteFile := config.Config.SQLite3DataFile
-	previousSkipUpdate := config.Config.SkipOrchestratorDatabaseUpdate
+	previousBackendDB := config.Config.Metadata.Type
+	previousSQLiteFile := config.Config.Metadata.SQLite.DataFile
+	previousSkipUpdate := config.Config.Metadata.Schema.SkipUpdate
 	previousRuntime := processDatabaseRuntime
-	config.Config.BackendDB = "sqlite3"
-	config.Config.SQLite3DataFile = ":memory:"
-	config.Config.SkipOrchestratorDatabaseUpdate = true
+	config.Config.Metadata.Type = "sqlite3"
+	config.Config.Metadata.SQLite.DataFile = ":memory:"
+	config.Config.Metadata.Schema.SkipUpdate = true
 	processDatabaseRuntime = newDatabaseRuntime()
 	t.Cleanup(func() {
 		_ = processDatabaseRuntime.Close()
 		processDatabaseRuntime = previousRuntime
-		config.Config.BackendDB = previousBackendDB
-		config.Config.SQLite3DataFile = previousSQLiteFile
-		config.Config.SkipOrchestratorDatabaseUpdate = previousSkipUpdate
+		config.Config.Metadata.Type = previousBackendDB
+		config.Config.Metadata.SQLite.DataFile = previousSQLiteFile
+		config.Config.Metadata.Schema.SkipUpdate = previousSkipUpdate
 	})
 
 	first, err := OpenOrchestratorContext(context.Background())
@@ -328,25 +328,25 @@ func TestOpenOrchestratorContextReusesAndClosesRuntimeOwnedSQLitePool(t *testing
 }
 
 func TestOpenOrchestratorContextInitializesSQLiteSchema(t *testing.T) {
-	previousBackendDB := config.Config.BackendDB
-	previousSQLiteFile := config.Config.SQLite3DataFile
-	previousSkipUpdate := config.Config.SkipOrchestratorDatabaseUpdate
-	previousPanicIfDifferent := config.Config.PanicIfDifferentDatabaseDeploy
+	previousBackendDB := config.Config.Metadata.Type
+	previousSQLiteFile := config.Config.Metadata.SQLite.DataFile
+	previousSkipUpdate := config.Config.Metadata.Schema.SkipUpdate
+	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
 	previousConfiguredVersion := config.RuntimeCLIFlags.ConfiguredVersion
 	previousRuntime := processDatabaseRuntime
-	config.Config.BackendDB = "sqlite3"
-	config.Config.SQLite3DataFile = ":memory:"
-	config.Config.SkipOrchestratorDatabaseUpdate = false
-	config.Config.PanicIfDifferentDatabaseDeploy = false
+	config.Config.Metadata.Type = "sqlite3"
+	config.Config.Metadata.SQLite.DataFile = ":memory:"
+	config.Config.Metadata.Schema.SkipUpdate = false
+	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
 	config.RuntimeCLIFlags.ConfiguredVersion = "runtime-test"
 	processDatabaseRuntime = newDatabaseRuntime()
 	t.Cleanup(func() {
 		_ = processDatabaseRuntime.Close()
 		processDatabaseRuntime = previousRuntime
-		config.Config.BackendDB = previousBackendDB
-		config.Config.SQLite3DataFile = previousSQLiteFile
-		config.Config.SkipOrchestratorDatabaseUpdate = previousSkipUpdate
-		config.Config.PanicIfDifferentDatabaseDeploy = previousPanicIfDifferent
+		config.Config.Metadata.Type = previousBackendDB
+		config.Config.Metadata.SQLite.DataFile = previousSQLiteFile
+		config.Config.Metadata.Schema.SkipUpdate = previousSkipUpdate
+		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
 		config.RuntimeCLIFlags.ConfiguredVersion = previousConfiguredVersion
 	})
 
@@ -369,8 +369,8 @@ func TestOpenOrchestratorContextInitializesSQLiteSchema(t *testing.T) {
 
 func TestDatabaseRuntimeSeparatesAndClosesTopologyPools(t *testing.T) {
 	preserveMySQLConfig(t)
-	config.Config.MySQLTopologyUser = "topology-user"
-	config.Config.MySQLTopologyPassword = "first-secret"
+	config.Config.Topology.MySQL.User = "topology-user"
+	config.Config.Topology.MySQL.Password = "first-secret"
 	runtime := newDatabaseRuntime()
 	runtime.openMySQL = func(*mysql.Config) (*sql.DB, error) {
 		return sql.Open("sqlite3", ":memory:")
@@ -423,17 +423,17 @@ func TestDatabaseRuntimeSeparatesAndClosesTopologyPools(t *testing.T) {
 
 func TestOpenTopologyContextUsesRoleSpecificRuntimePools(t *testing.T) {
 	preserveMySQLConfig(t)
-	previousMutualTLS := config.Config.MySQLTopologyUseMutualTLS
-	previousMixedTLS := config.Config.MySQLTopologyUseMixedTLS
-	previousDiscoveryTimeout := config.Config.MySQLDiscoveryReadTimeoutSeconds
-	previousTopologyTimeout := config.Config.MySQLTopologyReadTimeoutSeconds
+	previousMutualTLS := config.Config.Topology.MySQL.UseMutualTLS
+	previousMixedTLS := config.Config.Topology.MySQL.UseMixedTLS
+	previousDiscoveryTimeout := config.Config.Topology.MySQL.DiscoveryReadTimeoutSeconds
+	previousTopologyTimeout := config.Config.Topology.MySQL.ReadTimeoutSeconds
 	previousRuntime := processDatabaseRuntime
-	config.Config.MySQLTopologyUser = "topology-user"
-	config.Config.MySQLTopologyPassword = "topology-secret"
-	config.Config.MySQLTopologyUseMutualTLS = false
-	config.Config.MySQLTopologyUseMixedTLS = false
-	config.Config.MySQLDiscoveryReadTimeoutSeconds = 2
-	config.Config.MySQLTopologyReadTimeoutSeconds = 2
+	config.Config.Topology.MySQL.User = "topology-user"
+	config.Config.Topology.MySQL.Password = "topology-secret"
+	config.Config.Topology.MySQL.UseMutualTLS = false
+	config.Config.Topology.MySQL.UseMixedTLS = false
+	config.Config.Topology.MySQL.DiscoveryReadTimeoutSeconds = 2
+	config.Config.Topology.MySQL.ReadTimeoutSeconds = 2
 	processDatabaseRuntime = newDatabaseRuntime()
 	processDatabaseRuntime.openMySQL = func(*mysql.Config) (*sql.DB, error) {
 		return sql.Open("sqlite3", ":memory:")
@@ -441,10 +441,10 @@ func TestOpenTopologyContextUsesRoleSpecificRuntimePools(t *testing.T) {
 	t.Cleanup(func() {
 		_ = processDatabaseRuntime.Close()
 		processDatabaseRuntime = previousRuntime
-		config.Config.MySQLTopologyUseMutualTLS = previousMutualTLS
-		config.Config.MySQLTopologyUseMixedTLS = previousMixedTLS
-		config.Config.MySQLDiscoveryReadTimeoutSeconds = previousDiscoveryTimeout
-		config.Config.MySQLTopologyReadTimeoutSeconds = previousTopologyTimeout
+		config.Config.Topology.MySQL.UseMutualTLS = previousMutualTLS
+		config.Config.Topology.MySQL.UseMixedTLS = previousMixedTLS
+		config.Config.Topology.MySQL.DiscoveryReadTimeoutSeconds = previousDiscoveryTimeout
+		config.Config.Topology.MySQL.ReadTimeoutSeconds = previousTopologyTimeout
 	})
 
 	discovery, err := OpenDiscoveryContext(context.Background(), "mysql.example", 3306)

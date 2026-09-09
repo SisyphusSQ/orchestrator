@@ -1,113 +1,146 @@
 ---
 # Compact starting point for a MySQL-backed installation.
 # Minimum required node identity and database access.
-RaftNodeID: node-1
-RaftDataDir: "/var/lib/orchestrator/raft"
-RaftBind: 127.0.0.1:10008
-Debug: true
-EnableSyslog: false
-ListenAddress: ":3000"
-MySQLTopologyUser: orc_client_user
-MySQLTopologyPassword: orc_client_password
-MySQLTopologyCredentialsConfigFile: ''
-MySQLTopologySSLPrivateKeyFile: ''
-MySQLTopologySSLCertFile: ''
-MySQLTopologySSLCAFile: ''
-MySQLTopologySSLSkipVerify: true
-MySQLTopologyUseMutualTLS: false
-MySQLOrchestratorHost: 127.0.0.1
-MySQLOrchestratorPort: 3306
-MySQLOrchestratorDatabase: orchestrator
-MySQLOrchestratorUser: orc_server_user
-MySQLOrchestratorPassword: orc_server_password
-MySQLOrchestratorCredentialsConfigFile: ''
-MySQLOrchestratorSSLPrivateKeyFile: ''
-MySQLOrchestratorSSLCertFile: ''
-MySQLOrchestratorSSLCAFile: ''
-MySQLOrchestratorSSLSkipVerify: true
-MySQLOrchestratorUseMutualTLS: false
+raft:
+  nodeID: node-1
+  dataDir: "/var/lib/orchestrator/raft"
+  bind: 127.0.0.1:10008
+logging:
+  debug: true
+  syslog:
+    enabled: false
+server:
+  listen:
+    address: ":3000"
+  readOnly: false
+  tls:
+    enabled: false
+    mutualTLS: false
+    skipVerify: false
+    privateKeyFile: ''
+    certFile: ''
+    caFile: ''
+    validOUs: []
+  urlPrefix: ''
+  status:
+    endpoint: "/api/status"
+    verifyOU: false
+  web:
+    removeTextFromHostname: ".mydomain.com:3306"
+metadata:
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: orchestrator
+    user: orc_server_user
+    password: orc_server_password
+    credentialsConfigFile: ''
+    sslPrivateKeyFile: ''
+    sslCertFile: ''
+    sslCAFile: ''
+    sslSkipVerify: true
+    useMutualTLS: false
 # Advanced discovery and topology behavior.
-MySQLConnectTimeoutSeconds: 1
-DefaultInstancePort: 3306
-DiscoverByShowSlaveHosts: true
-InstancePollSeconds: 5
-DiscoveryIgnoreReplicaHostnameFilters:
-- a_host_i_want_to_ignore[.]example[.]com
-- ".*[.]ignore_all_hosts_from_this_domain[.]example[.]com"
-- a_host_with_extra_port_i_want_to_ignore[.]example[.]com:3307
-UnseenInstanceForgetHours: 240
-SnapshotTopologiesIntervalHours: 0
-InstanceBulkOperationsWaitTimeoutSeconds: 10
-HostnameResolveMethod: default
-MySQLHostnameResolveMethod: "@@hostname"
-SkipBinlogServerUnresolveCheck: true
-ExpiryHostnameResolvesMinutes: 60
-RejectHostnameResolvePattern: ''
-CandidateInstanceExpireMinutes: 60
-AuditLogFile: ''
-AuditToSyslog: false
-RemoveTextFromHostnameDisplay: ".mydomain.com:3306"
+mysql:
+  connectTimeoutSeconds: 1
+topology:
+  mysql:
+    user: orc_client_user
+    password: orc_client_password
+    credentialsConfigFile: ''
+    sslPrivateKeyFile: ''
+    sslCertFile: ''
+    sslCAFile: ''
+    sslSkipVerify: true
+    useMutualTLS: false
+    defaultPort: 3306
+  replication:
+    lagQuery: ''
+  discovery:
+    useShowReplicaHosts: true
+    pollSeconds: 5
+    ignoreReplicaHostnames:
+      - a_host_i_want_to_ignore[.]example[.]com
+      - ".*[.]ignore_all_hosts_from_this_domain[.]example[.]com"
+      - a_host_with_extra_port_i_want_to_ignore[.]example[.]com:3307
+    unseenForgetHours: 240
+  snapshot:
+    intervalHours: 0
+  operations:
+    bulkWaitTimeoutSeconds: 10
+  hostname:
+    resolveMethod: default
+    mysqlResolveMethod: "@@hostname"
+    skipBinlogServerUnresolveCheck: true
+    resolveExpiryMinutes: 60
+    rejectResolvePattern: ''
+  candidate:
+    expireMinutes: 60
+  classification:
+    clusterNameToAlias:
+      127.0.0.1: test suite
+    detectClusterAliasQuery: SELECT SUBSTRING_INDEX(@@hostname, '.', 1)
+    detectClusterDomainQuery: ''
+    detectInstanceAliasQuery: ''
+    detectPromotionRuleQuery: ''
+    dataCenterPattern: "[.]([^.]+)[.][^.]+[.]mydomain[.]com"
+    physicalEnvironmentPattern: "[.]([^.]+[.][^.]+)[.]mydomain[.]com"
+    detectSemiSyncEnforcedQuery: ''
+  analysis:
+    reduceCount: true
+audit:
+  logFile: ''
+  toSyslog: false
 # Security and access control.
-ReadOnly: false
-AuthenticationMethod: ''
-HTTPAuthUser: ''
-HTTPAuthPassword: ''
-AuthUserHeader: ''
-PowerAuthUsers:
-- "*"
-ClusterNameToAlias:
-  127.0.0.1: test suite
-ReplicationLagQuery: ''
-DetectClusterAliasQuery: SELECT SUBSTRING_INDEX(@@hostname, '.', 1)
-DetectClusterDomainQuery: ''
-DetectInstanceAliasQuery: ''
-DetectPromotionRuleQuery: ''
-DataCenterPattern: "[.]([^.]+)[.][^.]+[.]mydomain[.]com"
-PhysicalEnvironmentPattern: "[.]([^.]+[.][^.]+)[.]mydomain[.]com"
-DetectSemiSyncEnforcedQuery: ''
-ServeAgentsHttp: false
-AgentsServerPort: ":3001"
-AgentsUseSSL: false
-AgentsUseMutualTLS: false
-AgentSSLSkipVerify: false
-AgentSSLPrivateKeyFile: ''
-AgentSSLCertFile: ''
-AgentSSLCAFile: ''
-AgentSSLValidOUs: []
-UseSSL: false
-UseMutualTLS: false
-SSLSkipVerify: false
-SSLPrivateKeyFile: ''
-SSLCertFile: ''
-SSLCAFile: ''
-SSLValidOUs: []
-URLPrefix: ''
-StatusEndpoint: "/api/status"
-StatusOUVerify: false
-AgentPollMinutes: 60
-UnseenAgentForgetHours: 6
-StaleSeedFailMinutes: 60
+authentication:
+  method: ''
+  basic:
+    user: ''
+    password: ''
+  proxy:
+    userHeader: ''
+  power:
+    users:
+      - "*"
+agents:
+  serveHTTP: false
+  serverPort: ":3001"
+  pollMinutes: 60
+  unseenForgetHours: 6
+  staleSeedFailMinutes: 60
+  tls:
+    enabled: false
+    mutualTLS: false
+    skipVerify: false
+    privateKeyFile: ''
+    certFile: ''
+    caFile: ''
+    validOUs: []
 # Pseudo-GTID configuration.
-PseudoGTIDPattern: ''
-PseudoGTIDPatternIsFixedSubstring: false
-PseudoGTIDMonotonicHint: 'asc:'
-DetectPseudoGTIDQuery: ''
-BinlogEventsChunkSize: 10000
-SkipBinlogEventsContaining: []
-ReduceReplicationAnalysisCount: true
+pseudoGTID:
+  pattern: ''
+  patternIsFixedSubstring: false
+  monotonicHint: 'asc:'
+  detectQuery: ''
+  binlogEventsChunkSize: 10000
+  skipBinlogContaining: []
 # Recovery policies and pre/post hooks are configured in Web -> 恢复配置.
-OSCIgnoreHostnameFilters: []
+osc:
+  ignoreHostnames: []
 # Consul KV publishing.
-ConsulAddress: ''
-ConsulScheme: http
-ConsulAclToken: ''
-ConsulDatacenter: ''
-ConsulTLSCAFile: ''
-ConsulTLSCAPath: ''
-ConsulTLSCertFile: ''
-ConsulTLSPrivateKeyFile: ''
-ConsulTLSServerName: ''
-ConsulTLSSkipVerify: false
-ConsulHttpTimeoutSeconds: 60
-ConsulKVStoreProvider: consul
-ConsulCrossDataCenterDistribution: false
+consul:
+  address: ''
+  scheme: http
+  aclToken: ''
+  datacenter: ''
+  httpTimeoutSeconds: 60
+  tls:
+    caFile: ''
+    caPath: ''
+    certFile: ''
+    privateKeyFile: ''
+    serverName: ''
+    skipVerify: false
+  kv:
+    provider: consul
+    crossDataCenterDistribution: false

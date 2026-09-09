@@ -701,12 +701,12 @@ func moveReplicasViaGTID(replicas [](*Instance), other *Instance, postponedFunct
 	log.Infof("moveReplicasViaGTID: Will move %+v replicas below %+v via GTID, max concurrency: %v",
 		len(replicas),
 		other.Key,
-		config.Config.MaxConcurrentReplicaOperations)
+		config.Config.Topology.Operations.MaxConcurrentReplicaOperations)
 
 	var waitGroup sync.WaitGroup
 	var replicaMutex sync.Mutex
 
-	var concurrencyChan = make(chan bool, config.Config.MaxConcurrentReplicaOperations)
+	var concurrencyChan = make(chan bool, config.Config.Topology.Operations.MaxConcurrentReplicaOperations)
 
 	for _, replica := range replicas {
 		replica := replica
@@ -1451,7 +1451,7 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 // and return found coordinates as well as entry text
 func FindLastPseudoGTIDEntry(instance *Instance, recordedInstanceRelayLogCoordinates BinlogCoordinates, maxBinlogCoordinates *BinlogCoordinates, exhaustiveSearch bool, expectedBinlogFormat *string) (instancePseudoGtidCoordinates *BinlogCoordinates, instancePseudoGtidText string, err error) {
 
-	if config.Config.PseudoGTIDPattern == "" {
+	if config.Config.PseudoGTID.Pattern == "" {
 		return instancePseudoGtidCoordinates, instancePseudoGtidText, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
 	}
 
@@ -1489,7 +1489,7 @@ func CorrelateBinlogCoordinates(instance *Instance, binlogCoordinates *BinlogCoo
 	if err != nil {
 		return nil, 0, err
 	}
-	entriesMonotonic := (config.Config.PseudoGTIDMonotonicHint != "") && strings.Contains(instancePseudoGtidText, config.Config.PseudoGTIDMonotonicHint)
+	entriesMonotonic := (config.Config.PseudoGTID.MonotonicHint != "") && strings.Contains(instancePseudoGtidText, config.Config.PseudoGTID.MonotonicHint)
 	minBinlogCoordinates, _, err := GetHeuristiclyRecentCoordinatesForInstance(&otherInstance.Key)
 	otherInstancePseudoGtidCoordinates, err := SearchEntryInInstanceBinlogs(otherInstance, instancePseudoGtidText, entriesMonotonic, minBinlogCoordinates)
 	if err != nil {
@@ -1564,7 +1564,7 @@ func MatchBelow(instanceKey, otherKey *InstanceKey, requireInstanceMaintenance b
 	if instance.IsReplicationGroupSecondary() {
 		return instance, nil, fmt.Errorf("MatchBelow: %+v is a secondary replication group member, hence, it cannot be relocated", *instanceKey)
 	}
-	if config.Config.PseudoGTIDPattern == "" {
+	if config.Config.PseudoGTID.Pattern == "" {
 		return instance, nil, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
 	}
 	if instanceKey.Equals(otherKey) {
@@ -1929,7 +1929,7 @@ func sortedReplicasDataCenterHint(replicas [](*Instance), stopReplicationMethod 
 	if len(replicas) <= 1 {
 		return replicas
 	}
-	replicas = StopReplicas(replicas, stopReplicationMethod, time.Duration(config.Config.InstanceBulkOperationsWaitTimeoutSeconds)*time.Second)
+	replicas = StopReplicas(replicas, stopReplicationMethod, time.Duration(config.Config.Topology.Operations.BulkWaitTimeoutSeconds)*time.Second)
 	replicas = RemoveNilInstances(replicas)
 
 	sortInstancesDataCenterHint(replicas, dataCenterHint)
@@ -2354,7 +2354,7 @@ func RegroupReplicasPseudoGTID(
 		return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, err
 	}
 
-	if config.Config.PseudoGTIDPattern == "" {
+	if config.Config.PseudoGTID.Pattern == "" {
 		return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
 	}
 

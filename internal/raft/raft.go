@@ -104,21 +104,21 @@ func enqueueFatalRaftError(fatalErrors chan<- error, err error) bool {
 }
 
 func computeLeaderURI() (uri string, err error) {
-	if config.Config.HTTPAdvertise != "" {
-		return config.Config.HTTPAdvertise, nil
+	if config.Config.Server.HTTPAdvertise != "" {
+		return config.Config.Server.HTTPAdvertise, nil
 	}
 	scheme := "http"
-	if config.Config.UseSSL {
+	if config.Config.Server.TLS.Enabled {
 		scheme = "https"
 	}
 
-	hostname, _, err := net.SplitHostPort(config.Config.RaftAdvertise)
+	hostname, _, err := net.SplitHostPort(config.Config.Raft.Advertise)
 	if err != nil {
-		return uri, fmt.Errorf("computeLeaderURI: cannot determine raft advertise host out of %q: %w", config.Config.RaftAdvertise, err)
+		return uri, fmt.Errorf("computeLeaderURI: cannot determine raft advertise host out of %q: %w", config.Config.Raft.Advertise, err)
 	}
-	_, port, err := net.SplitHostPort(config.Config.ListenAddress)
+	_, port, err := net.SplitHostPort(config.Config.Server.Listen.Address)
 	if err != nil || port == "" {
-		return uri, fmt.Errorf("computeLeaderURI: cannot determine listen port out of config.Config.ListenAddress: %+v", config.Config.ListenAddress)
+		return uri, fmt.Errorf("computeLeaderURI: cannot determine listen port out of config.Config.Server.Listen.Address: %+v", config.Config.Server.Listen.Address)
 	}
 	return fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(hostname, port)), nil
 }
@@ -134,7 +134,7 @@ func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier
 	}
 	log.Debugf("Setting up raft")
 	ThisHostname = thisHostname
-	created := NewStore(config.Config.RaftDataDir, config.Config.RaftBind, config.Config.RaftAdvertise, config.Config.RaftNodeID, applier, snapshotCreatorApplier)
+	created := NewStore(config.Config.Raft.DataDir, config.Config.Raft.Bind, config.Config.Raft.Advertise, config.Config.Raft.NodeID, applier, snapshotCreatorApplier)
 	if err := created.Open(); err != nil {
 		_ = created.Close()
 		return log.Errorf("failed to open raft store: %s", err.Error())
@@ -201,7 +201,7 @@ func isRaftSetupComplete() bool {
 }
 
 func normalizeRaftNode(node string) (string, error) {
-	return config.NormalizeRaftAddress(node, config.Config.DefaultRaftPort)
+	return config.NormalizeRaftAddress(node, config.Config.Raft.DefaultPort)
 }
 
 // IsPartOfQuorum reports whether this node's data is trustworthy.

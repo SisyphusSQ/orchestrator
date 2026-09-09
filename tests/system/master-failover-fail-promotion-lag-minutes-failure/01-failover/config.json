@@ -1,3 +1,7 @@
 {
-  "ReplicationLagQuery": "select 61"
+  "topology": {
+    "replication": {
+      "lagQuery": "select 61"
+    }
+  }
 }

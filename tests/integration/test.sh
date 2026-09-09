@@ -124,7 +124,14 @@ with open("${test_config_file}") as f:
 with open("$real_config_path") as f:
     override = json.load(f)
 
-base.update(override)
+def merge(target, source):
+    for key, value in source.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            merge(target[key], value)
+        else:
+            target[key] = value
+
+merge(base, override)
 
 with open("$merged_config_path", "w") as out:
     json.dump(base, out, indent=2)
@@ -142,8 +149,11 @@ EOF
 import json,sys,socket,os
 with open(sys.argv[1]) as f: config=json.load(f)
 sock=socket.socket(); sock.bind(("127.0.0.1",0)); raft_port=sock.getsockname()[1]; sock.close()
-config.pop("RaftEnabled",None)
-config.update(ListenAddress="127.0.0.1:"+sys.argv[3],HostnameResolveMethod="none",Debug=False,AuditLogFile="",RaftNodeID="integration",RaftDataDir=os.path.join(os.path.dirname(sys.argv[2]),"raft-"+sys.argv[3]),RaftBind="127.0.0.1:"+str(raft_port),RaftAdvertise="127.0.0.1:"+str(raft_port))
+config.setdefault("server",{}).setdefault("listen",{})["address"]="127.0.0.1:"+sys.argv[3]
+config.setdefault("topology",{}).setdefault("hostname",{})["resolveMethod"]="none"
+config.setdefault("logging",{})["debug"]=False
+config.setdefault("audit",{})["logFile"]=""
+config["raft"]={"nodeID":"integration","dataDir":os.path.join(os.path.dirname(sys.argv[2]),"raft-"+sys.argv[3]),"bind":"127.0.0.1:"+str(raft_port),"advertise":"127.0.0.1:"+str(raft_port)}
 with open(sys.argv[2],"w") as f: json.dump(config,f)
 PYCONFIG
     "$orchestrator_binary" server --config="$task_tmp/server.json" --discovery=false >"$task_tmp/server.log" 2>&1 &
@@ -253,10 +263,10 @@ generate_config_file() {
   python3 - "$tests_path/orchestrator.conf.json" "$test_config_file" "$test_mysql_defaults_file" "$db_type" "$sqlite_file" <<'PYCONFIG'
 import json,sys
 with open(sys.argv[1]) as f: config=json.load(f)
-config["MySQLOrchestratorCredentialsConfigFile"]=sys.argv[3]
-config["AuditLogFile"]=""
-config["BackendDB"]=sys.argv[4]
-config["SQLite3DataFile"]=sys.argv[5]
+config.setdefault("metadata",{}).setdefault("mysql",{})["credentialsConfigFile"]=sys.argv[3]
+config.setdefault("audit",{})["logFile"]=""
+config["metadata"]["type"]=sys.argv[4]
+config["metadata"].setdefault("sqlite",{})["dataFile"]=sys.argv[5]
 with open(sys.argv[2],"w") as f: json.dump(config,f)
 PYCONFIG
   touch "$test_mysql_defaults_file" # required even for sqlite because config file references the my.cnf cgf file

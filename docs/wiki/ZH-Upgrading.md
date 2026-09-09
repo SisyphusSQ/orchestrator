@@ -14,6 +14,7 @@
 
 ## 当前主要不兼容项
 
+- 配置文件与 `dump-config` 已统一为 lowerCamel 分层结构；旧平铺字段没有兼容入口，启动前必须完整迁移配置、脚本和生成模板。
 - 服务端仅支持 Raft。删除 `RaftEnabled`，配置持久 ID、数据目录、bind 和 advertise 地址。
 - `orchestrator server` 取代历史 `http`/`continuous` 入口；`orchestrator admin` 只用于本地维护。
 - 独立 `orch` HTTP 客户端取代直连数据库的 CLI、`-c` 命令和 Shell 客户端。
@@ -24,6 +25,10 @@
 - HTTP transport、后端 DAO 和日志实现已变化，需要验证认证/代理、代表性数据库路径、日志解析和 syslog 可用性。
 
 ## 当前变更台账
+
+### 分层配置
+
+配置按 `server`、`raft`、`metadata`、`topology`、`authentication`、`agents`、`observability` 等职责分组，嵌套键使用 lowerCamel。旧字段不会被自动转换，例如 `RaftNodeID`、`BackendDB`、`MySQLTopologyUser` 和 `ConsulAddress` 分别迁移为 `raft.nodeID`、`metadata.type`、`topology.mysql.user` 和 `consul.address`。先从仓库 `conf/` 样例生成每个环境的新配置，用同版本二进制执行 `dump-config` 与启动验证，再进行滚动替换；回退必须同时恢复旧二进制和匹配的旧配置。
 
 ### 规范化元数据库 Schema
 
@@ -51,7 +56,7 @@ GORM 在 MySQL 和 SQLite 上承担稳定的后端 DAO 读写，并复用唯一�
 
 Prometheus/OpenTelemetry 取代 Graphite 与 raw/aggregated Collection API。删除[可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)列出的六个退役字段，逐节点抓取并更新大盘和告警。本变更不包含 Schema 或 Raft 格式迁移。
 
-Zap 文本格式为 `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`，日志解析器需要同步更新。`EnableSyslog` 或 `AuditToSyslog` 初始化失败现在会阻止启动，审计 sink 写入失败保持可见。写入从每条一个 goroutine 改为同步执行，需要在代表性负载下验证 sink 延迟。
+Zap 文本格式为 `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`，日志解析器需要同步更新。`logging.syslog.enabled` 或 `audit.toSyslog` 初始化失败现在会阻止启动，审计 sink 写入失败保持可见。写入从每条一个 goroutine 改为同步执行，需要在代表性负载下验证 sink 延迟。
 
 ### Consul 与 ZooKeeper
 

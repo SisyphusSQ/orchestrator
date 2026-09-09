@@ -17,14 +17,14 @@ func TestRemovedTelemetryConfiguration(t *testing.T) {
 func TestTelemetryConfigValidation(t *testing.T) {
 	for _, endpoint := range []string{"http://localhost:4318/v1/traces", "https://collector.example/v1/traces", ""} {
 		c := newConfiguration()
-		c.OTelTraceEndpoint = endpoint
+		c.Observability.Tracing.Endpoint = endpoint
 		if err := c.validateTelemetry(); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, endpoint := range []string{"localhost:4318", "http://user:secret@host/v1/traces", "https://host/v1/traces?token=secret", "https://host/wrong", "ftp://host/v1/traces"} {
 		c := newConfiguration()
-		c.OTelTraceEndpoint = endpoint
+		c.Observability.Tracing.Endpoint = endpoint
 		if err := c.validateTelemetry(); err == nil {
 			t.Fatalf("accepted invalid endpoint %s", endpoint)
 		}

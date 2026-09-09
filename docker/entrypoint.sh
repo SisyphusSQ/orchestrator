@@ -14,11 +14,10 @@ if [ ! -e /etc/orchestrator.conf.yaml ] && [ ! -e /etc/orchestrator.conf.yml ] &
     --arg dbHost "${ORC_DB_HOST:-db}" --argjson dbPort "${ORC_DB_PORT:-3306}" \
     --arg dbName "${ORC_DB_NAME:-orchestrator}" --arg dbUser "${ORC_USER:-orc_server_user}" \
     --arg dbPassword "${ORC_PASSWORD:-orc_server_password}" \
-    '{ListenAddress:":3000", RaftNodeID:$id, RaftBind:$bind, RaftAdvertise:$advertise,
-      RaftDataDir:$dir, HTTPAdvertise:$http, MySQLTopologyUser:$topologyUser,
-      MySQLTopologyPassword:$topologyPassword, MySQLOrchestratorHost:$dbHost,
-      MySQLOrchestratorPort:$dbPort, MySQLOrchestratorDatabase:$dbName,
-      MySQLOrchestratorUser:$dbUser, MySQLOrchestratorPassword:$dbPassword}' > /etc/orchestrator.conf.json
+    '{server:{listen:{address:":3000"}, httpAdvertise:$http},
+      raft:{nodeID:$id, bind:$bind, advertise:$advertise, dataDir:$dir},
+      metadata:{mysql:{host:$dbHost, port:$dbPort, database:$dbName, user:$dbUser, password:$dbPassword}},
+      topology:{mysql:{user:$topologyUser, password:$topologyPassword}}}' > /etc/orchestrator.conf.json
 fi
 
 exec /usr/local/orchestrator/orchestrator server

@@ -93,7 +93,7 @@ func (this *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 		return nil
 	}
 
-	if !config.Config.ConsulCrossDataCenterDistribution {
+	if !config.Config.Consul.KV.CrossDataCenterDistribution {
 		return nil
 	}
 	if this.client == nil {

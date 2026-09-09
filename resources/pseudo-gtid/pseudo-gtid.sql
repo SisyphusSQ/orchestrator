@@ -12,9 +12,11 @@
 --
 --  The following is to be added to the orchestrator configuration file
 --
---  "PseudoGTIDPattern": "drop view if exists .*?`_pseudo_gtid_hint__",
---  "PseudoGTIDMonotonicHint": "asc:",
---  "DetectPseudoGTIDQuery": "select count(*) as pseudo_gtid_exists from meta.pseudo_gtid_status where anchor = 1 and time_generated > now() - interval 2 day",
+--  "pseudoGTID": {
+--    "pattern": "drop view if exists .*?`_pseudo_gtid_hint__",
+--    "monotonicHint": "asc:",
+--    "detectQuery": "select count(*) as pseudo_gtid_exists from meta.pseudo_gtid_status where anchor = 1 and time_generated > now() - interval 2 day"
+--  }
 --
 
 

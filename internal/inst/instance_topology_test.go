@@ -19,7 +19,7 @@ var (
 )
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
+	config.Config.Topology.Hostname.ResolveMethod = "none"
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

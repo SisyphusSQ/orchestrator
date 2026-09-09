@@ -1,46 +1,88 @@
 {
-  "Debug": true,
-  "EnableSyslog": false,
-  "ListenAddress": ":300NODE_ID_PLACEHOLDER",
-  "MySQLTopologyUser": "ci",
-  "MySQLTopologyPassword": "ci",
-  "BackendDB": "sqlite",
-  "SQLite3DataFile": "/tmp/orchestrator-NODE_ID_PLACEHOLDER/orchestrator.sqlite3",
-  "MySQLConnectTimeoutSeconds": 1,
-  "DefaultInstancePort": 3306,
-  "DiscoverByShowSlaveHosts": true,
-  "InstancePollSeconds": 1,
-  "HostnameResolveMethod": "none",
-  "MySQLHostnameResolveMethod": "@@report_host",
-  "SkipBinlogServerUnresolveCheck": true,
-  "ExpiryHostnameResolvesMinutes": 60,
-  "CandidateInstanceExpireMinutes": 60,
-  "ReadOnly": false,
-  "AuthenticationMethod": "",
-  "ReplicationLagQuery": "select timestampdiff(second, ts, now()) from test.heartbeat",
-  "DetectClusterAliasQuery": "SELECT 'ci'",
-  "DetectClusterDomainQuery": "",
-  "DetectInstanceAliasQuery": "",
-  "DetectPromotionRuleQuery": "",
-  "DetectDataCenterQuery": "select CASE @@port WHEN 10111 THEN 'dc-east-1' WHEN 10112 THEN 'dc-east-1' WHEN 10113 THEN 'dc-east-2' WHEN 10114 THEN 'dc-west' END",
-  "DetectRegionQuery": "select IF(@@port = 10114, 'rgn-west', 'rgn-east')",
-  "DetectPhysicalEnvironmentQuery": "select 'prod'",
-  "DetectSemiSyncEnforcedQuery": "",
-  "DiscoverySeeds": [
-    "127.0.0.1:10111"
-  ],
-  "ServeAgentsHttp": false,
-  "UseSSL": false,
-  "UseMutualTLS": false,
-  "MySQLTopologyUseMixedTLS": false,
-  "StatusEndpoint": "/api/status",
-  "StatusOUVerify": false,
-  "BinlogEventsChunkSize": 10000,
-  "SkipBinlogEventsContaining": [],
-  "ReduceReplicationAnalysisCount": false,
-  "RaftNodeID": "node-NODE_ID_PLACEHOLDER",
-  "RaftDataDir": "/tmp/orchestrator-NODE_ID_PLACEHOLDER",
-  "RaftBind": "127.0.0.1:1000NODE_ID_PLACEHOLDER",
-  "RaftAdvertise": "127.0.0.1:1000NODE_ID_PLACEHOLDER",
-  "DefaultRaftPort": 10008
+  "logging": {
+    "debug": true,
+    "syslog": {
+      "enabled": false
+    }
+  },
+  "server": {
+    "listen": {
+      "address": ":300NODE_ID_PLACEHOLDER"
+    },
+    "readOnly": false,
+    "tls": {
+      "enabled": false,
+      "mutualTLS": false
+    },
+    "status": {
+      "endpoint": "/api/status",
+      "verifyOU": false
+    }
+  },
+  "topology": {
+    "mysql": {
+      "user": "ci",
+      "password": "ci",
+      "defaultPort": 3306,
+      "useMixedTLS": false
+    },
+    "discovery": {
+      "useShowReplicaHosts": true,
+      "pollSeconds": 1,
+      "seeds": [
+        "127.0.0.1:10111"
+      ]
+    },
+    "hostname": {
+      "resolveMethod": "none",
+      "mysqlResolveMethod": "@@report_host",
+      "skipBinlogServerUnresolveCheck": true,
+      "resolveExpiryMinutes": 60
+    },
+    "candidate": {
+      "expireMinutes": 60
+    },
+    "replication": {
+      "lagQuery": "select timestampdiff(second, ts, now()) from test.heartbeat"
+    },
+    "classification": {
+      "detectClusterAliasQuery": "SELECT 'ci'",
+      "detectClusterDomainQuery": "",
+      "detectInstanceAliasQuery": "",
+      "detectPromotionRuleQuery": "",
+      "detectDataCenterQuery": "select CASE @@port WHEN 10111 THEN 'dc-east-1' WHEN 10112 THEN 'dc-east-1' WHEN 10113 THEN 'dc-east-2' WHEN 10114 THEN 'dc-west' END",
+      "detectRegionQuery": "select IF(@@port = 10114, 'rgn-west', 'rgn-east')",
+      "detectPhysicalEnvironmentQuery": "select 'prod'",
+      "detectSemiSyncEnforcedQuery": ""
+    },
+    "analysis": {
+      "reduceCount": false
+    }
+  },
+  "metadata": {
+    "type": "sqlite",
+    "sqlite": {
+      "dataFile": "/tmp/orchestrator-NODE_ID_PLACEHOLDER/orchestrator.sqlite3"
+    }
+  },
+  "mysql": {
+    "connectTimeoutSeconds": 1
+  },
+  "authentication": {
+    "method": ""
+  },
+  "agents": {
+    "serveHTTP": false
+  },
+  "pseudoGTID": {
+    "binlogEventsChunkSize": 10000,
+    "skipBinlogContaining": []
+  },
+  "raft": {
+    "nodeID": "node-NODE_ID_PLACEHOLDER",
+    "dataDir": "/tmp/orchestrator-NODE_ID_PLACEHOLDER",
+    "bind": "127.0.0.1:1000NODE_ID_PLACEHOLDER",
+    "advertise": "127.0.0.1:1000NODE_ID_PLACEHOLDER",
+    "defaultPort": 10008
+  }
 }

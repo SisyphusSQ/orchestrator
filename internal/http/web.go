@@ -56,12 +56,12 @@ func (web *HttpWeb) Bootstrap(_ Params, r Responder, req *http.Request, resp htt
 		UserID:                        getUserId(req, user),
 		AuthorizedForAction:           isAuthorizedForAction(req, user),
 		AuthorizedForConfiguration:    isAuthorizedForConfiguration(req, user),
-		AgentsEnabled:                 config.Config.ServeAgentsHttp,
-		PseudoGTIDEnabled:             config.Config.PseudoGTIDPattern != "",
-		RemoveTextFromHostnameDisplay: config.Config.RemoveTextFromHostnameDisplay,
-		WebMessage:                    config.Config.WebMessage,
+		AgentsEnabled:                 config.Config.Agents.ServeHTTP,
+		PseudoGTIDEnabled:             config.Config.PseudoGTID.Pattern != "",
+		RemoveTextFromHostnameDisplay: config.Config.Server.Web.RemoveTextFromHostname,
+		WebMessage:                    config.Config.Server.Web.Message,
 		AuditPageSize:                 config.AuditPageSize,
-		AuditEnabled:                  config.Config.AuditToBackendDB,
+		AuditEnabled:                  config.Config.Audit.ToBackend,
 	})
 }
 

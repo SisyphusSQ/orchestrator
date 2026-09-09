@@ -188,8 +188,8 @@ func TestConsulClientHTTPSPrivateCA(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, false)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSCAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.CAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err != nil {
@@ -201,7 +201,7 @@ func TestConsulClientHTTPSSystemRootsRejectPrivateCert(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, false)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	err := putProbe(t, client)
@@ -218,8 +218,8 @@ func TestConsulClientHTTPSCAPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(caDir, "ca.pem"), material.CACertPEM, 0o600); err != nil {
 		t.Fatalf("write CA path: %v", err)
 	}
-	config.Config.ConsulTLSCAPath = caDir
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.CAPath = caDir
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err != nil {
@@ -231,8 +231,8 @@ func TestConsulClientServerNameMismatch(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, false)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSCAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
-	config.Config.ConsulTLSServerName = "wrong.example"
+	config.Config.Consul.TLS.CAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
+	config.Config.Consul.TLS.ServerName = "wrong.example"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err == nil {
@@ -244,8 +244,8 @@ func TestConsulClientWrongCA(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, false)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSCAFile = writeTempPEM(t, "other-ca.pem", material.OtherCACertPEM)
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.CAFile = writeTempPEM(t, "other-ca.pem", material.OtherCACertPEM)
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err == nil {
@@ -257,10 +257,10 @@ func TestConsulClientMTLS(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, true)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSCAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
-	config.Config.ConsulTLSCertFile = writeTempPEM(t, "client.pem", material.ClientCertPEM)
-	config.Config.ConsulTLSPrivateKeyFile = writeTempPEM(t, "client.key", material.ClientKeyPEM)
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.CAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
+	config.Config.Consul.TLS.CertFile = writeTempPEM(t, "client.pem", material.ClientCertPEM)
+	config.Config.Consul.TLS.PrivateKeyFile = writeTempPEM(t, "client.key", material.ClientKeyPEM)
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err != nil {
@@ -272,8 +272,8 @@ func TestConsulClientMTLSMissingClientCert(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, true)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSCAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.CAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err == nil {
@@ -307,7 +307,7 @@ func TestConsulClientSkipVerifyExplicit(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, false)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSSkipVerify = true
+	config.Config.Consul.TLS.SkipVerify = true
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err != nil {
@@ -320,14 +320,14 @@ func TestConsulEnvSSLVerifyCannotDisableVerification(t *testing.T) {
 	material := newTLSMaterial(t, "consul.test")
 	server := startConsulTLSServer(t, kvPutOKHandler(t), material, false)
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulTLSServerName = "consul.test"
+	config.Config.Consul.TLS.ServerName = "consul.test"
 
 	client := mustConsulClient(t)
 	if err := putProbe(t, client); err == nil {
 		t.Fatal("CONSUL_HTTP_SSL_VERIFY=false must not override the JSON secure default")
 	}
 
-	config.Config.ConsulTLSCAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
+	config.Config.Consul.TLS.CAFile = writeTempPEM(t, "ca.pem", material.CACertPEM)
 	secureClient := mustConsulClient(t)
 	if err := putProbe(t, secureClient); err != nil {
 		t.Fatalf("private CA should still work while env skip-verify is set: %v", err)

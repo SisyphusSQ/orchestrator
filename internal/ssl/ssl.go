@@ -70,7 +70,7 @@ func ReadCAFile(caFile string) (*x509.CertPool, error) {
 // Verify that the OU of the presented client certificate matches the list
 // of Valid OUs
 func Verify(r *nethttp.Request, validOUs []string) error {
-	if strings.Contains(r.URL.String(), config.Config.StatusEndpoint) && !config.Config.StatusOUVerify {
+	if strings.Contains(r.URL.String(), config.Config.Server.Status.Endpoint) && !config.Config.Server.Status.VerifyOU {
 		return nil
 	}
 	if r.TLS == nil {

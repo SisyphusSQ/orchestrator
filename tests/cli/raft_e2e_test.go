@@ -57,7 +57,22 @@ func TestHTTPRaftLifecycle(t *testing.T) {
 		endpoint := fmt.Sprintf("http://127.0.0.1:%d", freePort(t))
 		address := fmt.Sprintf("127.0.0.1:%d", freePort(t))
 		dbfile := filepath.Join(home, "backend.db")
-		config := map[string]any{"BackendDB": "sqlite", "SQLite3DataFile": dbfile, "ListenAddress": strings.TrimPrefix(endpoint, "http://"), "HTTPAdvertise": endpoint, "HostnameResolveMethod": "none", "RaftNodeID": fmt.Sprintf("e2e-%d", i), "RaftBind": address, "RaftAdvertise": address, "RaftDataDir": home, "Debug": false, "EnableSyslog": false, "AuditToSyslog": false, "InstancePollSeconds": 60}
+		config := map[string]any{
+			"metadata": map[string]any{"type": "sqlite", "sqlite": map[string]any{"dataFile": dbfile}},
+			"server": map[string]any{
+				"listen":        map[string]any{"address": strings.TrimPrefix(endpoint, "http://")},
+				"httpAdvertise": endpoint,
+			},
+			"topology": map[string]any{
+				"hostname":  map[string]any{"resolveMethod": "none"},
+				"discovery": map[string]any{"pollSeconds": 60},
+			},
+			"raft": map[string]any{
+				"nodeID": fmt.Sprintf("e2e-%d", i), "bind": address, "advertise": address, "dataDir": home,
+			},
+			"logging": map[string]any{"debug": false, "syslog": map[string]any{"enabled": false}},
+			"audit":   map[string]any{"toSyslog": false},
+		}
 		raw, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal(err)

@@ -1,94 +1,159 @@
 {
-  "RaftNodeID": "node-1",
-  "RaftDataDir": "/var/lib/orchestrator/raft",
-  "RaftBind": "127.0.0.1:10008",
-  "Debug": true,
-  "EnableSyslog": false,
-  "ListenAddress": ":3000",
-  "MySQLTopologyUser": "msandbox",
-  "MySQLTopologyPassword": "msandbox",
-  "MySQLTopologyCredentialsConfigFile": "",
-  "MySQLTopologySSLPrivateKeyFile": "",
-  "MySQLTopologySSLCertFile": "",
-  "MySQLTopologySSLCAFile": "",
-  "MySQLTopologySSLSkipVerify": true,
-  "MySQLTopologyUseMutualTLS": false,
-  "MySQLOrchestratorHost": "127.0.0.1",
-  "MySQLOrchestratorPort": 3306,
-  "MySQLOrchestratorDatabase": "orchestrator",
-  "MySQLOrchestratorUser": "root",
-  "MySQLOrchestratorPassword": "root",
-  "MySQLConnectTimeoutSeconds": 1,
-  "SQLite3DataFile": "/tmp/orchestrator.sqlite3",
-  "BackendDB": "backend-db-placeholder",
-  "DefaultInstancePort": 3306,
-  "DiscoverByShowSlaveHosts": true,
-  "InstancePollSeconds": 5,
-  "DiscoveryIgnoreReplicaHostnameFilters": [
-  ],
-  "UnseenInstanceForgetHours": 240,
-  "SnapshotTopologiesIntervalHours": 0,
-  "InstanceBulkOperationsWaitTimeoutSeconds": 10,
-  "HostnameResolveMethod": "default",
-  "MySQLHostnameResolveMethod": "@@hostname",
-  "SkipBinlogServerUnresolveCheck": true,
-  "ExpiryHostnameResolvesMinutes": 60,
-  "RejectHostnameResolvePattern": "",
-  "CandidateInstanceExpireMinutes": 60,
-  "AuditLogFile": "",
-  "AuditToSyslog": false,
-  "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
-  "ReadOnly": false,
-  "AuthenticationMethod": "",
-  "HTTPAuthUser": "",
-  "HTTPAuthPassword": "",
-  "AuthUserHeader": "",
-  "PowerAuthUsers": [
-    "*"
-  ],
-  "ReplicationLagQuery": "",
-  "DetectClusterAliasQuery": "SELECT 'ci'",
-  "DetectClusterDomainQuery": "",
-  "DetectInstanceAliasQuery": "",
-  "DetectPromotionRuleQuery": "",
-  "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]mydomain[.]com",
-  "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]mydomain[.]com",
-  "DetectSemiSyncEnforcedQuery": "",
-  "ServeAgentsHttp": false,
-  "AgentsServerPort": ":3001",
-  "AgentsUseSSL": false,
-  "AgentsUseMutualTLS": false,
-  "AgentSSLSkipVerify": false,
-  "AgentSSLPrivateKeyFile": "",
-  "AgentSSLCertFile": "",
-  "AgentSSLCAFile": "",
-  "AgentSSLValidOUs": [],
-  "UseSSL": false,
-  "UseMutualTLS": false,
-  "SSLSkipVerify": false,
-  "SSLPrivateKeyFile": "",
-  "SSLCertFile": "",
-  "SSLCAFile": "",
-  "SSLValidOUs": [],
-  "URLPrefix": "",
-  "StatusEndpoint": "/api/status",
-  "StatusOUVerify": false,
-  "AgentPollMinutes": 60,
-  "UnseenAgentForgetHours": 6,
-  "StaleSeedFailMinutes": 60,
-  "PseudoGTIDPattern": "",
-  "PseudoGTIDPatternIsFixedSubstring": false,
-  "PseudoGTIDMonotonicHint": "asc:",
-  "DetectPseudoGTIDQuery": "",
-  "BinlogEventsChunkSize": 10000,
-  "SkipBinlogEventsContaining": [],
-  "ReduceReplicationAnalysisCount": true,
-  "ConsulAddress": "",
-  "ConsulScheme": "http",
-  "ConsulAclToken": "",
-  "ConsulDatacenter": "",
-  "ConsulTLSSkipVerify": false,
-  "ConsulHttpTimeoutSeconds": 60,
-  "ConsulKVStoreProvider": "consul",
-  "ConsulCrossDataCenterDistribution": false
+  "raft": {
+    "nodeID": "node-1",
+    "dataDir": "/var/lib/orchestrator/raft",
+    "bind": "127.0.0.1:10008"
+  },
+  "logging": {
+    "debug": true,
+    "syslog": {
+      "enabled": false
+    }
+  },
+  "server": {
+    "listen": {
+      "address": ":3000"
+    },
+    "web": {
+      "removeTextFromHostname": ".mydomain.com:3306"
+    },
+    "readOnly": false,
+    "tls": {
+      "enabled": false,
+      "mutualTLS": false,
+      "skipVerify": false,
+      "privateKeyFile": "",
+      "certFile": "",
+      "caFile": "",
+      "validOUs": []
+    },
+    "urlPrefix": "",
+    "status": {
+      "endpoint": "/api/status",
+      "verifyOU": false
+    }
+  },
+  "topology": {
+    "mysql": {
+      "user": "msandbox",
+      "password": "msandbox",
+      "credentialsConfigFile": "",
+      "sslPrivateKeyFile": "",
+      "sslCertFile": "",
+      "sslCAFile": "",
+      "sslSkipVerify": true,
+      "useMutualTLS": false,
+      "defaultPort": 3306
+    },
+    "discovery": {
+      "useShowReplicaHosts": true,
+      "pollSeconds": 5,
+      "ignoreReplicaHostnames": [],
+      "unseenForgetHours": 240
+    },
+    "snapshot": {
+      "intervalHours": 0
+    },
+    "operations": {
+      "bulkWaitTimeoutSeconds": 10
+    },
+    "hostname": {
+      "resolveMethod": "default",
+      "mysqlResolveMethod": "@@hostname",
+      "skipBinlogServerUnresolveCheck": true,
+      "resolveExpiryMinutes": 60,
+      "rejectResolvePattern": ""
+    },
+    "candidate": {
+      "expireMinutes": 60
+    },
+    "replication": {
+      "lagQuery": ""
+    },
+    "classification": {
+      "detectClusterAliasQuery": "SELECT 'ci'",
+      "detectClusterDomainQuery": "",
+      "detectInstanceAliasQuery": "",
+      "detectPromotionRuleQuery": "",
+      "dataCenterPattern": "[.]([^.]+)[.][^.]+[.]mydomain[.]com",
+      "physicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]mydomain[.]com",
+      "detectSemiSyncEnforcedQuery": ""
+    },
+    "analysis": {
+      "reduceCount": true
+    }
+  },
+  "metadata": {
+    "mysql": {
+      "host": "127.0.0.1",
+      "port": 3306,
+      "database": "orchestrator",
+      "user": "root",
+      "password": "root"
+    },
+    "sqlite": {
+      "dataFile": "/tmp/orchestrator.sqlite3"
+    },
+    "type": "backend-db-placeholder"
+  },
+  "mysql": {
+    "connectTimeoutSeconds": 1
+  },
+  "audit": {
+    "logFile": "",
+    "toSyslog": false
+  },
+  "authentication": {
+    "method": "",
+    "basic": {
+      "user": "",
+      "password": ""
+    },
+    "proxy": {
+      "userHeader": ""
+    },
+    "power": {
+      "users": [
+        "*"
+      ]
+    }
+  },
+  "agents": {
+    "serveHTTP": false,
+    "serverPort": ":3001",
+    "tls": {
+      "enabled": false,
+      "mutualTLS": false,
+      "skipVerify": false,
+      "privateKeyFile": "",
+      "certFile": "",
+      "caFile": "",
+      "validOUs": []
+    },
+    "pollMinutes": 60,
+    "unseenForgetHours": 6,
+    "staleSeedFailMinutes": 60
+  },
+  "pseudoGTID": {
+    "pattern": "",
+    "patternIsFixedSubstring": false,
+    "monotonicHint": "asc:",
+    "detectQuery": "",
+    "binlogEventsChunkSize": 10000,
+    "skipBinlogContaining": []
+  },
+  "consul": {
+    "address": "",
+    "scheme": "http",
+    "aclToken": "",
+    "datacenter": "",
+    "tls": {
+      "skipVerify": false
+    },
+    "httpTimeoutSeconds": 60,
+    "kv": {
+      "provider": "consul",
+      "crossDataCenterDistribution": false
+    }
+  }
 }

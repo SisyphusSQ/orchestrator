@@ -8,7 +8,7 @@
 
 本分支明确采用仅 Raft 架构：
 
-- 每个服务节点都有稳定的 `RaftNodeID`、持久化 `RaftDataDir`，以及可达的 `RaftBind`/`RaftAdvertise` 地址。
+- 每个服务节点都有稳定的 `raft.nodeID`、持久化 `raft.dataDir`，以及可达的 `raft.bind`/`raft.advertise` 地址。
 - 每个节点独占自己的 MySQL 或 SQLite 元数据库；Raft 成员之间不共享元数据库。
 - 新集群只在一个种子节点上 bootstrap，其余节点通过 Leader 加入。
 - 所有就绪节点都发现 MySQL 拓扑；只有获得多数派确认的 Leader 执行恢复和受协调的业务写入。

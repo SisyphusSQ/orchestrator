@@ -13,12 +13,12 @@ import (
 func TestRuntimeShutdownWhileServingStatusAndCommands(t *testing.T) {
 	previous := config.Config
 	cfg := *previous
-	cfg.RaftNodeID = "runtime-test"
-	cfg.RaftDataDir = t.TempDir()
-	cfg.RaftBind = localAddr(t)
-	cfg.RaftAdvertise = cfg.RaftBind
-	cfg.HTTPAdvertise = "http://127.0.0.1:3000"
-	cfg.UseSSL = false
+	cfg.Raft.NodeID = "runtime-test"
+	cfg.Raft.DataDir = t.TempDir()
+	cfg.Raft.Bind = localAddr(t)
+	cfg.Raft.Advertise = cfg.Raft.Bind
+	cfg.Server.HTTPAdvertise = "http://127.0.0.1:3000"
+	cfg.Server.TLS.Enabled = false
 	config.Config = &cfg
 	t.Cleanup(func() { _ = Shutdown(); config.Config = previous })
 	app := &memoryApp{}
@@ -98,10 +98,10 @@ func TestComputeLeaderURIHandlesIPv6(t *testing.T) {
 	config.Config = &testConfig
 	t.Cleanup(func() { config.Config = originalConfig })
 
-	config.Config.HTTPAdvertise = ""
-	config.Config.UseSSL = false
-	config.Config.RaftAdvertise = "[::1]:10008"
-	config.Config.ListenAddress = "[::]:3000"
+	config.Config.Server.HTTPAdvertise = ""
+	config.Config.Server.TLS.Enabled = false
+	config.Config.Raft.Advertise = "[::1]:10008"
+	config.Config.Server.Listen.Address = "[::]:3000"
 
 	got, err := computeLeaderURI()
 	if err != nil {
@@ -111,7 +111,7 @@ func TestComputeLeaderURIHandlesIPv6(t *testing.T) {
 		t.Fatalf("computeLeaderURI = %q, want %q", got, want)
 	}
 
-	config.Config.ListenAddress = "3000"
+	config.Config.Server.Listen.Address = "3000"
 	if _, err := computeLeaderURI(); err == nil {
 		t.Fatal("computeLeaderURI accepted a listen address without host:port syntax")
 	}

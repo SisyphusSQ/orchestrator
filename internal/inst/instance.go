@@ -480,7 +480,7 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 	}
 	if this.IsSmallerMajorVersion(other) && !this.IsBinlogServer() {
 		warningMsg = fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", this.Key, this.Version, other.Version, other.Key)
-		if !config.Config.LowerReplicaVersionAllowed {
+		if !config.Config.Topology.Compatibility.LowerReplicaVersionAllowed {
 			return false, warningMsg
 		}
 	}
@@ -513,7 +513,7 @@ const logPrefix = "Replicating from higher version source is enabled by LowerRep
 func (this *Instance) CanReplicateFromEx(other *Instance, logContext string) (bool, error) {
 	canReplicate, err := this.CanReplicateFrom(other)
 
-	if config.Config.LowerReplicaVersionAllowed && canReplicate && err != nil {
+	if config.Config.Topology.Compatibility.LowerReplicaVersionAllowed && canReplicate && err != nil {
 		log.Warningf("%v: %v Details: %v", logContext, logPrefix, err)
 		err = nil
 	}

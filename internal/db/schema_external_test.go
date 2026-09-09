@@ -52,15 +52,15 @@ func TestCanonicalMetadataSchemaExternalMySQL(t *testing.T) {
 		t.Fatalf("empty external metadata schema layout = %d; want bootstrap", layout)
 	}
 
-	previousBackend := config.Config.BackendDB
-	previousPanicIfDifferent := config.Config.PanicIfDifferentDatabaseDeploy
+	previousBackend := config.Config.Metadata.Type
+	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	config.Config.BackendDB = "mysql"
-	config.Config.PanicIfDifferentDatabaseDeploy = false
+	config.Config.Metadata.Type = "mysql"
+	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
 	config.RuntimeCLIFlags.ConfiguredVersion = "metadata-schema-compatibility-test"
 	t.Cleanup(func() {
-		config.Config.BackendDB = previousBackend
-		config.Config.PanicIfDifferentDatabaseDeploy = previousPanicIfDifferent
+		config.Config.Metadata.Type = previousBackend
+		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
 	statements := metadataschema.Statements()

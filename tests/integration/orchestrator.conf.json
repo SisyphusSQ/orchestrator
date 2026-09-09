@@ -1,90 +1,154 @@
 {
-  "Debug": true,
-  "EnableSyslog": false,
-  "ListenAddress": "127.0.0.1:3000",
-  "ListenSocket": "",
-  "AgentsServerPort": "",
-  "MySQLTopologyUser": "",
-  "MySQLTopologyPassword": "",
-  "MySQLTopologyCredentialsConfigFile": "",
-  "MySQLTopologySSLPrivateKeyFile": "",
-  "MySQLTopologySSLCertFile": "",
-  "MySQLTopologySSLCAFile": "",
-  "MySQLTopologySSLSkipVerify": true,
-  "MySQLTopologyUseMutualTLS": false,
-  "BackendDB": "backend-db-placeholder",
-  "SQLite3DataFile": "sqlite-data-file-placeholder",
-  "MySQLOrchestratorHost": "127.0.0.1",
-  "MySQLOrchestratorPort": 3306,
-  "MySQLOrchestratorDatabase": "test",
-  "MySQLOrchestratorCredentialsConfigFile": "/tmp/orchestrator-test-my.cnf",
-  "MySQLOrchestratorSSLPrivateKeyFile": "",
-  "MySQLOrchestratorSSLCertFile": "",
-  "MySQLOrchestratorSSLCAFile": "",
-  "MySQLOrchestratorSSLSkipVerify": true,
-  "MySQLOrchestratorUseMutualTLS": false,
-  "MySQLConnectTimeoutSeconds": 1,
-  "DefaultInstancePort": 3306,
-  "SkipOrchestratorDatabaseUpdate": false,
-  "ReplicationLagQuery": "",
-  "DiscoverByShowSlaveHosts": true,
-  "InstancePollSeconds": 5,
-  "UnseenInstanceForgetHours": 240,
-  "SnapshotTopologiesIntervalHours": 0,
-  "InstanceBulkOperationsWaitTimeoutSeconds": 10,
-  "HostnameResolveMethod": "default",
-  "MySQLHostnameResolveMethod": "@@hostname",
-  "SkipBinlogServerUnresolveCheck": true,
-  "ExpiryHostnameResolvesMinutes": 60,
-  "RejectHostnameResolvePattern": "",
-  "CandidateInstanceExpireMinutes": 60,
-  "AuditLogFile": "/tmp/orchestrator-audit.log",
-  "AuditToSyslog": false,
-  "AuditPurgeDays": 365,
-  "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
-  "ReadOnly": false,
-  "AuthenticationMethod": "",
-  "HTTPAuthUser": "",
-  "HTTPAuthPassword": "",
-  "AuthUserHeader": "",
-  "PowerAuthUsers": [
-    "*"
-  ],
-  "AccessTokenUseExpirySeconds": 60,
-  "ClusterNameToAlias": {
-    "127.0.0.1": "test suite"
+  "logging": {
+    "debug": true,
+    "syslog": {
+      "enabled": false
+    }
   },
-  "DetectClusterAliasQuery": "SELECT 'default'",
-  "DetectClusterDomainQuery": "SELECT 'orchestrator.org'",
-  "DataCenterPattern": "",
-  "DetectDataCenterQuery": "select 'nyc'",
-  "PhysicalEnvironmentPattern": "",
-  "ServeAgentsHttp": false,
-  "AgentsUseSSL": false,
-  "AgentsUseMutualTLS": false,
-  "AgentSSLSkipVerify": false,
-  "AgentSSLPrivateKeyFile": "",
-  "AgentSSLCertFile": "",
-  "AgentSSLCAFile": "",
-  "AgentSSLValidOUs": [],
-  "UseSSL": false,
-  "UseMutualTLS": false,
-  "SSLSkipVerify": false,
-  "SSLPrivateKeyFile": "",
-  "SSLCertFile": "",
-  "SSLCAFile": "",
-  "SSLValidOUs": [],
-  "StatusEndpoint": "/api/status",
-  "StatusOUVerify": false,
-  "AgentPollMinutes": 60,
-  "UnseenAgentForgetHours": 6,
-  "StaleSeedFailMinutes": 60,
-  "PseudoGTIDPattern": "drop view if exists `test`.`_pseudo_gtid_hint__asc:",
-  "PseudoGTIDPatternIsFixedSubstring": true,
-  "PseudoGTIDMonotonicHint": "asc:",
-  "DetectPseudoGTIDQuery": "",
-  "BinlogEventsChunkSize": 10000,
-  "SkipBinlogEventsContaining": [],
-  "ReduceReplicationAnalysisCount": true,
-  "OSCIgnoreHostnameFilters": []
+  "server": {
+    "listen": {
+      "address": "127.0.0.1:3000",
+      "socket": ""
+    },
+    "web": {
+      "removeTextFromHostname": ".mydomain.com:3306"
+    },
+    "readOnly": false,
+    "tls": {
+      "enabled": false,
+      "mutualTLS": false,
+      "skipVerify": false,
+      "privateKeyFile": "",
+      "certFile": "",
+      "caFile": "",
+      "validOUs": []
+    },
+    "status": {
+      "endpoint": "/api/status",
+      "verifyOU": false
+    }
+  },
+  "agents": {
+    "serverPort": "",
+    "serveHTTP": false,
+    "tls": {
+      "enabled": false,
+      "mutualTLS": false,
+      "skipVerify": false,
+      "privateKeyFile": "",
+      "certFile": "",
+      "caFile": "",
+      "validOUs": []
+    },
+    "pollMinutes": 60,
+    "unseenForgetHours": 6,
+    "staleSeedFailMinutes": 60
+  },
+  "topology": {
+    "mysql": {
+      "user": "",
+      "password": "",
+      "credentialsConfigFile": "",
+      "sslPrivateKeyFile": "",
+      "sslCertFile": "",
+      "sslCAFile": "",
+      "sslSkipVerify": true,
+      "useMutualTLS": false,
+      "defaultPort": 3306
+    },
+    "replication": {
+      "lagQuery": ""
+    },
+    "discovery": {
+      "useShowReplicaHosts": true,
+      "pollSeconds": 5,
+      "unseenForgetHours": 240
+    },
+    "snapshot": {
+      "intervalHours": 0
+    },
+    "operations": {
+      "bulkWaitTimeoutSeconds": 10
+    },
+    "hostname": {
+      "resolveMethod": "default",
+      "mysqlResolveMethod": "@@hostname",
+      "skipBinlogServerUnresolveCheck": true,
+      "resolveExpiryMinutes": 60,
+      "rejectResolvePattern": ""
+    },
+    "candidate": {
+      "expireMinutes": 60
+    },
+    "classification": {
+      "clusterNameToAlias": {
+        "127.0.0.1": "test suite"
+      },
+      "detectClusterAliasQuery": "SELECT 'default'",
+      "detectClusterDomainQuery": "SELECT 'orchestrator.org'",
+      "dataCenterPattern": "",
+      "detectDataCenterQuery": "select 'nyc'",
+      "physicalEnvironmentPattern": ""
+    },
+    "analysis": {
+      "reduceCount": true
+    }
+  },
+  "metadata": {
+    "type": "backend-db-placeholder",
+    "sqlite": {
+      "dataFile": "sqlite-data-file-placeholder"
+    },
+    "mysql": {
+      "host": "127.0.0.1",
+      "port": 3306,
+      "database": "test",
+      "credentialsConfigFile": "/tmp/orchestrator-test-my.cnf",
+      "sslPrivateKeyFile": "",
+      "sslCertFile": "",
+      "sslCAFile": "",
+      "sslSkipVerify": true,
+      "useMutualTLS": false
+    },
+    "schema": {
+      "skipUpdate": false
+    }
+  },
+  "mysql": {
+    "connectTimeoutSeconds": 1
+  },
+  "audit": {
+    "logFile": "/tmp/orchestrator-audit.log",
+    "toSyslog": false,
+    "purgeDays": 365
+  },
+  "authentication": {
+    "method": "",
+    "basic": {
+      "user": "",
+      "password": ""
+    },
+    "proxy": {
+      "userHeader": ""
+    },
+    "power": {
+      "users": [
+        "*"
+      ]
+    },
+    "accessToken": {
+      "useExpirySeconds": 60
+    }
+  },
+  "pseudoGTID": {
+    "pattern": "drop view if exists `test`.`_pseudo_gtid_hint__asc:",
+    "patternIsFixedSubstring": true,
+    "monotonicHint": "asc:",
+    "detectQuery": "",
+    "binlogEventsChunkSize": 10000,
+    "skipBinlogContaining": []
+  },
+  "osc": {
+    "ignoreHostnames": []
+  }
 }

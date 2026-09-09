@@ -38,7 +38,7 @@
 
 ## 身份、存储与节点替换
 
-`RaftNodeID` 与 DNS 和网络地址相互独立。Raft 目录包含 `raft.db`、`node-id` 和 `snapshots/`，其中 `node-id` 是持久状态的一部分。存在日志或快照但缺少匹配身份时，启动会失败，而不是把旧状态静默绑定到新 ID。身份、数据目录、bind 和 advertise 变化都需要重启，不能通过 reload 生效。
+`raft.nodeID` 与 DNS 和网络地址相互独立。Raft 目录包含 `raft.db`、`node-id` 和 `snapshots/`，其中 `node-id` 是持久状态的一部分。存在日志或快照但缺少匹配身份时，启动会失败，而不是把旧状态静默绑定到新 ID。身份、数据目录、bind 和 advertise 变化都需要重启，不能通过 reload 生效。
 
 每个 Raft 成员使用独立的 MySQL 或 SQLite 元数据库。元数据库副本可以用于准备替代节点，但不会自动建立 Raft 成员关系，也不能随意克隆其他成员的 Raft 目录。替换 `node-3` 时，应使用新的稳定 ID 启动干净节点，通过 Leader 加入，确认配置已提交且状态追平后，再按 ID 移除 `node-3`。
 
@@ -46,7 +46,7 @@
 
 ## 网络与部署
 
-`RaftBind` 是本地监听地址，`RaftAdvertise` 是其他成员访问该节点的地址。位于 NAT 后时显式设置 advertise，Raft 端口只对成员开放。自动推导 Leader URL 不正确时，可用 `HTTPAdvertise` 指定外部可达的 Web/API origin。
+`raft.bind` 是本地监听地址，`raft.advertise` 是其他成员访问该节点的地址。位于 NAT 后时显式设置 advertise，Raft 端口只对成员开放。自动推导 Leader URL 不正确时，可用 `server.httpAdvertise` 指定外部可达的 Web/API origin。
 
 客户端可以使用 Leader-aware 代理，也可以访问能代理业务请求的健康节点。只路由 Leader 时负载均衡使用 `/health/leader-ready`；允许 Follower 代理时使用 `/health/ready`。不能根据进程存活推断多数派或成员配置已经提交。
 

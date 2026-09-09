@@ -88,10 +88,10 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	{
 		dbBackend := ""
 		if config.Config.IsSQLite() {
-			dbBackend = config.Config.SQLite3DataFile
+			dbBackend = config.Config.Metadata.SQLite.DataFile
 		} else {
-			dbBackend = fmt.Sprintf("%s:%d", config.Config.MySQLOrchestratorHost,
-				config.Config.MySQLOrchestratorPort)
+			dbBackend = fmt.Sprintf("%s:%d", config.Config.Metadata.MySQL.Host,
+				config.Config.Metadata.MySQL.Port)
 		}
 		sqlResult, err := db.ExecOrchestrator(`
 			insert ignore into node_health
@@ -145,7 +145,7 @@ func ExpireNodesHistory() error {
 			where
 				first_seen_active < now() - interval ? hour
 			`,
-		config.Config.UnseenInstanceForgetHours,
+		config.Config.Topology.Discovery.UnseenForgetHours,
 	)
 	return log.Errore(err)
 }

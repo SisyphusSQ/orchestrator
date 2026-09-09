@@ -6,7 +6,7 @@
 
 `make binary` 先把前端构建到 `web/dist/`，同步到 `web/assets/` 下的 embed 源，再构建服务端；`make build` 还会构建 `bin/orch`。直接执行 `go build` 不会准备生产 Web 资源。Docker 使用独立 Node 阶段并把产物复制到 Go 构建阶段，最终运行镜像不包含 Node。内嵌资源缺失时返回明确 503，不会从工作目录读取旧资源。
 
-从服务端同源地址打开 `/web/clusters`。如果 `URLPrefix` 是 `/orchestrator`，则访问 `/orchestrator/web/clusters`。
+从服务端同源地址打开 `/web/clusters`。如果 `server.urlPrefix` 是 `/orchestrator`，则访问 `/orchestrator/web/clusters`。
 
 ## 运维流程
 

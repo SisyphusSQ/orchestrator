@@ -113,25 +113,25 @@ func runCommand(options *commandOptions, command string) error {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
-		config.Config.SkipOrchestratorDatabaseUpdate = false
+		config.Config.Metadata.Schema.SkipUpdate = false
 	}
-	if config.Config.Debug {
+	if config.Config.Logging.Debug {
 		log.SetLevel(log.DEBUG)
 	}
 	if options.quiet {
 		// Override!!
 		log.SetLevel(log.ERROR)
 	}
-	if err := configureSyslog(config.Config.EnableSyslog, log.EnableSyslogWriter); err != nil {
+	if err := configureSyslog(config.Config.Logging.Syslog.Enabled, log.EnableSyslogWriter); err != nil {
 		return err
 	}
-	if config.Config.AuditToSyslog {
+	if config.Config.Audit.ToSyslog {
 		if err := inst.EnableAuditSyslog(); err != nil {
 			return fmt.Errorf("initialize audit syslog: %w", err)
 		}
 	}
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
-	telemetry, err := observability.New(context.Background(), config.Config.OTelTraceEndpoint, config.Config.OTelTraceSampleRatio, AppVersion)
+	telemetry, err := observability.New(context.Background(), config.Config.Observability.Tracing.Endpoint, config.Config.Observability.Tracing.SampleRatio, AppVersion)
 	if err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}

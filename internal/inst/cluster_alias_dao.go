@@ -260,7 +260,7 @@ func ForgetLongUnseenClusterAliases() error {
 				from cluster_alias
 			where
 			last_registered < NOW() - interval ? hour`,
-		config.Config.UnseenInstanceForgetHours,
+		config.Config.Topology.Discovery.UnseenForgetHours,
 	)
 	if err != nil {
 		return log.Errore(err)

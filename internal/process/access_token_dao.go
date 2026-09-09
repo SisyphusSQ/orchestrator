@@ -65,7 +65,7 @@ func AcquireAccessToken(publicToken string) (secretToken string, err error) {
 						or is_reentrant=1
 					)
 			`,
-		publicToken, config.Config.AccessTokenUseExpirySeconds,
+		publicToken, config.Config.Authentication.AccessToken.UseExpirySeconds,
 	)
 	if err != nil {
 		return secretToken, log.Errore(err)
@@ -109,7 +109,7 @@ func TokenIsValid(publicToken string, secretToken string) (result bool, err erro
 	type validTokenRow struct {
 		Count int `gorm:"column:valid_token"`
 	}
-	rows, err := db.QueryOrchestratorRows[validTokenRow](context.Background(), query, publicToken, secretToken, config.Config.AccessTokenExpiryMinutes)
+	rows, err := db.QueryOrchestratorRows[validTokenRow](context.Background(), query, publicToken, secretToken, config.Config.Authentication.AccessToken.ExpiryMinutes)
 	if err == nil && len(rows) > 0 {
 		result = rows[0].Count > 0
 	}
@@ -125,7 +125,7 @@ func ExpireAccessTokens() error {
 				generated_at < now() - interval ? minute
 				and is_reentrant = 0
 			`,
-		config.Config.AccessTokenExpiryMinutes,
+		config.Config.Authentication.AccessToken.ExpiryMinutes,
 	)
 	return log.Errore(err)
 }

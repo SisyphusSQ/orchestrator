@@ -69,7 +69,7 @@ func Http(continuousDiscovery bool) (resultErr error) {
 	go reportRuntimeError(runtimeErrors, "standard HTTP server", func() error {
 		return standardHttp(ctx, continuousDiscovery, runtimeErrors)
 	})
-	if config.Config.ServeAgentsHttp {
+	if config.Config.Agents.ServeHTTP {
 		go reportRuntimeError(runtimeErrors, "agent HTTP server", agentsHttp)
 	}
 	return <-runtimeErrors
@@ -86,14 +86,14 @@ func reportRuntimeError(runtimeErrors chan<- error, component string, run func()
 // Iterate over the private keys and get passwords for them
 // Don't prompt for a password a second time if the files are the same
 func promptForSSLPasswords() {
-	if ssl.IsEncryptedPEM(config.Config.SSLPrivateKeyFile) {
-		sslPEMPassword = ssl.GetPEMPassword(config.Config.SSLPrivateKeyFile)
+	if ssl.IsEncryptedPEM(config.Config.Server.TLS.PrivateKeyFile) {
+		sslPEMPassword = ssl.GetPEMPassword(config.Config.Server.TLS.PrivateKeyFile)
 	}
-	if ssl.IsEncryptedPEM(config.Config.AgentSSLPrivateKeyFile) {
-		if config.Config.AgentSSLPrivateKeyFile == config.Config.SSLPrivateKeyFile {
+	if ssl.IsEncryptedPEM(config.Config.Agents.TLS.PrivateKeyFile) {
+		if config.Config.Agents.TLS.PrivateKeyFile == config.Config.Server.TLS.PrivateKeyFile {
 			agentSSLPEMPassword = sslPEMPassword
 		} else {
-			agentSSLPEMPassword = ssl.GetPEMPassword(config.Config.AgentSSLPrivateKeyFile)
+			agentSSLPEMPassword = ssl.GetPEMPassword(config.Config.Agents.TLS.PrivateKeyFile)
 		}
 	}
 }
@@ -116,33 +116,33 @@ func standardHttp(ctx context.Context, continuousDiscovery bool, runtimeErrors c
 	log.Info("Registering endpoints")
 
 	// Serve
-	if config.Config.ListenSocket != "" {
-		log.Infof("Starting HTTP listener on unix socket %v", config.Config.ListenSocket)
-		unixListener, err := net.Listen("unix", config.Config.ListenSocket)
+	if config.Config.Server.Listen.Socket != "" {
+		log.Infof("Starting HTTP listener on unix socket %v", config.Config.Server.Listen.Socket)
+		unixListener, err := net.Listen("unix", config.Config.Server.Listen.Socket)
 		if err != nil {
-			return fmt.Errorf("listen on unix socket %s: %w", config.Config.ListenSocket, err)
+			return fmt.Errorf("listen on unix socket %s: %w", config.Config.Server.Listen.Socket, err)
 		}
 		defer unixListener.Close()
 		if err := nethttp.Serve(unixListener, m); err != nil {
-			return fmt.Errorf("serve HTTP on unix socket %s: %w", config.Config.ListenSocket, err)
+			return fmt.Errorf("serve HTTP on unix socket %s: %w", config.Config.Server.Listen.Socket, err)
 		}
-	} else if config.Config.UseSSL {
+	} else if config.Config.Server.TLS.Enabled {
 		log.Info("Starting HTTPS listener")
-		tlsConfig, err := ssl.NewTLSConfig(config.Config.SSLCAFile, config.Config.UseMutualTLS)
+		tlsConfig, err := ssl.NewTLSConfig(config.Config.Server.TLS.CAFile, config.Config.Server.TLS.MutualTLS)
 		if err != nil {
 			return fmt.Errorf("create HTTP TLS configuration: %w", err)
 		}
-		tlsConfig.InsecureSkipVerify = config.Config.SSLSkipVerify
-		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.SSLCertFile, config.Config.SSLPrivateKeyFile, sslPEMPassword); err != nil {
+		tlsConfig.InsecureSkipVerify = config.Config.Server.TLS.SkipVerify
+		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.Server.TLS.CertFile, config.Config.Server.TLS.PrivateKeyFile, sslPEMPassword); err != nil {
 			return fmt.Errorf("load HTTP TLS key pair: %w", err)
 		}
-		if err = ssl.ListenAndServeTLS(config.Config.ListenAddress, m, tlsConfig); err != nil {
-			return fmt.Errorf("serve HTTPS on %s: %w", config.Config.ListenAddress, err)
+		if err = ssl.ListenAndServeTLS(config.Config.Server.Listen.Address, m, tlsConfig); err != nil {
+			return fmt.Errorf("serve HTTPS on %s: %w", config.Config.Server.Listen.Address, err)
 		}
 	} else {
-		log.Infof("Starting HTTP listener on %+v", config.Config.ListenAddress)
-		if err := nethttp.ListenAndServe(config.Config.ListenAddress, m); err != nil {
-			return fmt.Errorf("serve HTTP on %s: %w", config.Config.ListenAddress, err)
+		log.Infof("Starting HTTP listener on %+v", config.Config.Server.Listen.Address)
+		if err := nethttp.ListenAndServe(config.Config.Server.Listen.Address, m); err != nil {
+			return fmt.Errorf("serve HTTP on %s: %w", config.Config.Server.Listen.Address, err)
 		}
 	}
 	log.Info("Web server started")
@@ -162,23 +162,23 @@ func agentsHttp() error {
 	go logic.ContinuousAgentsPoll()
 
 	// Serve
-	if config.Config.AgentsUseSSL {
+	if config.Config.Agents.TLS.Enabled {
 		log.Info("Starting agent HTTPS listener")
-		tlsConfig, err := ssl.NewTLSConfig(config.Config.AgentSSLCAFile, config.Config.AgentsUseMutualTLS)
+		tlsConfig, err := ssl.NewTLSConfig(config.Config.Agents.TLS.CAFile, config.Config.Agents.TLS.MutualTLS)
 		if err != nil {
 			return fmt.Errorf("create agent HTTP TLS configuration: %w", err)
 		}
-		tlsConfig.InsecureSkipVerify = config.Config.AgentSSLSkipVerify
-		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.AgentSSLCertFile, config.Config.AgentSSLPrivateKeyFile, agentSSLPEMPassword); err != nil {
+		tlsConfig.InsecureSkipVerify = config.Config.Agents.TLS.SkipVerify
+		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.Agents.TLS.CertFile, config.Config.Agents.TLS.PrivateKeyFile, agentSSLPEMPassword); err != nil {
 			return fmt.Errorf("load agent HTTP TLS key pair: %w", err)
 		}
-		if err = ssl.ListenAndServeTLS(config.Config.AgentsServerPort, m, tlsConfig); err != nil {
-			return fmt.Errorf("serve agent HTTPS on %s: %w", config.Config.AgentsServerPort, err)
+		if err = ssl.ListenAndServeTLS(config.Config.Agents.ServerPort, m, tlsConfig); err != nil {
+			return fmt.Errorf("serve agent HTTPS on %s: %w", config.Config.Agents.ServerPort, err)
 		}
 	} else {
 		log.Info("Starting agent HTTP listener")
-		if err := nethttp.ListenAndServe(config.Config.AgentsServerPort, m); err != nil {
-			return fmt.Errorf("serve agent HTTP on %s: %w", config.Config.AgentsServerPort, err)
+		if err := nethttp.ListenAndServe(config.Config.Agents.ServerPort, m); err != nil {
+			return fmt.Errorf("serve agent HTTP on %s: %w", config.Config.Agents.ServerPort, err)
 		}
 	}
 	log.Info("Agent server started")
@@ -186,21 +186,21 @@ func agentsHttp() error {
 }
 
 func newStandardHTTPRouter() (*http.Router, error) {
-	if strings.EqualFold(config.Config.AuthenticationMethod, "basic") && config.Config.HTTPAuthUser == "" {
+	if strings.EqualFold(config.Config.Authentication.Method, "basic") && config.Config.Authentication.Basic.User == "" {
 		// Still allowed; may be disallowed in future versions.
-		log.Warning("AuthenticationMethod is configured as 'basic' but HTTPAuthUser undefined. Running without authentication.")
+		log.Warning("authentication.method is configured as 'basic' but authentication.basic.user is undefined. Running without authentication.")
 	}
 
 	options := http.RouterOptions{
 		Authentication: http.AuthenticationOptions{
-			Method:   config.Config.AuthenticationMethod,
-			Username: config.Config.HTTPAuthUser,
-			Password: config.Config.HTTPAuthPassword,
+			Method:   config.Config.Authentication.Method,
+			Username: config.Config.Authentication.Basic.User,
+			Password: config.Config.Authentication.Basic.Password,
 		},
 		EnableGzip: true,
 	}
-	if config.Config.UseMutualTLS {
-		options.VerifyRequest = ssl.VerifyOUs(config.Config.SSLValidOUs)
+	if config.Config.Server.TLS.MutualTLS {
+		options.VerifyRequest = ssl.VerifyOUs(config.Config.Server.TLS.ValidOUs)
 	}
 
 	router, err := http.NewRouter(options)
@@ -211,11 +211,11 @@ func newStandardHTTPRouter() (*http.Router, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open embedded web assets: %w", err)
 	}
-	router.StaticFS(config.Config.URLPrefix+"/web/assets", nethttp.FS(assets))
+	router.StaticFS(config.Config.Server.URLPrefix+"/web/assets", nethttp.FS(assets))
 
-	http.API.URLPrefix = config.Config.URLPrefix
-	http.Web.URLPrefix = config.Config.URLPrefix
-	http.RegisterObservability(router, config.Config.URLPrefix)
+	http.API.URLPrefix = config.Config.Server.URLPrefix
+	http.Web.URLPrefix = config.Config.Server.URLPrefix
+	http.RegisterObservability(router, config.Config.Server.URLPrefix)
 	http.API.RegisterRequests(router)
 	http.Web.RegisterRequests(router)
 	return router, nil
@@ -223,14 +223,14 @@ func newStandardHTTPRouter() (*http.Router, error) {
 
 func newAgentsHTTPRouter() (*http.Router, error) {
 	options := http.RouterOptions{EnableGzip: true}
-	if config.Config.AgentsUseMutualTLS {
-		options.VerifyRequest = ssl.VerifyOUs(config.Config.AgentSSLValidOUs)
+	if config.Config.Agents.TLS.MutualTLS {
+		options.VerifyRequest = ssl.VerifyOUs(config.Config.Agents.TLS.ValidOUs)
 	}
 	router, err := http.NewRouter(options)
 	if err != nil {
 		return nil, err
 	}
-	http.AgentsAPI.URLPrefix = config.Config.URLPrefix
+	http.AgentsAPI.URLPrefix = config.Config.Server.URLPrefix
 	http.AgentsAPI.RegisterRequests(router)
 	return router, nil
 }
