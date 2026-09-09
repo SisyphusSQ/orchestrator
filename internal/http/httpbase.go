@@ -109,6 +109,24 @@ func isAuthorizedForAction(req *http.Request, user Principal) bool {
 	return true
 }
 
+// isAuthorizedForConfiguration is intentionally narrower than topology write
+// access because hook commands execute with the orchestrator process identity.
+func isAuthorizedForConfiguration(req *http.Request, user Principal) bool {
+	if !isAuthorizedForAction(req, user) {
+		return false
+	}
+	if strings.TrimSpace(config.Config.AuthenticationMethod) == "" {
+		return true
+	}
+	userID := getUserId(req, user)
+	for _, allowed := range config.Config.ConfigurationAdminUsers {
+		if allowed == "*" || allowed == userID {
+			return true
+		}
+	}
+	return userID != "" && len(config.Config.ConfigurationAdminGroups) > 0 && os.UserInGroups(userID, config.Config.ConfigurationAdminGroups)
+}
+
 func authenticateToken(publicToken string, resp http.ResponseWriter) error {
 	secretToken, err := process.AcquireAccessToken(publicToken)
 	if err != nil {

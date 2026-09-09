@@ -4,6 +4,7 @@ export const ConfigContext = createContext<WebConfig>({
   urlPrefix: "",
   userId: "",
   authorizedForAction: false,
+  authorizedForConfiguration: false,
   agentsEnabled: false,
   pseudoGTIDEnabled: false,
   removeTextFromHostnameDisplay: "",

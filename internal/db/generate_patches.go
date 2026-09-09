@@ -620,4 +620,52 @@ var generateSQLPatches = []string{
 		INSERT IGNORE INTO orchestrator_schema_migrations (migration_id, applied_at)
 		VALUES ('legacy-v1', CURRENT_TIMESTAMP)
 	`,
+	`
+		CREATE TABLE IF NOT EXISTS recovery_policy (
+			scope_type varchar(16) NOT NULL,
+			scope_key varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			policy_json text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			revision bigint NOT NULL DEFAULT 1,
+			updated_by varchar(128) NOT NULL,
+			change_reason varchar(512) NOT NULL,
+			updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (scope_type, scope_key)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+	`,
+	`
+		CREATE TABLE IF NOT EXISTS recovery_hook_profile (
+			profile_id varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			profile_name varchar(128) NOT NULL,
+			commands_json text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			timeout_seconds int unsigned NOT NULL DEFAULT 30,
+			failure_policy varchar(16) NOT NULL DEFAULT 'abort',
+			output_limit_bytes int unsigned NOT NULL DEFAULT 65536,
+			enabled tinyint unsigned NOT NULL DEFAULT 1,
+			revision bigint NOT NULL DEFAULT 1,
+			updated_by varchar(128) NOT NULL,
+			change_reason varchar(512) NOT NULL,
+			updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (profile_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+	`,
+	`
+		CREATE TABLE IF NOT EXISTS recovery_hook_assignment (
+			scope_type varchar(16) NOT NULL,
+			scope_key varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			phase varchar(64) NOT NULL,
+			mode varchar(16) NOT NULL DEFAULT 'inherit',
+			profile_ids_json text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+			revision bigint NOT NULL DEFAULT 1,
+			updated_by varchar(128) NOT NULL,
+			change_reason varchar(512) NOT NULL,
+			updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (scope_type, scope_key, phase)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+	`,
+	`
+		ALTER TABLE topology_recovery ADD COLUMN policy_revision bigint NOT NULL DEFAULT 0
+	`,
+	`
+		ALTER TABLE topology_recovery ADD COLUMN hook_assignment_revision bigint NOT NULL DEFAULT 0
+	`,
 }

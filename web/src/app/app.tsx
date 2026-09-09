@@ -49,6 +49,7 @@ import { AuditPage } from "../pages/audit";
 import { SearchPage, DiscoverPage, PoolsPage } from "../pages/instances";
 import { AgentPage, AgentsPage, SeedsPage } from "../pages/agents";
 import { HelpPage, StatusPage } from "../pages/status";
+import { RecoverySettingsPage } from "../pages/recovery-settings";
 import { QueryError } from "../components/common";
 
 const ClusterPage = lazy(() =>
@@ -160,6 +161,7 @@ export function Application() {
         ]
       : []),
     { type: "divider" as const },
+    { key: "recovery-settings", label: "恢复配置", icon: <SafetyOutlined /> },
     { key: "status", label: "系统状态", icon: <SettingOutlined /> },
     { key: "about", label: "使用帮助", icon: <QuestionCircleOutlined /> },
   ];
@@ -352,6 +354,10 @@ export function Application() {
                     }
                   />
                   <Route path="/status" element={<StatusPage />} />
+                  <Route
+                    path="/recovery-settings"
+                    element={<RecoverySettingsPage />}
+                  />
                   {["about", "home", "faq", "keep-calm"].map((path) => (
                     <Route
                       key={path}

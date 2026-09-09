@@ -17,11 +17,12 @@
 package os
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 
 	"github.com/openark/orchestrator/internal/config"
@@ -35,35 +36,74 @@ var EmptyEnv = []string{}
 // command to a temporary file and then ask the shell to execute
 // it, after which the temporary file is removed.
 func CommandRun(commandText string, env []string, arguments ...string) error {
-	// show the actual command we have been asked to run
 	log.Infof("CommandRun(%v,%+v)", commandText, arguments)
-
-	cmd, shellScript, err := generateShellScript(commandText, env, arguments...)
-	defer os.Remove(shellScript)
+	output, err := commandRunContext(context.Background(), commandText, env, 0, arguments...)
+	log.Infof("CommandRun: %s\n", output)
 	if err != nil {
-		return log.Errore(err)
+		return log.Errore(fmt.Errorf("(%s) %s", err.Error(), output))
+	}
+	return nil
+}
+
+type limitedBuffer struct {
+	buffer bytes.Buffer
+	limit  int
+}
+
+func (buffer *limitedBuffer) Write(data []byte) (int, error) {
+	original := len(data)
+	if buffer.limit <= 0 {
+		_, _ = buffer.buffer.Write(data)
+		return original, nil
+	}
+	remaining := buffer.limit - buffer.buffer.Len()
+	if remaining > 0 {
+		if len(data) > remaining {
+			data = data[:remaining]
+		}
+		_, _ = buffer.buffer.Write(data)
+	}
+	return original, nil
+}
+
+func (buffer *limitedBuffer) String() string {
+	return buffer.buffer.String()
+}
+
+// CommandRunContext runs a shell hook with cancellation and bounded captured
+// output. The returned output is suitable for recovery audit records.
+func CommandRunContext(ctx context.Context, commandText string, env []string, outputLimit int, arguments ...string) (string, error) {
+	return commandRunContext(ctx, commandText, env, outputLimit, arguments...)
+}
+
+func commandRunContext(ctx context.Context, commandText string, env []string, outputLimit int, arguments ...string) (string, error) {
+	cmd, shellScript, err := generateShellScriptContext(ctx, commandText, env, arguments...)
+	if shellScript != "" {
+		defer os.Remove(shellScript)
+	}
+	if err != nil {
+		return "", log.Errore(err)
 	}
 
 	var waitStatus syscall.WaitStatus
 
-	log.Infof("CommandRun/running: %s", strings.Join(cmd.Args, " "))
-	cmdOutput, err := cmd.CombinedOutput()
-	log.Infof("CommandRun: %s\n", string(cmdOutput))
+	output := &limitedBuffer{limit: outputLimit}
+	cmd.Stdout, cmd.Stderr = output, output
+	err = cmd.Run()
+	cmdOutput := output.String()
 	if err != nil {
 		// Did the command fail because of an unsuccessful exit code
 		if exitError, ok := err.(*exec.ExitError); ok {
 			waitStatus = exitError.Sys().(syscall.WaitStatus)
-			log.Errorf("CommandRun: failed. exit status %d", waitStatus.ExitStatus())
+			log.Errorf("hook command failed with exit status %d", waitStatus.ExitStatus())
 		}
 
-		return log.Errore(fmt.Errorf("(%s) %s", err.Error(), cmdOutput))
+		return cmdOutput, fmt.Errorf("%s", err.Error())
 	}
 
 	// Command was successful
 	waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
-	log.Infof("CommandRun successful. exit status %d", waitStatus.ExitStatus())
-
-	return nil
+	return cmdOutput, nil
 }
 
 // generateShellScript generates a temporary shell script based on
@@ -71,6 +111,10 @@ func CommandRun(commandText string, env []string, arguments ...string) error {
 // file and returns the exec.Command which can be executed together
 // with the script name that was created.
 func generateShellScript(commandText string, env []string, arguments ...string) (*exec.Cmd, string, error) {
+	return generateShellScriptContext(context.Background(), commandText, env, arguments...)
+}
+
+func generateShellScriptContext(ctx context.Context, commandText string, env []string, arguments ...string) (*exec.Cmd, string, error) {
 	shell := config.Config.ProcessesShellCommand
 
 	commandBytes := []byte(commandText)
@@ -83,7 +127,14 @@ func generateShellScript(commandText string, env []string, arguments ...string) 
 	shellArguments := append([]string{}, tmpFile.Name())
 	shellArguments = append(shellArguments, arguments...)
 
-	cmd := exec.Command(shell, shellArguments...)
+	cmd := exec.CommandContext(ctx, shell, shellArguments...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return os.ErrProcessDone
+		}
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 	cmd.Env = env
 
 	return cmd, tmpFile.Name(), nil

@@ -17,6 +17,8 @@ EN-HTTP-API.md
 ZH-HTTP-API.md
 EN-Failure-Recovery.md
 ZH-Failure-Recovery.md
+EN-Recovery-Configuration.md
+ZH-Recovery-Configuration.md
 EN-Observability.md
 ZH-Observability.md
 EN-Security.md

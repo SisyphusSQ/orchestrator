@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"context"
 	"fmt"
 	goos "os"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	"github.com/openark/orchestrator/internal/golib/math"
 	"github.com/openark/orchestrator/internal/golib/util"
 	"github.com/openark/orchestrator/internal/os"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 )
 
 type StopReplicationMethod string
@@ -179,8 +181,8 @@ func shouldPostponeRelocatingReplica(replica *Instance, postponedFunctionsContai
 	if postponedFunctionsContainer == nil {
 		return false
 	}
-	if config.Config.PostponeReplicaRecoveryOnLagMinutes > 0 &&
-		replica.SQLDelay > config.Config.PostponeReplicaRecoveryOnLagMinutes*60 {
+	postponeMinutes := recoverypolicy.Current(replica.ClusterName).PostponeReplicaRecoveryOnLagMinutes
+	if postponeMinutes > 0 && replica.SQLDelay > uint(postponeMinutes*60) {
 		// This replica is lagging very much, AND
 		// we're configured to postpone operation on this replica so as not to delay everyone else.
 		return true
@@ -1745,17 +1747,22 @@ func TakeMasterHook(successor *Instance, demoted *Instance) {
 	successorStr := fmt.Sprintf("%s", successorKey)
 	demotedStr := fmt.Sprintf("%s", demotedKey)
 
-	processCount := len(config.Config.PostTakeMasterProcesses)
-	for i, command := range config.Config.PostTakeMasterProcesses {
-		fullDescription := fmt.Sprintf("PostTakeMasterProcesses hook %d of %d", i+1, processCount)
-		log.Debugf("Take-Master: PostTakeMasterProcesses: Calling %+s", fullDescription)
-		start := time.Now()
-		if err := os.CommandRun(command, env, successorStr, demotedStr); err == nil {
-			info := fmt.Sprintf("Completed %s in %v", fullDescription, time.Since(start))
-			log.Infof("Take-Master: %s", info)
-		} else {
-			info := fmt.Sprintf("Execution of PostTakeMasterProcesses failed in %v with error: %v", time.Since(start), err)
-			log.Errorf("Take-Master: %s", info)
+	hooks, _, err := recoverypolicy.EffectiveHooks(context.Background(), successor.ClusterName)
+	if err != nil {
+		log.Errorf("Take-Master: resolve post_take_master hooks: %v", err)
+		return
+	}
+	for _, profile := range hooks["post_take_master"] {
+		for i, command := range profile.Commands {
+			fullDescription := fmt.Sprintf("PostTakeMasterProcesses profile=%s revision=%d command=%d/%d", profile.ID, profile.Revision, i+1, len(profile.Commands))
+			commandCtx, cancel := context.WithTimeout(context.Background(), time.Duration(profile.TimeoutSeconds)*time.Second)
+			output, commandErr := os.CommandRunContext(commandCtx, command, env, profile.OutputLimitBytes, successorStr, demotedStr)
+			output = recoverypolicy.RedactOutput(output)
+			cancel()
+			AuditOperation("post-take-master-hook", &successor.Key, fmt.Sprintf("%s output=%q error=%v", fullDescription, output, commandErr))
+			if commandErr != nil && profile.FailurePolicy == "abort" {
+				return
+			}
 		}
 	}
 
@@ -1831,13 +1838,9 @@ Cleanup:
 	}
 	AuditOperation("take-master", instanceKey, fmt.Sprintf("took master: %+v", masterInstance.Key))
 
-	// Created this to enable a custom hook to be called after a TakeMaster success.
-	// This only runs if there is a hook configured in the orchestrator configuration file
 	demoted := masterInstance
 	successor := instance
-	if config.Config.PostTakeMasterProcesses != nil {
-		TakeMasterHook(successor, demoted)
-	}
+	TakeMasterHook(successor, demoted)
 
 	return instance, err
 }
@@ -2154,11 +2157,15 @@ func isValidAsCandidateMasterInBinlogServerTopology(replica *Instance) bool {
 }
 
 func IsBannedFromBeingCandidateReplica(replica *Instance) bool {
+	return isBannedFromBeingCandidateReplica(replica, recoverypolicy.Current(replica.ClusterName).PromotionIgnoreHostnameFilters)
+}
+
+func isBannedFromBeingCandidateReplica(replica *Instance, promotionIgnoreHostnameFilters []string) bool {
 	if replica.PromotionRule == MustNotPromoteRule {
 		log.Debugf("instance %+v is banned because of promotion rule", replica.Key)
 		return true
 	}
-	if FiltersMatchInstanceKey(&replica.Key, config.Config.PromotionIgnoreHostnameFilters) {
+	if FiltersMatchInstanceKey(&replica.Key, promotionIgnoreHostnameFilters) {
 		return true
 	}
 	return false

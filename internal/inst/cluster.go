@@ -23,6 +23,7 @@ import (
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/kv"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 )
 
 func GetClusterMasterKVKey(clusterAlias string) string {
@@ -90,8 +91,9 @@ type ClusterInfo struct {
 
 // ReadRecoveryInfo
 func (this *ClusterInfo) ReadRecoveryInfo() {
-	this.HasAutomatedMasterRecovery = this.filtersMatchCluster(config.Config.RecoverMasterClusterFilters)
-	this.HasAutomatedIntermediateMasterRecovery = this.filtersMatchCluster(config.Config.RecoverIntermediateMasterClusterFilters)
+	policy := recoverypolicy.Current(this.ClusterName)
+	this.HasAutomatedMasterRecovery = policy.AutoMasterRecovery
+	this.HasAutomatedIntermediateMasterRecovery = policy.AutoIntermediateMasterRecovery
 }
 
 // filtersMatchCluster will see whether the given filters match the given cluster details

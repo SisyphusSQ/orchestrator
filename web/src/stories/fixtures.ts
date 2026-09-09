@@ -5,6 +5,7 @@ export const webConfig: WebConfig = {
   urlPrefix: "",
   userId: "storybook",
   authorizedForAction: true,
+  authorizedForConfiguration: true,
   agentsEnabled: false,
   pseudoGTIDEnabled: true,
   removeTextFromHostnameDisplay: ".example.test",

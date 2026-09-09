@@ -25,10 +25,25 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/mattn/go-sqlite3"
 	metadataschema "github.com/openark/orchestrator/docs/schema"
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 )
+
+// IsDuplicateKeyError identifies backend uniqueness violations without relying
+// on error text so optimistic-create callers can report a stable conflict.
+func IsDuplicateKeyError(err error) bool {
+	var mysqlError *mysql.MySQLError
+	if errors.As(err, &mysqlError) {
+		return mysqlError.Number == 1062
+	}
+	var sqliteError sqlite3.Error
+	if errors.As(err, &sqliteError) {
+		return sqliteError.ExtendedCode == sqlite3.ErrConstraintPrimaryKey || sqliteError.ExtendedCode == sqlite3.ErrConstraintUnique
+	}
+	return false
+}
 
 // OpenDiscovery returns a DB instance to access a topology instance.
 // It has lower read timeout than OpenTopology and is intended to

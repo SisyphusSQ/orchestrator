@@ -2,6 +2,7 @@
 
 echo "# Reloading configuration"
 orch api "reload-configuration" | jq -r '.Code'
+"$(dirname "$0")/apply-recovery-policy"
 orch ack-all-recoveries --reason "system-tests"
 orch all-instances | while read i ; do
   orch end-downtime -i $i

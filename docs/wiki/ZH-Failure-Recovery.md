@@ -6,7 +6,7 @@
 
 ## 启用自动恢复前先定义策略
 
-- 用 `RecoverMasterClusterFilters` 与 `RecoverIntermediateMasterClusterFilters` 明确允许恢复的集群。
+- 在 Web 控制台“恢复配置”中按全局或显式集群别名开启自动恢复；配置优先级与 Hook 覆盖规则见 [页面化恢复配置](ZH-Recovery-Configuration.md)。
 - 用 `RecoveryIgnoreHostnameFilters` 排除不应参与恢复的主机。
 - 配置提升规则、机房/区域限制、复制延迟阈值和 GTID/Pseudo-GTID 策略。
 - 把故障前后 hooks 当作生产代码：限制执行时间、显式暴露失败，并避免隐藏的非幂等重试。

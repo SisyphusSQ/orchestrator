@@ -254,6 +254,8 @@ CREATE TABLE IF NOT EXISTS `topology_recovery` (
   `end_recovery` TIMESTAMP NULL DEFAULT NULL COMMENT '恢复执行结束时间',
   `processing_node_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '执行恢复的节点主机名',
   `processcing_node_token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '执行恢复的节点令牌，保留历史拼写',
+  `policy_revision` BIGINT NOT NULL DEFAULT 0 COMMENT '本次恢复冻结的策略版本',
+  `hook_assignment_revision` BIGINT NOT NULL DEFAULT 0 COMMENT '本次恢复冻结的 Hook 分配版本',
   `is_successful` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '恢复是否成功',
   `successor_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '恢复后继实例主机名',
   `successor_port` SMALLINT UNSIGNED DEFAULT NULL COMMENT '恢复后继实例端口',
@@ -649,6 +651,45 @@ CREATE TABLE IF NOT EXISTS `database_instance_stale_binlog_coordinates` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例停滞 binlog 位点';
 
 CREATE INDEX `idx_stale_binlog_coordinates_first_seen` ON `database_instance_stale_binlog_coordinates` (`first_seen`);
+
+CREATE TABLE IF NOT EXISTS `recovery_policy` (
+  `scope_type` VARCHAR(16) NOT NULL COMMENT '作用域类型：global 或 cluster',
+  `scope_key` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '全局为 *，集群为显式别名',
+  `policy_json` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '仅保存用户覆盖的稀疏策略 JSON',
+  `revision` BIGINT NOT NULL DEFAULT 1 COMMENT '乐观锁版本',
+  `updated_by` VARCHAR(128) NOT NULL COMMENT '最近修改人',
+  `change_reason` VARCHAR(512) NOT NULL COMMENT '最近修改原因',
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近修改时间',
+  PRIMARY KEY (`scope_type`, `scope_key`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '页面化恢复策略覆盖';
+
+CREATE TABLE IF NOT EXISTS `recovery_hook_profile` (
+  `profile_id` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Hook 配置稳定标识',
+  `profile_name` VARCHAR(128) NOT NULL COMMENT 'Hook 配置名称',
+  `commands_json` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '顺序执行的命令 JSON 数组',
+  `timeout_seconds` INT UNSIGNED NOT NULL DEFAULT 30 COMMENT '单条命令超时秒数',
+  `failure_policy` VARCHAR(16) NOT NULL DEFAULT 'abort' COMMENT '失败策略：abort 或 continue',
+  `output_limit_bytes` INT UNSIGNED NOT NULL DEFAULT 65536 COMMENT '单条命令审计输出上限',
+  `enabled` TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '配置是否启用',
+  `revision` BIGINT NOT NULL DEFAULT 1 COMMENT '乐观锁版本',
+  `updated_by` VARCHAR(128) NOT NULL COMMENT '最近修改人',
+  `change_reason` VARCHAR(512) NOT NULL COMMENT '最近修改原因',
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近修改时间',
+  PRIMARY KEY (`profile_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '恢复 Hook 可复用配置';
+
+CREATE TABLE IF NOT EXISTS `recovery_hook_assignment` (
+  `scope_type` VARCHAR(16) NOT NULL COMMENT '作用域类型：global 或 cluster',
+  `scope_key` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '全局为 *，集群为显式别名',
+  `phase` VARCHAR(64) NOT NULL COMMENT '恢复生命周期阶段',
+  `mode` VARCHAR(16) NOT NULL DEFAULT 'inherit' COMMENT '覆盖语义：inherit、replace 或 disable',
+  `profile_ids_json` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'replace 模式下顺序执行的配置标识数组',
+  `revision` BIGINT NOT NULL DEFAULT 1 COMMENT '乐观锁版本',
+  `updated_by` VARCHAR(128) NOT NULL COMMENT '最近修改人',
+  `change_reason` VARCHAR(512) NOT NULL COMMENT '最近修改原因',
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近修改时间',
+  PRIMARY KEY (`scope_type`, `scope_key`, `phase`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '全局与集群恢复 Hook 分配';
 
 INSERT IGNORE INTO `orchestrator_schema_migrations` (`migration_id`, `applied_at`)
 VALUES ('canonical-v1', CURRENT_TIMESTAMP);

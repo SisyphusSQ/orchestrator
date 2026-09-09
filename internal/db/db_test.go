@@ -4,13 +4,36 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openark/orchestrator/internal/config"
 )
+
+func TestIsDuplicateKeyError(t *testing.T) {
+	if !IsDuplicateKeyError(&mysql.MySQLError{Number: 1062, Message: "duplicate"}) {
+		t.Fatal("MySQL duplicate key error not recognized")
+	}
+	database, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if _, err := database.Exec("CREATE TABLE unique_values (value TEXT PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec("INSERT INTO unique_values VALUES ('same')"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = database.Exec("INSERT INTO unique_values VALUES ('same')")
+	if !IsDuplicateKeyError(fmt.Errorf("wrapped: %w", err)) {
+		t.Fatalf("SQLite duplicate key error not recognized: %v", err)
+	}
+}
 
 func TestSetupMySQLOrchestratorTLSReturnsCAFileError(t *testing.T) {
 	previousConfigured := orchestratorTLSConfigured

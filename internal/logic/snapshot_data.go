@@ -25,6 +25,7 @@ import (
 
 	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/inst"
+	"github.com/openark/orchestrator/internal/recoverypolicy"
 
 	"github.com/openark/orchestrator/internal/golib/log"
 	orcraft "github.com/openark/orchestrator/internal/raft"
@@ -50,7 +51,10 @@ type SnapshotData struct {
 	Detections,
 	KVStore,
 	Recovery,
-	RecoverySteps db.NamedResultData
+	RecoverySteps,
+	RecoveryPolicy,
+	RecoveryHookProfiles,
+	RecoveryHookAssignments db.NamedResultData
 
 	LeaderURI string
 }
@@ -101,6 +105,9 @@ func CreateSnapshotData() *SnapshotData {
 	readTableData("kv_store", &snapshotData.KVStore)
 	readTableData("topology_recovery", &snapshotData.Recovery)
 	readTableData("topology_recovery_steps", &snapshotData.RecoverySteps)
+	readTableData("recovery_policy", &snapshotData.RecoveryPolicy)
+	readTableData("recovery_hook_profile", &snapshotData.RecoveryHookProfiles)
+	readTableData("recovery_hook_assignment", &snapshotData.RecoveryHookAssignments)
 	readTableData("cluster_injected_pseudo_gtid", &snapshotData.InjectedPseudoGTIDClusters)
 
 	log.Debugf("raft snapshot data created")
@@ -207,6 +214,10 @@ func (this *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
 	writeTableData("topology_recovery", &snapshotData.Recovery)
 	writeTableData("topology_failure_detection", &snapshotData.Detections)
 	writeTableData("topology_recovery_steps", &snapshotData.RecoverySteps)
+	writeTableData("recovery_policy", &snapshotData.RecoveryPolicy)
+	writeTableData("recovery_hook_profile", &snapshotData.RecoveryHookProfiles)
+	writeTableData("recovery_hook_assignment", &snapshotData.RecoveryHookAssignments)
+	recoverypolicy.Invalidate()
 	writeTableData("cluster_injected_pseudo_gtid", &snapshotData.InjectedPseudoGTIDClusters)
 
 	// recovery disable

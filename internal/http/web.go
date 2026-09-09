@@ -26,6 +26,7 @@ type webConfig struct {
 	URLPrefix                     string `json:"urlPrefix"`
 	UserID                        string `json:"userId"`
 	AuthorizedForAction           bool   `json:"authorizedForAction"`
+	AuthorizedForConfiguration    bool   `json:"authorizedForConfiguration"`
 	AgentsEnabled                 bool   `json:"agentsEnabled"`
 	PseudoGTIDEnabled             bool   `json:"pseudoGTIDEnabled"`
 	RemoveTextFromHostnameDisplay string `json:"removeTextFromHostnameDisplay"`
@@ -54,6 +55,7 @@ func (web *HttpWeb) Bootstrap(_ Params, r Responder, req *http.Request, resp htt
 		URLPrefix:                     web.URLPrefix,
 		UserID:                        getUserId(req, user),
 		AuthorizedForAction:           isAuthorizedForAction(req, user),
+		AuthorizedForConfiguration:    isAuthorizedForConfiguration(req, user),
 		AgentsEnabled:                 config.Config.ServeAgentsHttp,
 		PseudoGTIDEnabled:             config.Config.PseudoGTIDPattern != "",
 		RemoveTextFromHostnameDisplay: config.Config.RemoveTextFromHostnameDisplay,
@@ -106,6 +108,7 @@ func (this *HttpWeb) RegisterRequests(m *Router) {
 	this.registerWebRequest(m, "keep-calm", this.Page)
 	this.registerWebRequest(m, "faq", this.Page)
 	this.registerWebRequest(m, "status", this.Page)
+	this.registerWebRequest(m, "recovery-settings", this.Page)
 	this.registerWebRequest(m, "clusters", this.Page)
 	this.registerWebRequest(m, "clusters-analysis", this.Page)
 	this.registerWebRequest(m, "cluster/:clusterName", this.Page)
