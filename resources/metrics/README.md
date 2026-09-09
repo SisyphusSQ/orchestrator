@@ -1,6 +1,6 @@
 # Orchestrator 监控示例
 
-此目录提供 Prometheus 大盘与告警、OTLP Collector、Tempo、Grafana provisioning。指标与升级契约见 [可观测性文档](../../docs/observability.md)。
+此目录提供 Prometheus 大盘与告警、OTLP Collector、Tempo、Grafana provisioning。指标与升级契约见 Wiki 的[可观测性文档](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)。
 
 ## 使用已有 Prometheus / Grafana
 

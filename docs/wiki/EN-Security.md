@@ -31,4 +31,20 @@ Separate TLS settings cover topology MySQL, metadata MySQL, optional Agent endpo
 - Give topology users read permissions needed for discovery and only the additional privileges required by enabled mutation/recovery features.
 - Back up sensitive state encrypted and test restore access separately.
 
-Authentication protects entry points; it does not replace Raft quorum, MySQL authorization, recovery filters, fencing, audit retention, or browser origin checks. See the detailed [security](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/security.md) and [TLS](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/ssl-and-tls.md) references.
+Authentication protects entry points; it does not replace Raft quorum, MySQL authorization, recovery filters, fencing, audit retention, or browser origin checks.
+
+## Database, Agent, and Consul transport
+
+Topology MySQL and metadata-backend MySQL have independent TLS settings and trust material. Verify hostnames and CA chains; do not assume the Web listener certificate protects database traffic. The topology account needs only discovery privileges plus the exact mutation/recovery privileges enabled by policy. The backend account owns only its node's metadata schema.
+
+The optional Agent listener has its own exposure and timeout boundary. Enable it only when Agent/seed workflows are required, restrict its network path, and validate the real endpoint separately from the standard Web/API listener.
+
+Consul HTTPS verifies certificates by default. Provide `ConsulTLSCAFile` or `ConsulTLSCAPath`, set `ConsulTLSServerName` when address and certificate name differ, and configure client certificate/key together for mTLS. Keep `ConsulTLSSkipVerify` false outside a documented, time-bounded migration window. ACL tokens are carried in `X-Consul-Token`, not URLs.
+
+## Deployment checklist
+
+- Bind Web/API and Raft listeners only where required; expose Raft only to cluster members.
+- Terminate TLS at a component whose trust and identity-header behavior are understood; test `URLPrefix`, redirects, WebSocket-independent polling, and deep links through the real proxy.
+- Verify Basic/multi/proxy/token behavior, read-only enforcement, origin rejection, follower proxying, and client-certificate OU rejection with the deployed configuration.
+- Rotate credentials and certificates with an explicit restart plan for components whose pools or exporters do not reload.
+- Keep backups encrypted and test restore permissions separately from backup creation.

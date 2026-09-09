@@ -2,33 +2,30 @@
 
 [English](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Reference) · **中文** · [Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-双语 Wiki 是当前维护入口。以下仓库页面保留更深的实现、配置与历史背景；明确讨论历史行为时可能继续使用旧术语，把命令写入自动化前应以当前代码复核。
+双语 Wiki 是完整的当前维护文档集合。以下仓库链接只指向可执行契约或源码资产，不再维护第二套叙述性文档树。
 
-## 运行与部署
+## 文档地图
 
-- [运行方式](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/execution.md)
-- [Raft 配置](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/configuration-raft.md)
-- [Raft 部署](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/deployment-raft.md)
-- [高可用](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/high-availability.md)
-- [元数据库配置](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/configuration-backend.md)
+- [项目概览](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Overview)：架构、入口、能力边界和项目沿革。
+- [快速开始](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Getting-Started)：构建、单节点 bootstrap、发现和生产前置检查。
+- [配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration)：Raft 身份、元数据库、发现、恢复策略、KV、日志和已移除字段。
+- [Raft 运维](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Raft-Operations)：建群、成员变更、节点替换、多数派、健康与备份边界。
+- [orch 命令行](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)、[Web 控制台](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Web-Console)和 [HTTP API](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-HTTP-API)：受支持的管理入口及失败语义。
+- [故障恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Failure-Recovery)：分析、策略、候选选择、GTID/Pseudo-GTID、hooks 和验收。
+- [可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)与[安全](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Security)：节点本地遥测、认证、TLS、凭据和权限边界。
+- [升级](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)与[开发](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Development)：不兼容变更台账、回滚、源码布局、构建、测试和发布流程。
 
-## 接口与运维
+## 可执行与机器可读契约
 
-- [orch 详细指南](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/orch.md)
-- [orch 命令映射](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/orch-commands.md)
-- [Web 实现与 Storybook](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/web.md)
-- [故障检测](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/failure-detection.md)
-- [拓扑恢复](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/topology-recovery.md)
-- [Pseudo-GTID](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/pseudo-gtid.md)
-- [标签](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/tags.md)
+- 配置样例：[`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf)；完整字段与校验：[`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go)。
+- 元数据库 Schema：[`docs/schema/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/schema)，包括可执行 MySQL DDL、兼容性与迁移说明。
+- HTTP 路由注册：[`internal/http/api.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/api.go)；CLI catalog：[`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json)。
+- Web 源码与浏览器测试：[`web/`](https://github.com/SisyphusSQ/orchestrator/tree/main/web)。
+- 指标、大盘与告警：[`resources/metrics/`](https://github.com/SisyphusSQ/orchestrator/tree/main/resources/metrics)。
+- 构建和验证入口：[`Makefile`](https://github.com/SisyphusSQ/orchestrator/blob/main/Makefile)、[`script/`](https://github.com/SisyphusSQ/orchestrator/tree/main/script)与 [`tests/`](https://github.com/SisyphusSQ/orchestrator/tree/main/tests)。
 
-## 平台与维护
+## 项目与历史
 
-- [可观测性契约](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/observability.md)
-- [安全](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/security.md)与 [TLS](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/ssl-and-tls.md)
-- [升级台账](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/upgrading.md)
-- [构建](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/build.md)、[CI](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/ci.md)与 [Web 开发](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/web.md)
-- [配置示例](https://github.com/SisyphusSQ/orchestrator/tree/main/conf)
-- [Apache License 2.0](https://github.com/SisyphusSQ/orchestrator/blob/main/LICENSE)
+本维护分支源自 [Percona orchestrator](https://github.com/percona/orchestrator) 和 Shlomi Noach 创建的 [openark/orchestrator](https://github.com/openark/orchestrator)。历史页面、演讲、截图和被替代命令保留在 Git 历史中，但不属于当前产品文档。仓库使用 [Apache License 2.0](https://github.com/SisyphusSQ/orchestrator/blob/main/LICENSE)。
 
-文档与可执行行为冲突时，以测试和当前代码作为实现证据，并在同一改动中修正文档。问题请提交到 [SisyphusSQ/orchestrator](https://github.com/SisyphusSQ/orchestrator/issues)。
+叙述文档与可执行行为冲突时，以当前代码和测试作为实现证据，并在同一改动中修正两个语言页面。问题请提交到 [SisyphusSQ/orchestrator](https://github.com/SisyphusSQ/orchestrator/issues)。

@@ -1,13 +1,13 @@
 # TOO-426 orch CLI 本地验证报告
 
-> 这是特定变更的历史验证记录，不是当前用户指南。当前使用说明见 [orch CLI](../orch.md)，双语 Wiki 入口见 [文档索引](../README.md)。
+> 这是特定变更的历史验证记录，不是当前用户指南。当前使用说明见 Wiki 的 [orch CLI](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)，双语入口见[文档索引](../README.md)。
 
 日期：2026-09-08。分支：`suqing/too-426-http-cli`；基线：`d6fe13d8`。本报告覆盖本地开发工作区，不代表提交、合并、远端 CI、生产验收或发版。
 
 ## 实现范围核对
 
 - `tools/orch-cli` 独立 Go 模块，产物 `orch`；依赖仅为标准库及 Cobra/pflag（Windows 补全依赖 mousetrap）。无根模块 replace、服务端 internal 导入、数据库驱动或运行资源。
-- 原 Go 127 个目录项：121 个同名远程命令、5 个本地入口、1 个旧别名合并；加上 13 个 Shell 补充命令和 5 个当前 Raft 管理命令，合计 139 个远程命令。另有 `api`、`which-api`、Cobra 帮助/补全。详见 [能力映射](../orch-commands.md)。
+- 原 Go 127 个目录项：121 个同名远程命令、5 个本地入口、1 个旧别名合并；加上 13 个 Shell 补充命令和 5 个当前 Raft 管理命令，合计 139 个远程命令。另有 `api`、`which-api`、Cobra 帮助/补全。当前能力入口见 Wiki 的 [orch CLI](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)。
 - 服务端新增 18 个薄 HTTP 能力入口及 repoint 无目的地路由；保留业务层，补齐必要参数与鉴权/Raft 错误语义。手动发现不再依赖后台循环初始化。
 - 删除 Shell client、profile、原直连 CLI 和兼容参数；同步服务启动、脚本、系统测试、构建/打包与文档。服务端使用 `orchestrator server`，本地维护使用 `admin`。
 
@@ -47,4 +47,4 @@
 - 新 Raft command 与删除返回契约要求节点使用同一新版本；不提供旧版本混跑或旧 CLI 兼容期。
 - CLI 所有变更仍由服务端执行业务逻辑。客户端取消等待或返回结果未知时，应先回读状态；不表示服务端已撤销操作。
 
-使用方式见 [orch](../orch.md)，切换要求见 [升级说明](../upgrading.md)。
+使用方式见 Wiki 的 [orch CLI](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)，切换要求见[升级指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)。

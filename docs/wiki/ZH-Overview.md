@@ -26,3 +26,5 @@
 项目继续支持拓扑发现、基于 GTID/Pseudo-GTID 的调整、计划切换、自动恢复、审计、标签、Consul KV 发布、认证、TLS 和可选 Agent 接口。可用性与安全性取决于正确的拓扑权限、恢复过滤、Raft 多数派和部署验收。
 
 历史上的共享元数据库选主、非 Raft 服务模式、直连数据库的旧 CLI 和 Shell 客户端均已移除。替换旧二进制前请先阅读[升级指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)。
+
+本仓库延续最初发布于 GitHub、后由 Percona 维护的开源 orchestrator 项目。当前实现采用 Apache License 2.0，完整条款见 [`LICENSE`](https://github.com/SisyphusSQ/orchestrator/blob/main/LICENSE)。

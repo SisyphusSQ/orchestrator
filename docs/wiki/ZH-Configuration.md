@@ -33,8 +33,31 @@
 
 每个节点都要配置 `MySQLTopologyUser` 及密码或凭据文件。该账号必须能读取所有被发现实例的复制状态；执行拓扑变更时还需要对应权限。发现种子、主机名解析、实例过滤、提升规则、恢复过滤、hooks、审计输出、Consul、认证、TLS 和 URL 前缀均属于独立策略，需要按环境决定。
 
-仓库在 [`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf) 提供 MySQL 与 SQLite 示例。完整字段定义以 [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go) 为准；各专题细节仍保留在 [`docs/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs)。
+仓库在 [`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf) 提供 MySQL 与 SQLite 示例。完整字段定义与校验逻辑以 [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go) 为准。
+
+## 元数据库生命周期与 Schema
+
+兼容的 MySQL 协议后端包括 MySQL 5.7–8.0、TiDB 和 OceanBase MySQL 模式。凭据可直接配置，也可通过 `MySQLOrchestratorCredentialsConfigFile` 提供；两类文件都需要限制访问，因为环境变量展开后密钥仍会进入进程内存。`MySQLOrchestratorMaxAllowedPacket` 与 `MySQLTopologyMaxAllowedPacket` 分别作用于元数据库和被管理实例连接。
+
+进程持有一个元数据库连接池，并将拓扑发现与拓扑操作连接池分开。endpoint、凭据、TLS、超时、packet 限制、连接寿命或池大小变化后必须重启；reload 不会重建已打开的连接池。SQLite 使用一个进程级连接池，并要求绝对且可写的数据文件路径。
+
+空元数据库由可执行的 [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) 契约初始化；存量库继续走有序兼容补丁链。GORM 复用进程级连接池，不拥有 Schema 迁移。替换二进制或导入 DDL 前先阅读 [`迁移指南`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md)。
+
+## 发现、分类与过滤
+
+- 发现周期、并发、实例过期、主机名解析和 seed 决定拓扑状态的新鲜度。启用恢复前应稳定 DNS 与 `report_host` 行为。
+- `DiscoveryIgnoreReplicaHostnameFilters`、`DiscoveryIgnoreMasterHostnameFilters` 与 `DiscoveryIgnorePrimaryKeyHostnameFilters` 会从特定发现路径排除匹配实例。过滤器属于策略而不是连通性诊断，需要用代表性主机名验证。
+- 集群别名、域名、机房、区域、环境标签、提升规则、延迟阈值和半同步状态都会影响候选分类，依赖自动恢复前应保持一致。
+- 拓扑兼容时优先使用 GTID。Pseudo-GTID 需要在相关可写主库上明确配置注入、保留时间与权限；缺少标记会降低调整和恢复能力。
+
+## 恢复、hooks、KV 与日志
+
+恢复由全局开关、集群过滤、忽略主机过滤、候选资格和 Raft Leader/多数派状态共同决定。hooks 必须限制运行时间并显式处理失败。maintenance、downtime、audit 和 recovery 记录需要明确保留策略。
+
+Consul KV 继续通过官方 SDK 支持。必须配置 `ConsulAddress`；HTTPS 默认校验证书，并可配置 CA、server name 和成对客户端证书。`ConsulTLSSkipVerify` 只用于限时兼容。跨机房写入超时或部分成功时不会自动重试或回滚。内建 ZooKeeper 发布已删除。
+
+应用日志以 `time<TAB>[LEVEL]<TAB>[caller]<TAB>message` 文本格式写入 stderr。`EnableSyslog` 和 `AuditToSyslog` 初始化失败会阻止启动；审计文件/syslog 写入失败保持可见。日志解析器和 sink 延迟必须在真实服务沙箱中验证。
 
 ## 已移除配置
 
-不要继续携带 `RaftEnabled`、`ZkAddress`、Graphite 配置或旧的内存指标保留配置。服务端会拒绝这些字段，避免被移除的行为静默失效。为兼容性，其他未知字段仍可能被接受，因此不能只以“成功启动”作为配置生效的验收依据。
+不要继续携带 `RaftEnabled`、`ZkAddress`、Graphite 配置、旧内存指标保留配置或 `deprecatedConfigurationVariables` 中列出的字段。服务端会拒绝已移除字段，避免退役行为静默失效。为兼容性，其他未知字段仍可能被接受，因此不能只以“成功启动”作为配置生效的验收依据。
