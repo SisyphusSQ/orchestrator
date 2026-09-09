@@ -165,7 +165,7 @@ func (this *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent, 
 		// but we really don't expect a huge sequence of those.
 		return this.nextRealEvent(recursionLevel + 1)
 	}
-	for _, skipSubstring := range config.Config.SkipBinlogEventsContaining {
+	for _, skipSubstring := range config.Config.PseudoGTID.SkipBinlogContaining {
 		if strings.Index(event.Info, skipSubstring) >= 0 {
 			// Recursion might go deeper here.
 			return this.nextRealEvent(recursionLevel + 1)

@@ -72,7 +72,7 @@ func IsLeaderOrActive() bool { return orcraft.IsReady() }
 
 // used in several places
 func instancePollSecondsDuration() time.Duration {
-	return time.Duration(config.Config.InstancePollSeconds) * time.Second
+	return time.Duration(config.Config.Topology.Discovery.PollSeconds) * time.Second
 }
 
 // AcceptSignals installs the process signal handler once, including HTTP without discovery.
@@ -116,7 +116,7 @@ func handleDiscoveryRequests() {
 	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
 
 	// create a pool of discovery workers
-	for i := uint(0); i < config.Config.DiscoveryMaxConcurrency; i++ {
+	for i := uint(0); i < config.Config.Topology.Discovery.MaxConcurrency; i++ {
 		go func() {
 			for {
 				instanceKey := discoveryQueue.Consume()
@@ -135,13 +135,13 @@ func handleDiscoveryRequests() {
 		}()
 	}
 
-	if config.Config.DeadInstanceDiscoveryMaxConcurrency > 0 {
+	if config.Config.Topology.Discovery.DeadMaxConcurrency > 0 {
 		deadInstancesDiscoveryQueue = discovery.CreateOrReturnQueue("DEADINSTANCES")
 
 		// Register dead instances queue gauge only if the queue exists
 
 		// create a pool of discovery workers
-		for i := uint(0); i < config.Config.DeadInstanceDiscoveryMaxConcurrency; i++ {
+		for i := uint(0); i < config.Config.Topology.Discovery.DeadMaxConcurrency; i++ {
 			go func() {
 				for {
 					instanceKey := deadInstancesDiscoveryQueue.Consume()
@@ -172,7 +172,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
 		return
 	}
-	if inst.FiltersMatchInstanceKey(&instanceKey, config.Config.DiscoveryIgnoreHostnameFilters) {
+	if inst.FiltersMatchInstanceKey(&instanceKey, config.Config.Topology.Discovery.IgnoreHostnames) {
 		log.Debugf("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
 		return
 	}
@@ -230,7 +230,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 
 	// First we've ever heard of this instance. Continue investigation:
 	skipped := false
-	instance, skipped, err = inst.ReadTopologyInstanceBufferableContext(ctx, &instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, skipped, err = inst.ReadTopologyInstanceBufferableContext(ctx, &instanceKey, config.Config.Topology.WriteBuffer.Enabled, latency)
 	observationResult = observability.Result(err)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
@@ -240,7 +240,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 
 	if skipped {
 		observationResult = "skipped"
-		if config.Config.EnableDiscoveryFiltersLogs {
+		if config.Config.Topology.Discovery.FilterLogsEnabled {
 			log.Infof("discoverInstance: skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", instanceKey)
 		}
 		return
@@ -272,7 +272,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 		replicaKey := replicaKey // not needed? no concurrency here?
 
 		// Avoid noticing some hosts we would otherwise discover
-		if inst.FiltersMatchInstanceKey(&replicaKey, config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
+		if inst.FiltersMatchInstanceKey(&replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
 			continue
 		}
 
@@ -293,7 +293,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	}
 	// Investigate master:
 	if instance.MasterKey.IsValid() {
-		if !inst.FiltersMatchInstanceKey(&instance.MasterKey, config.Config.DiscoveryIgnoreMasterHostnameFilters) {
+		if !inst.FiltersMatchInstanceKey(&instance.MasterKey, config.Config.Topology.Discovery.IgnoreMasterHostnames) {
 			dead, recheck := inst.DeadInstancesFilter.InstanceRecheckNeeded(&instance.MasterKey)
 
 			if dead {
@@ -445,7 +445,7 @@ func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVP
 
 func injectSeeds(seedOnce *sync.Once) {
 	seedOnce.Do(func() {
-		for _, seed := range config.Config.DiscoverySeeds {
+		for _, seed := range config.Config.Topology.Discovery.Seeds {
 			instanceKey, err := inst.ParseRawInstanceKey(seed)
 			if err == nil {
 				inst.InjectSeed(instanceKey)
@@ -489,8 +489,8 @@ func ContinuousDiscovery(ctx context.Context) error {
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	var snapshotTopologiesTicker *time.Ticker
-	if config.Config.SnapshotTopologiesIntervalHours > 0 {
-		snapshotTopologiesTicker = time.NewTicker(time.Duration(config.Config.SnapshotTopologiesIntervalHours) * time.Hour)
+	if config.Config.Topology.Snapshot.IntervalHours > 0 {
+		snapshotTopologiesTicker = time.NewTicker(time.Duration(config.Config.Topology.Snapshot.IntervalHours) * time.Hour)
 		defer snapshotTopologiesTicker.Stop()
 		snapshotTopologiesTick = snapshotTopologiesTicker.C
 	}
@@ -525,7 +525,7 @@ func ContinuousDiscovery(ctx context.Context) error {
 			}()
 		case <-autoPseudoGTIDTicker.C:
 			go func() {
-				if config.Config.AutoPseudoGTID && IsLeader() {
+				if config.Config.PseudoGTID.Auto && IsLeader() {
 					go InjectPseudoGTIDOnWriters()
 				}
 			}()

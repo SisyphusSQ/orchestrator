@@ -315,7 +315,7 @@ func requestWithPrincipal(request *nethttp.Request, principal Principal) *nethtt
 
 func validateAuthentication(options AuthenticationOptions) error {
 	if strings.EqualFold(options.Method, "multi") && options.Username == "" {
-		return fmt.Errorf("AuthenticationMethod is 'multi' but HTTPAuthUser is undefined")
+		return fmt.Errorf("authentication.method is 'multi' but authentication.basic.user is undefined")
 	}
 	return nil
 }

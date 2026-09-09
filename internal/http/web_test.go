@@ -87,9 +87,9 @@ func TestWebConfigPublishesOnlyUICapabilities(t *testing.T) {
 	previous := config.Config
 	copy := *previous
 	config.Config = &copy
-	config.Config.ReadOnly = true
-	config.Config.MySQLTopologyPassword = "never-publish-this"
-	config.Config.WebMessage = "maintenance </script><script>alert(1)</script>"
+	config.Config.Server.ReadOnly = true
+	config.Config.Topology.MySQL.Password = "never-publish-this"
+	config.Config.Server.Web.Message = "maintenance </script><script>alert(1)</script>"
 	t.Cleanup(func() { config.Config = previous })
 	router := mustRouter(t, RouterOptions{})
 	web := HttpWeb{URLPrefix: "/prefix"}
@@ -99,7 +99,7 @@ func TestWebConfigPublishesOnlyUICapabilities(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.AuthorizedForAction || result.URLPrefix != "/prefix" || result.WebMessage != config.Config.WebMessage {
+	if result.AuthorizedForAction || result.URLPrefix != "/prefix" || result.WebMessage != config.Config.Server.Web.Message {
 		t.Fatalf("incorrect public capabilities: %+v", result)
 	}
 	if strings.Contains(response.Body.String(), "never-publish-this") || strings.Contains(response.Body.String(), "</script>") {
@@ -111,7 +111,7 @@ func TestWebPostActionsRejectCrossOriginAndReadonlyBeforeExecution(t *testing.T)
 	previous := config.Config
 	copy := *previous
 	config.Config = &copy
-	config.Config.AuthenticationMethod = ""
+	config.Config.Authentication.Method = ""
 	t.Cleanup(func() { config.Config = previous })
 	calls := 0
 	router := mustRouter(t, RouterOptions{})
@@ -131,7 +131,7 @@ func TestWebPostActionsRejectCrossOriginAndReadonlyBeforeExecution(t *testing.T)
 		{"read-only", "", "", true, 403},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config.Config.ReadOnly = test.readOnly
+			config.Config.Server.ReadOnly = test.readOnly
 			request := httptest.NewRequest(http.MethodPost, "http://example.com/prefix/api/begin-maintenance/mysql/3306/owner/a%2Fb%2Bc%25d", nil)
 			request.Header.Set("Origin", test.origin)
 			request.Header.Set("Sec-Fetch-Site", test.site)
@@ -154,8 +154,8 @@ func TestRaftLeadershipTransferRejectsCrossSiteBeforeExecution(t *testing.T) {
 	previous := config.Config
 	copy := *previous
 	config.Config = &copy
-	config.Config.AuthenticationMethod = ""
-	config.Config.ReadOnly = false
+	config.Config.Authentication.Method = ""
+	config.Config.Server.ReadOnly = false
 	t.Cleanup(func() { config.Config = previous })
 	calls := 0
 	router := mustRouter(t, RouterOptions{})

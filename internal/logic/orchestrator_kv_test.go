@@ -16,9 +16,9 @@ func TestContinuousDiscoveryReturnsKVInitError(t *testing.T) {
 		kv.ResetKVStoresForTest()
 	})
 	kv.ResetKVStoresForTest()
-	config.Config.ConsulAddress = "https://127.0.0.1:8501"
-	config.Config.ConsulScheme = "https"
-	config.Config.ConsulTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	config.Config.Consul.Address = "https://127.0.0.1:8501"
+	config.Config.Consul.Scheme = "https"
+	config.Config.Consul.TLS.CAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
 
 	err := ContinuousDiscovery(t.Context())
 	if err == nil {

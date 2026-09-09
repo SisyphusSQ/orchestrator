@@ -1354,13 +1354,13 @@ func MasterPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinate
 // Attempt to read and return replication credentials from the mysql.slave_master_info system table
 func ReadReplicationCredentials(instanceKey *InstanceKey) (creds *ReplicationCredentials, err error) {
 	creds = &ReplicationCredentials{}
-	if config.Config.ReplicationCredentialsQuery != "" {
+	if config.Config.Topology.Replication.CredentialsQuery != "" {
 		db, err := orchestratordb.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 		if err != nil {
 			return creds, log.Errore(err)
 		}
 		{
-			resultData, err := orchestratordb.QueryResultData(db, config.Config.ReplicationCredentialsQuery)
+			resultData, err := orchestratordb.QueryResultData(db, config.Config.Topology.Replication.CredentialsQuery)
 			if err != nil {
 				return creds, log.Errore(err)
 			}
@@ -1434,7 +1434,7 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 	if _, err := ExecInstance(instanceKey, "set global read_only = ?", readOnly); err != nil {
 		return instance, log.Errore(err)
 	}
-	if config.Config.UseSuperReadOnly {
+	if config.Config.Topology.Operations.UseSuperReadOnly {
 		if _, err := ExecInstance(instanceKey, "set global super_read_only = ?", readOnly); err != nil {
 			// We don't bail out here. super_read_only is only available on
 			// MySQL 5.7.8 and Percona Server 5.6.21-70

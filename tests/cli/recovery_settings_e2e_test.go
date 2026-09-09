@@ -31,15 +31,23 @@ func TestRecoverySettingsLifecycle(t *testing.T) {
 	databasePath := filepath.Join(workDir, "orchestrator.db")
 	httpPort, raftPort := freePort(t), freePort(t)
 	configuration := map[string]any{
-		"BackendDB":             "sqlite3",
-		"SQLite3DataFile":       databasePath,
-		"ListenAddress":         fmt.Sprintf("127.0.0.1:%d", httpPort),
-		"HostnameResolveMethod": "none",
-		"RaftNodeID":            "recovery-settings-e2e",
-		"RaftDataDir":           filepath.Join(workDir, "raft"),
-		"RaftBind":              fmt.Sprintf("127.0.0.1:%d", raftPort),
-		"EnableSyslog":          false,
-		"AuditToSyslog":         false,
+		"metadata": map[string]any{
+			"type":   "sqlite3",
+			"sqlite": map[string]any{"dataFile": databasePath},
+		},
+		"server": map[string]any{
+			"listen": map[string]any{"address": fmt.Sprintf("127.0.0.1:%d", httpPort)},
+		},
+		"topology": map[string]any{
+			"hostname": map[string]any{"resolveMethod": "none"},
+		},
+		"raft": map[string]any{
+			"nodeID":  "recovery-settings-e2e",
+			"dataDir": filepath.Join(workDir, "raft"),
+			"bind":    fmt.Sprintf("127.0.0.1:%d", raftPort),
+		},
+		"logging": map[string]any{"syslog": map[string]any{"enabled": false}},
+		"audit":   map[string]any{"toSyslog": false},
 	}
 	configurationBytes, err := json.Marshal(configuration)
 	if err != nil {

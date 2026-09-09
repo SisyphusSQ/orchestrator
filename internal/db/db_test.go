@@ -37,18 +37,18 @@ func TestIsDuplicateKeyError(t *testing.T) {
 
 func TestSetupMySQLOrchestratorTLSReturnsCAFileError(t *testing.T) {
 	previousConfigured := orchestratorTLSConfigured
-	previousPassword := config.Config.MySQLOrchestratorPassword
-	previousCAFile := config.Config.MySQLOrchestratorSSLCAFile
-	previousSkipVerify := config.Config.MySQLOrchestratorSSLSkipVerify
+	previousPassword := config.Config.Metadata.MySQL.Password
+	previousCAFile := config.Config.Metadata.MySQL.SSLCAFile
+	previousSkipVerify := config.Config.Metadata.MySQL.SSLSkipVerify
 	orchestratorTLSConfigured = false
-	config.Config.MySQLOrchestratorPassword = "password-must-not-appear-in-error"
-	config.Config.MySQLOrchestratorSSLCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
-	config.Config.MySQLOrchestratorSSLSkipVerify = false
+	config.Config.Metadata.MySQL.Password = "password-must-not-appear-in-error"
+	config.Config.Metadata.MySQL.SSLCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	config.Config.Metadata.MySQL.SSLSkipVerify = false
 	t.Cleanup(func() {
 		orchestratorTLSConfigured = previousConfigured
-		config.Config.MySQLOrchestratorPassword = previousPassword
-		config.Config.MySQLOrchestratorSSLCAFile = previousCAFile
-		config.Config.MySQLOrchestratorSSLSkipVerify = previousSkipVerify
+		config.Config.Metadata.MySQL.Password = previousPassword
+		config.Config.Metadata.MySQL.SSLCAFile = previousCAFile
+		config.Config.Metadata.MySQL.SSLSkipVerify = previousSkipVerify
 	})
 
 	_, err := SetupMySQLOrchestratorTLS("user@tcp(localhost:3306)/orchestrator")
@@ -58,28 +58,28 @@ func TestSetupMySQLOrchestratorTLSReturnsCAFileError(t *testing.T) {
 	if !strings.Contains(err.Error(), "missing-ca.pem") {
 		t.Fatalf("SetupMySQLOrchestratorTLS() error = %q; want missing CA path", err)
 	}
-	if strings.Contains(err.Error(), config.Config.MySQLOrchestratorPassword) {
+	if strings.Contains(err.Error(), config.Config.Metadata.MySQL.Password) {
 		t.Fatalf("SetupMySQLOrchestratorTLS() error exposed the configured password: %q", err)
 	}
 }
 
 func TestConfigureOrchestratorTLSReturnsConfigurationError(t *testing.T) {
 	previousConfigured := orchestratorTLSConfigured
-	previousUseMutualTLS := config.Config.MySQLOrchestratorUseMutualTLS
-	previousCAFile := config.Config.MySQLOrchestratorSSLCAFile
-	previousSkipVerify := config.Config.MySQLOrchestratorSSLSkipVerify
+	previousUseMutualTLS := config.Config.Metadata.MySQL.UseMutualTLS
+	previousCAFile := config.Config.Metadata.MySQL.SSLCAFile
+	previousSkipVerify := config.Config.Metadata.MySQL.SSLSkipVerify
 	orchestratorTLSConfigured = false
-	config.Config.MySQLOrchestratorUseMutualTLS = true
-	config.Config.MySQLOrchestratorSSLCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
-	config.Config.MySQLOrchestratorSSLSkipVerify = false
+	config.Config.Metadata.MySQL.UseMutualTLS = true
+	config.Config.Metadata.MySQL.SSLCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	config.Config.Metadata.MySQL.SSLSkipVerify = false
 	t.Cleanup(func() {
 		orchestratorTLSConfigured = previousConfigured
-		config.Config.MySQLOrchestratorUseMutualTLS = previousUseMutualTLS
-		config.Config.MySQLOrchestratorSSLCAFile = previousCAFile
-		config.Config.MySQLOrchestratorSSLSkipVerify = previousSkipVerify
+		config.Config.Metadata.MySQL.UseMutualTLS = previousUseMutualTLS
+		config.Config.Metadata.MySQL.SSLCAFile = previousCAFile
+		config.Config.Metadata.MySQL.SSLSkipVerify = previousSkipVerify
 	})
 
-	cfg := newOrchestratorMySQLConfig(config.Config.MySQLOrchestratorDatabase)
+	cfg := newOrchestratorMySQLConfig(config.Config.Metadata.MySQL.Database)
 	if err := configureOrchestratorTLS(cfg); err == nil {
 		t.Fatal("configureOrchestratorTLS() returned nil for an invalid TLS configuration")
 	}
@@ -98,10 +98,10 @@ func TestDeployStatementsReturnsExecutionError(t *testing.T) {
 			t.Errorf("close sqlite fixture: %v", err)
 		}
 	})
-	previousBackendDB := config.Config.BackendDB
-	config.Config.BackendDB = "sqlite3"
+	previousBackendDB := config.Config.Metadata.Type
+	config.Config.Metadata.Type = "sqlite3"
 	t.Cleanup(func() {
-		config.Config.BackendDB = previousBackendDB
+		config.Config.Metadata.Type = previousBackendDB
 	})
 
 	err = deployStatements(database, []string{"not valid SQL"})
@@ -123,10 +123,10 @@ func TestDeployStatementsContextPropagatesCancellation(t *testing.T) {
 			t.Errorf("close sqlite fixture: %v", err)
 		}
 	})
-	previousBackendDB := config.Config.BackendDB
-	config.Config.BackendDB = "sqlite3"
+	previousBackendDB := config.Config.Metadata.Type
+	config.Config.Metadata.Type = "sqlite3"
 	t.Cleanup(func() {
-		config.Config.BackendDB = previousBackendDB
+		config.Config.Metadata.Type = previousBackendDB
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

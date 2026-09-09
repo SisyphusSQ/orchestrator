@@ -85,14 +85,14 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 	}
 
 	auditWritten := false
-	if config.Config.AuditLogFile != "" {
+	if config.Config.Audit.LogFile != "" {
 		text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format(log.TimeFormat), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
-		if err := appendAuditFile(config.Config.AuditLogFile, text); err != nil {
+		if err := appendAuditFile(config.Config.Audit.LogFile, text); err != nil {
 			return log.Errore(err)
 		}
 		auditWritten = true
 	}
-	if config.Config.AuditToBackendDB {
+	if config.Config.Audit.ToBackend {
 		_, err := db.ExecOrchestrator(`
 			insert
 				into audit (

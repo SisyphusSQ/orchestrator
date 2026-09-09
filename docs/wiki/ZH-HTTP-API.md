@@ -2,7 +2,7 @@
 
 [English](https://github.com/SisyphusSQ/orchestrator/wiki/EN-HTTP-API) · **中文** · [Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-HTTP API 是 `orch` 与 Web 控制台共同使用的契约。默认基础路径是 `/api`；配置 `URLPrefix` 后需要在前面加上该前缀。
+HTTP API 是 `orch` 与 Web 控制台共同使用的契约。默认基础路径是 `/api`；配置 `server.urlPrefix` 后需要在前面加上该前缀。
 
 ## 响应契约
 

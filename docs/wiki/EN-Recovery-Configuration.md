@@ -14,6 +14,6 @@ Hooks cover nine phases: after failure detection, before failover, after primary
 
 Hooks run with the Orchestrator process identity. Every profile has a per-command timeout, failure policy, and audited-output limit. Common password, token, secret, and API-key assignments are redacted before audit. Test Run executes the command on the server, so confirm first that the command is safe and idempotent in that environment.
 
-When authentication is enabled, `ConfigurationAdminUsers` and `ConfigurationAdminGroups` grant the narrower recovery-configuration permission. Empty lists deny configuration writes. Local deployments without authentication permit configuration writes, but the API still requires a Raft leader with quorum.
+When authentication is enabled, `authentication.configurationAdmins.users` and `authentication.configurationAdmins.groups` grant the narrower recovery-configuration permission. Empty lists deny configuration writes. Local deployments without authentication permit configuration writes, but the API still requires a Raft leader with quorum.
 
 This is a breaking upgrade. The former YAML/JSON recovery-policy and hook keys are rejected and are not imported automatically. Record required values before upgrading, configure them in the Web console after the new version starts, and read back the effective values.

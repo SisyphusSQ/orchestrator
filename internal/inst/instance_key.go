@@ -77,7 +77,7 @@ func parseRawInstanceKey(hostPort string, resolve bool) (instanceKey *InstanceKe
 		return nil, fmt.Errorf("Cannot parse address: %s", hostPort)
 	}
 	if port == "" {
-		port = fmt.Sprintf("%d", config.Config.DefaultInstancePort)
+		port = fmt.Sprintf("%d", config.Config.Topology.MySQL.DefaultPort)
 	}
 	return newInstanceKeyStrings(hostname, port, resolve)
 }

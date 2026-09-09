@@ -12,44 +12,44 @@ import (
 )
 
 func TestStandardHTTPReturnsInvalidMultiAuthConfiguration(t *testing.T) {
-	previousMethod := config.Config.AuthenticationMethod
-	previousUser := config.Config.HTTPAuthUser
-	config.Config.AuthenticationMethod = "multi"
-	config.Config.HTTPAuthUser = ""
+	previousMethod := config.Config.Authentication.Method
+	previousUser := config.Config.Authentication.Basic.User
+	config.Config.Authentication.Method = "multi"
+	config.Config.Authentication.Basic.User = ""
 	t.Cleanup(func() {
-		config.Config.AuthenticationMethod = previousMethod
-		config.Config.HTTPAuthUser = previousUser
+		config.Config.Authentication.Method = previousMethod
+		config.Config.Authentication.Basic.User = previousUser
 	})
 
 	err := standardHttp(context.Background(), false, nil)
 	if err == nil {
-		t.Fatal("standardHttp() returned nil for multi auth without HTTPAuthUser")
+		t.Fatal("standardHttp() returned nil for multi auth without authentication.basic.user")
 	}
-	if !strings.Contains(err.Error(), "HTTPAuthUser") {
-		t.Fatalf("standardHttp() error = %q; want HTTPAuthUser context", err)
+	if !strings.Contains(err.Error(), "authentication.basic.user") {
+		t.Fatalf("standardHttp() error = %q; want authentication.basic.user context", err)
 	}
 }
 
 func TestHTTPRoutersApplyConfiguredMutualTLSVerification(t *testing.T) {
-	previousUseMutualTLS := config.Config.UseMutualTLS
-	previousValidOUs := config.Config.SSLValidOUs
-	previousAgentsUseMutualTLS := config.Config.AgentsUseMutualTLS
-	previousAgentValidOUs := config.Config.AgentSSLValidOUs
-	previousPrefix := config.Config.URLPrefix
-	previousMethod := config.Config.AuthenticationMethod
-	config.Config.UseMutualTLS = true
-	config.Config.SSLValidOUs = []string{"standard"}
-	config.Config.AgentsUseMutualTLS = true
-	config.Config.AgentSSLValidOUs = []string{"agent"}
-	config.Config.URLPrefix = "/orchestrator"
-	config.Config.AuthenticationMethod = ""
+	previousUseMutualTLS := config.Config.Server.TLS.MutualTLS
+	previousValidOUs := config.Config.Server.TLS.ValidOUs
+	previousAgentsUseMutualTLS := config.Config.Agents.TLS.MutualTLS
+	previousAgentValidOUs := config.Config.Agents.TLS.ValidOUs
+	previousPrefix := config.Config.Server.URLPrefix
+	previousMethod := config.Config.Authentication.Method
+	config.Config.Server.TLS.MutualTLS = true
+	config.Config.Server.TLS.ValidOUs = []string{"standard"}
+	config.Config.Agents.TLS.MutualTLS = true
+	config.Config.Agents.TLS.ValidOUs = []string{"agent"}
+	config.Config.Server.URLPrefix = "/orchestrator"
+	config.Config.Authentication.Method = ""
 	t.Cleanup(func() {
-		config.Config.UseMutualTLS = previousUseMutualTLS
-		config.Config.SSLValidOUs = previousValidOUs
-		config.Config.AgentsUseMutualTLS = previousAgentsUseMutualTLS
-		config.Config.AgentSSLValidOUs = previousAgentValidOUs
-		config.Config.URLPrefix = previousPrefix
-		config.Config.AuthenticationMethod = previousMethod
+		config.Config.Server.TLS.MutualTLS = previousUseMutualTLS
+		config.Config.Server.TLS.ValidOUs = previousValidOUs
+		config.Config.Agents.TLS.MutualTLS = previousAgentsUseMutualTLS
+		config.Config.Agents.TLS.ValidOUs = previousAgentValidOUs
+		config.Config.Server.URLPrefix = previousPrefix
+		config.Config.Authentication.Method = previousMethod
 	})
 
 	standard, err := newStandardHTTPRouter()
@@ -83,16 +83,16 @@ func TestHTTPRoutersApplyConfiguredMutualTLSVerification(t *testing.T) {
 }
 
 func TestStandardHTTPReturnsUnixListenerError(t *testing.T) {
-	previousMethod := config.Config.AuthenticationMethod
-	previousSocket := config.Config.ListenSocket
-	previousUseSSL := config.Config.UseSSL
-	config.Config.AuthenticationMethod = ""
-	config.Config.ListenSocket = filepath.Join(t.TempDir(), "missing", "orchestrator.sock")
-	config.Config.UseSSL = false
+	previousMethod := config.Config.Authentication.Method
+	previousSocket := config.Config.Server.Listen.Socket
+	previousUseSSL := config.Config.Server.TLS.Enabled
+	config.Config.Authentication.Method = ""
+	config.Config.Server.Listen.Socket = filepath.Join(t.TempDir(), "missing", "orchestrator.sock")
+	config.Config.Server.TLS.Enabled = false
 	t.Cleanup(func() {
-		config.Config.AuthenticationMethod = previousMethod
-		config.Config.ListenSocket = previousSocket
-		config.Config.UseSSL = previousUseSSL
+		config.Config.Authentication.Method = previousMethod
+		config.Config.Server.Listen.Socket = previousSocket
+		config.Config.Server.TLS.Enabled = previousUseSSL
 	})
 
 	err := standardHttp(context.Background(), false, nil)

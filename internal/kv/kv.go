@@ -67,7 +67,7 @@ func initKVStores() error {
 		return err
 	}
 	if client != nil {
-		provider, err := config.NormalizeConsulKVStoreProvider(config.Config.ConsulKVStoreProvider)
+		provider, err := config.NormalizeConsulKVStoreProvider(config.Config.Consul.KV.Provider)
 		if err != nil {
 			return err
 		}

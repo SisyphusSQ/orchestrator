@@ -57,9 +57,9 @@ func TestClientCatalogRoutesExist(t *testing.T) {
 	}
 }
 func TestDiagnosticsRequireAuthorizationBeforeDatabaseAccess(t *testing.T) {
-	old := config.Config.ReadOnly
-	config.Config.ReadOnly = true
-	t.Cleanup(func() { config.Config.ReadOnly = old })
+	old := config.Config.Server.ReadOnly
+	config.Config.Server.ReadOnly = true
+	t.Cleanup(func() { config.Config.Server.ReadOnly = old })
 	router := mustRouter(t, RouterOptions{})
 	api := HttpAPI{}
 	api.registerCLIRequests(router)
@@ -70,9 +70,9 @@ func TestDiagnosticsRequireAuthorizationBeforeDatabaseAccess(t *testing.T) {
 }
 
 func TestMigratedMutationsRejectReadOnlyBeforeDatabaseAccess(t *testing.T) {
-	old := config.Config.ReadOnly
-	config.Config.ReadOnly = true
-	t.Cleanup(func() { config.Config.ReadOnly = old })
+	old := config.Config.Server.ReadOnly
+	config.Config.Server.ReadOnly = true
+	t.Cleanup(func() { config.Config.Server.ReadOnly = old })
 	router := mustRouter(t, RouterOptions{})
 	api := HttpAPI{}
 	api.RegisterRequests(router)

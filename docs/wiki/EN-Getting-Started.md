@@ -26,14 +26,21 @@ make build
 Start from `conf/orchestrator-sample-sqlite.conf.yaml`. At minimum, choose durable local paths and set real topology credentials:
 
 ```yaml
-RaftNodeID: dev-1
-RaftDataDir: /absolute/path/orchestrator-raft
-RaftBind: 127.0.0.1:10008
-ListenAddress: 127.0.0.1:3000
-BackendDB: sqlite
-SQLite3DataFile: /absolute/path/orchestrator.sqlite3
-MySQLTopologyUser: orchestrator
-MySQLTopologyPassword: replace-me
+raft:
+  nodeID: dev-1
+  dataDir: /absolute/path/orchestrator-raft
+  bind: 127.0.0.1:10008
+server:
+  listen:
+    address: 127.0.0.1:3000
+metadata:
+  type: sqlite
+  sqlite:
+    dataFile: /absolute/path/orchestrator.sqlite3
+topology:
+  mysql:
+    user: orchestrator
+    password: replace-me
 ```
 
 Protect the configuration file because it contains database credentials.
@@ -72,4 +79,4 @@ Open `http://127.0.0.1:3000/web/clusters`. Check `/health/live`, `/health/ready`
 - Put Web/API and Raft on controlled networks. Validate the actual proxy, TLS/mTLS, authentication, URL prefix, read-only roles, metrics scraping, log collection, and alert routing.
 - Exercise one representative discovery, read, controlled write, failure analysis, and rollback in an isolated topology. Read back MySQL, orchestrator, Raft, audit, and external routing/KV state independently.
 
-Configuration samples are starting points, not production policy. Review every field against [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go) and keep credentials out of version control.
+Configuration samples are starting points, not production policy. Review every field against [`internal/config/model.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/model.go) and keep credentials out of version control.

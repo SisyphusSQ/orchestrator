@@ -14,6 +14,7 @@ Current `main` can contain changes newer than the latest published release. Trea
 
 ## Major current breaks
 
+- Configuration files and `dump-config` now use one lowerCamel layered structure. There is no compatibility path for legacy flat fields; migrate configuration, scripts, and generators before startup.
 - Server mode is Raft-only. Remove `RaftEnabled`; configure a durable ID, data directory, bind, and advertise address.
 - `orchestrator server` replaces historical `http`/`continuous` entry points. `orchestrator admin` is local maintenance only.
 - The standalone `orch` HTTP client replaces the database-connected CLI, `-c` commands, and shell client.
@@ -24,6 +25,10 @@ Current `main` can contain changes newer than the latest published release. Trea
 - HTTP transport, backend DAO, and logging implementations changed. Validate authentication/proxy behavior, representative database paths, log parsing, and syslog availability.
 
 ## Current change ledger
+
+### Layered configuration
+
+Configuration is grouped by responsibility under `server`, `raft`, `metadata`, `topology`, `authentication`, `agents`, `observability`, and related sections, with lowerCamel nested keys. Legacy fields are not converted automatically: for example, migrate `RaftNodeID`, `BackendDB`, `MySQLTopologyUser`, and `ConsulAddress` to `raft.nodeID`, `metadata.type`, `topology.mysql.user`, and `consul.address`. Generate each environment's new configuration from the checked-in `conf/` samples, validate `dump-config` and startup with the matching binary, then roll it out. Rollback must restore both the old binary and its matching flat configuration.
 
 ### Canonical metadata schema
 
@@ -51,7 +56,7 @@ GORM handles stable backend DAO reads/writes for MySQL and SQLite while reusing 
 
 Prometheus/OpenTelemetry replaces Graphite and raw/aggregated Collection APIs. Remove all six retired fields listed in [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability), scrape every node, and update dashboards and alert rules. This change adds no schema or Raft format migration.
 
-Zap text output is `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`; update parsers. `EnableSyslog` or `AuditToSyslog` initialization failure now stops startup, and audit sink write failures are visible. Writes are synchronous rather than one goroutine per entry, so validate sink latency under representative load.
+Zap text output is `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`; update parsers. `logging.syslog.enabled` or `audit.toSyslog` initialization failure now stops startup, and audit sink write failures are visible. Writes are synchronous rather than one goroutine per entry, so validate sink latency under representative load.
 
 ### Consul and ZooKeeper
 

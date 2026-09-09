@@ -8,7 +8,7 @@
 
 This fork is intentionally Raft-only:
 
-- Every server has a stable `RaftNodeID`, a persistent `RaftDataDir`, and a reachable `RaftBind`/`RaftAdvertise` address.
+- Every server has a stable `raft.nodeID`, a persistent `raft.dataDir`, and a reachable `raft.bind`/`raft.advertise` address.
 - Every server owns its own MySQL or SQLite metadata backend. Metadata databases are not shared between Raft members.
 - A new cluster is bootstrapped on exactly one seed; other nodes are added through the leader.
 - All ready nodes discover MySQL topology. Only a quorum-confirmed leader performs recoveries and coordinated business writes.

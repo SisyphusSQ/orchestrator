@@ -42,10 +42,10 @@ func openMetadataSchemaSQLite(t *testing.T) *sql.DB {
 
 func useSQLiteMetadataBackend(t *testing.T) {
 	t.Helper()
-	previousBackend := config.Config.BackendDB
-	config.Config.BackendDB = "sqlite3"
+	previousBackend := config.Config.Metadata.Type
+	config.Config.Metadata.Type = "sqlite3"
 	t.Cleanup(func() {
-		config.Config.BackendDB = previousBackend
+		config.Config.Metadata.Type = previousBackend
 	})
 }
 
@@ -155,12 +155,12 @@ func TestCanonicalMetadataSchemaResumesSQLite(t *testing.T) {
 		t.Fatalf("deploy interrupted canonical schema: %v", err)
 	}
 
-	previousPanicIfDifferent := config.Config.PanicIfDifferentDatabaseDeploy
+	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	config.Config.PanicIfDifferentDatabaseDeploy = false
+	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
 	config.RuntimeCLIFlags.ConfiguredVersion = "canonical-resume-test"
 	t.Cleanup(func() {
-		config.Config.PanicIfDifferentDatabaseDeploy = previousPanicIfDifferent
+		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
 	if err := initOrchestratorDBContext(ctx, database); err != nil {
@@ -381,12 +381,12 @@ func TestLegacyMetadataSchemaRemainsPatchDriven(t *testing.T) {
 		t.Fatalf("historical layout = %d; want legacy", layout)
 	}
 
-	previousPanicIfDifferent := config.Config.PanicIfDifferentDatabaseDeploy
+	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	config.Config.PanicIfDifferentDatabaseDeploy = false
+	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
 	config.RuntimeCLIFlags.ConfiguredVersion = "legacy-schema-test"
 	t.Cleanup(func() {
-		config.Config.PanicIfDifferentDatabaseDeploy = previousPanicIfDifferent
+		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
 	if err := initOrchestratorDBContext(ctx, database); err != nil {

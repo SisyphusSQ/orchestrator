@@ -128,7 +128,7 @@ func ExpireMasterPositionEquivalence() error {
 		_, err := db.ExecOrchestrator(`
         	delete from master_position_equivalence 
 				where last_suggested < NOW() - INTERVAL ? HOUR
-				`, config.Config.UnseenInstanceForgetHours,
+				`, config.Config.Topology.Discovery.UnseenForgetHours,
 		)
 		return log.Errore(err)
 	}

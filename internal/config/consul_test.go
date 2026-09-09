@@ -213,8 +213,8 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 		{
 			name: "preserves url address and applies embedded scheme",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "https://consul.example.com:8501"
-				c.ConsulScheme = "http"
+				c.Consul.Address = "https://consul.example.com:8501"
+				c.Consul.Scheme = "http"
 			},
 			wantAddress:  "https://consul.example.com:8501",
 			wantScheme:   "https",
@@ -224,7 +224,7 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 		{
 			name: "normalizes historical provider alias",
 			mutate: func(c *Configuration) {
-				c.ConsulKVStoreProvider = "consul_txn"
+				c.Consul.KV.Provider = "consul_txn"
 			},
 			wantScheme:   "http",
 			wantProvider: "consul-txn",
@@ -233,8 +233,8 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 		{
 			name: "keeps explicit zero timeout",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "127.0.0.1:8500"
-				c.ConsulHttpTimeoutSeconds = 0
+				c.Consul.Address = "127.0.0.1:8500"
+				c.Consul.HTTPTimeoutSeconds = 0
 			},
 			wantAddress:  "127.0.0.1:8500",
 			wantScheme:   "http",
@@ -244,56 +244,56 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 		{
 			name: "rejects negative timeout",
 			mutate: func(c *Configuration) {
-				c.ConsulHttpTimeoutSeconds = -1
+				c.Consul.HTTPTimeoutSeconds = -1
 			},
-			wantErrContains: "ConsulHttpTimeoutSeconds",
+			wantErrContains: "consul.httpTimeoutSeconds",
 		},
 		{
 			name: "rejects unknown provider",
 			mutate: func(c *Configuration) {
-				c.ConsulKVStoreProvider = "vault"
+				c.Consul.KV.Provider = "vault"
 			},
-			wantErrContains: "ConsulKVStoreProvider",
+			wantErrContains: "consul.kv.provider",
 		},
 		{
 			name: "rejects tls options on http",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "127.0.0.1:8500"
-				c.ConsulTLSCAFile = "/tmp/ca.pem"
+				c.Consul.Address = "127.0.0.1:8500"
+				c.Consul.TLS.CAFile = "/tmp/ca.pem"
 			},
 			wantErrContains: "https",
 		},
 		{
 			name: "rejects skip verify on http",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "http://127.0.0.1:8500"
-				c.ConsulTLSSkipVerify = true
+				c.Consul.Address = "http://127.0.0.1:8500"
+				c.Consul.TLS.SkipVerify = true
 			},
 			wantErrContains: "https",
 		},
 		{
 			name: "rejects unpaired client cert",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "https://127.0.0.1:8501"
-				c.ConsulTLSCertFile = "/tmp/client.pem"
+				c.Consul.Address = "https://127.0.0.1:8501"
+				c.Consul.TLS.CertFile = "/tmp/client.pem"
 			},
 			wantErrContains: "both be set",
 		},
 		{
 			name: "rejects unpaired client key",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "https://127.0.0.1:8501"
-				c.ConsulTLSPrivateKeyFile = "/tmp/client.key"
+				c.Consul.Address = "https://127.0.0.1:8501"
+				c.Consul.TLS.PrivateKeyFile = "/tmp/client.key"
 			},
 			wantErrContains: "both be set",
 		},
 		{
 			name: "allows paired certs on https",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = "https://127.0.0.1:8501"
-				c.ConsulTLSCertFile = "/tmp/client.pem"
-				c.ConsulTLSPrivateKeyFile = "/tmp/client.key"
-				c.ConsulTLSServerName = "consul.example.com"
+				c.Consul.Address = "https://127.0.0.1:8501"
+				c.Consul.TLS.CertFile = "/tmp/client.pem"
+				c.Consul.TLS.PrivateKeyFile = "/tmp/client.key"
+				c.Consul.TLS.ServerName = "consul.example.com"
 			},
 			wantAddress:  "https://127.0.0.1:8501",
 			wantScheme:   "https",
@@ -303,15 +303,15 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 		{
 			name: "rejects cross dc without address",
 			mutate: func(c *Configuration) {
-				c.ConsulAddress = ""
-				c.ConsulCrossDataCenterDistribution = true
+				c.Consul.Address = ""
+				c.Consul.KV.CrossDataCenterDistribution = true
 			},
-			wantErrContains: "ConsulCrossDataCenterDistribution",
+			wantErrContains: "consul.kv.crossDataCenterDistribution",
 		},
 		{
 			name: "rejects tls options without address",
 			mutate: func(c *Configuration) {
-				c.ConsulTLSCAFile = "/tmp/ca.pem"
+				c.Consul.TLS.CAFile = "/tmp/ca.pem"
 			},
 			wantErrContains: "https",
 		},
@@ -334,17 +334,17 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 			if err != nil {
 				t.Fatalf("postReadAdjustments() error: %v", err)
 			}
-			if configuration.ConsulAddress != testCase.wantAddress {
-				t.Fatalf("ConsulAddress = %q, want %q", configuration.ConsulAddress, testCase.wantAddress)
+			if configuration.Consul.Address != testCase.wantAddress {
+				t.Fatalf("ConsulAddress = %q, want %q", configuration.Consul.Address, testCase.wantAddress)
 			}
-			if configuration.ConsulScheme != testCase.wantScheme {
-				t.Fatalf("ConsulScheme = %q, want %q", configuration.ConsulScheme, testCase.wantScheme)
+			if configuration.Consul.Scheme != testCase.wantScheme {
+				t.Fatalf("ConsulScheme = %q, want %q", configuration.Consul.Scheme, testCase.wantScheme)
 			}
-			if configuration.ConsulKVStoreProvider != testCase.wantProvider {
-				t.Fatalf("ConsulKVStoreProvider = %q, want %q", configuration.ConsulKVStoreProvider, testCase.wantProvider)
+			if configuration.Consul.KV.Provider != testCase.wantProvider {
+				t.Fatalf("ConsulKVStoreProvider = %q, want %q", configuration.Consul.KV.Provider, testCase.wantProvider)
 			}
-			if configuration.ConsulHttpTimeoutSeconds != testCase.wantTimeout {
-				t.Fatalf("ConsulHttpTimeoutSeconds = %d, want %d", configuration.ConsulHttpTimeoutSeconds, testCase.wantTimeout)
+			if configuration.Consul.HTTPTimeoutSeconds != testCase.wantTimeout {
+				t.Fatalf("ConsulHttpTimeoutSeconds = %d, want %d", configuration.Consul.HTTPTimeoutSeconds, testCase.wantTimeout)
 			}
 		})
 	}
@@ -352,18 +352,18 @@ func TestPostReadAdjustmentsConsulContract(t *testing.T) {
 
 func TestPostReadAdjustmentsEmbeddedSchemeSurvivesLaterAdjustment(t *testing.T) {
 	configuration := newConfiguration()
-	configuration.ConsulAddress = "https://consul.example.com:8501"
-	configuration.ConsulScheme = "http"
+	configuration.Consul.Address = "https://consul.example.com:8501"
+	configuration.Consul.Scheme = "http"
 	if err := configuration.postReadAdjustments(); err != nil {
 		t.Fatalf("first postReadAdjustments() error: %v", err)
 	}
 
-	configuration.ConsulScheme = "http"
+	configuration.Consul.Scheme = "http"
 	if err := configuration.postReadAdjustments(); err != nil {
 		t.Fatalf("second postReadAdjustments() error: %v", err)
 	}
-	if configuration.ConsulScheme != "https" {
-		t.Fatalf("ConsulScheme = %q after later adjustment, want embedded https", configuration.ConsulScheme)
+	if configuration.Consul.Scheme != "https" {
+		t.Fatalf("ConsulScheme = %q after later adjustment, want embedded https", configuration.Consul.Scheme)
 	}
 }
 
@@ -393,70 +393,70 @@ func TestForceReadConsulDefaultsAndValidation(t *testing.T) {
 	})
 
 	t.Run("defaults", func(t *testing.T) {
-		_, err := ForceRead(writeConfigFixture(t, `{"Debug":true}`))
+		_, err := ForceRead(writeConfigFixture(t, `{"logging":{"debug":true}}`))
 		if err != nil {
 			t.Fatalf("ForceRead() error: %v", err)
 		}
-		if Config.ConsulAddress != "" {
-			t.Fatalf("ConsulAddress = %q, want empty", Config.ConsulAddress)
+		if Config.Consul.Address != "" {
+			t.Fatalf("ConsulAddress = %q, want empty", Config.Consul.Address)
 		}
-		if Config.ConsulScheme != "http" {
-			t.Fatalf("ConsulScheme = %q, want http", Config.ConsulScheme)
+		if Config.Consul.Scheme != "http" {
+			t.Fatalf("ConsulScheme = %q, want http", Config.Consul.Scheme)
 		}
-		if Config.ConsulAclToken != "" {
-			t.Fatalf("ConsulAclToken = %q, want empty", Config.ConsulAclToken)
+		if Config.Consul.ACLToken != "" {
+			t.Fatalf("ConsulAclToken = %q, want empty", Config.Consul.ACLToken)
 		}
-		if Config.ConsulDatacenter != "" {
-			t.Fatalf("ConsulDatacenter = %q, want empty", Config.ConsulDatacenter)
+		if Config.Consul.Datacenter != "" {
+			t.Fatalf("ConsulDatacenter = %q, want empty", Config.Consul.Datacenter)
 		}
-		if Config.ConsulTLSSkipVerify {
+		if Config.Consul.TLS.SkipVerify {
 			t.Fatal("ConsulTLSSkipVerify default is true; want false")
 		}
-		if Config.ConsulHttpTimeoutSeconds != 60 {
-			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 60", Config.ConsulHttpTimeoutSeconds)
+		if Config.Consul.HTTPTimeoutSeconds != 60 {
+			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 60", Config.Consul.HTTPTimeoutSeconds)
 		}
-		if Config.ConsulKVStoreProvider != "consul" {
-			t.Fatalf("ConsulKVStoreProvider = %q, want consul", Config.ConsulKVStoreProvider)
+		if Config.Consul.KV.Provider != "consul" {
+			t.Fatalf("ConsulKVStoreProvider = %q, want consul", Config.Consul.KV.Provider)
 		}
 	})
 
 	t.Run("explicit zero timeout", func(t *testing.T) {
-		_, err := ForceRead(writeConfigFixture(t, `{"ConsulAddress":"127.0.0.1:8500","ConsulHttpTimeoutSeconds":0}`))
+		_, err := ForceRead(writeConfigFixture(t, `{"consul":{"address":"127.0.0.1:8500","httpTimeoutSeconds":0}}`))
 		if err != nil {
 			t.Fatalf("ForceRead() error: %v", err)
 		}
-		if Config.ConsulHttpTimeoutSeconds != 0 {
-			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 0", Config.ConsulHttpTimeoutSeconds)
+		if Config.Consul.HTTPTimeoutSeconds != 0 {
+			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 0", Config.Consul.HTTPTimeoutSeconds)
 		}
 	})
 
 	t.Run("rejects unknown provider", func(t *testing.T) {
-		_, err := ForceRead(writeConfigFixture(t, `{"ConsulKVStoreProvider":"zk"}`))
+		_, err := ForceRead(writeConfigFixture(t, `{"consul":{"kv":{"provider":"zk"}}}`))
 		if err == nil {
 			t.Fatal("expected unknown provider to fail")
 		}
-		if !strings.Contains(err.Error(), "ConsulKVStoreProvider") {
-			t.Fatalf("error %q does not mention ConsulKVStoreProvider", err)
+		if !strings.Contains(err.Error(), "consul.kv.provider") {
+			t.Fatalf("error %q does not mention consul.kv.provider", err)
 		}
 	})
 }
 
 func TestConsulMaxKVsPerTransactionNormalizationStillApplies(t *testing.T) {
 	configuration := newConfiguration()
-	configuration.ConsulMaxKVsPerTransaction = 1
+	configuration.Consul.KV.MaxKVsPerTransaction = 1
 	if err := configuration.postReadAdjustments(); err != nil {
 		t.Fatalf("postReadAdjustments() error: %v", err)
 	}
-	if configuration.ConsulMaxKVsPerTransaction != ConsulKVsPerCluster {
-		t.Fatalf("got %d, want %d", configuration.ConsulMaxKVsPerTransaction, ConsulKVsPerCluster)
+	if configuration.Consul.KV.MaxKVsPerTransaction != ConsulKVsPerCluster {
+		t.Fatalf("got %d, want %d", configuration.Consul.KV.MaxKVsPerTransaction, ConsulKVsPerCluster)
 	}
 
 	configuration = newConfiguration()
-	configuration.ConsulMaxKVsPerTransaction = 100
+	configuration.Consul.KV.MaxKVsPerTransaction = 100
 	if err := configuration.postReadAdjustments(); err != nil {
 		t.Fatalf("postReadAdjustments() error: %v", err)
 	}
-	if configuration.ConsulMaxKVsPerTransaction != ConsulMaxTransactionOps {
-		t.Fatalf("got %d, want %d", configuration.ConsulMaxKVsPerTransaction, ConsulMaxTransactionOps)
+	if configuration.Consul.KV.MaxKVsPerTransaction != ConsulMaxTransactionOps {
+		t.Fatalf("got %d, want %d", configuration.Consul.KV.MaxKVsPerTransaction, ConsulMaxTransactionOps)
 	}
 }

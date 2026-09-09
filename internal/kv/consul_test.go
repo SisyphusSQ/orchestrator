@@ -126,23 +126,23 @@ func configureConsulTest(t *testing.T, address string, crossDataCenterDistributi
 		*config.Config = original
 	})
 
-	config.Config.ConsulAddress = address
+	config.Config.Consul.Address = address
 	if strings.HasPrefix(address, "https://") {
-		config.Config.ConsulScheme = "https"
+		config.Config.Consul.Scheme = "https"
 	} else {
-		config.Config.ConsulScheme = "http"
+		config.Config.Consul.Scheme = "http"
 	}
-	config.Config.ConsulAclToken = ""
-	config.Config.ConsulDatacenter = ""
-	config.Config.ConsulTLSCAFile = ""
-	config.Config.ConsulTLSCAPath = ""
-	config.Config.ConsulTLSCertFile = ""
-	config.Config.ConsulTLSPrivateKeyFile = ""
-	config.Config.ConsulTLSServerName = ""
-	config.Config.ConsulTLSSkipVerify = false
-	config.Config.ConsulHttpTimeoutSeconds = 60
-	config.Config.ConsulCrossDataCenterDistribution = crossDataCenterDistribution
-	config.Config.ConsulKVStoreProvider = "consul"
+	config.Config.Consul.ACLToken = ""
+	config.Config.Consul.Datacenter = ""
+	config.Config.Consul.TLS.CAFile = ""
+	config.Config.Consul.TLS.CAPath = ""
+	config.Config.Consul.TLS.CertFile = ""
+	config.Config.Consul.TLS.PrivateKeyFile = ""
+	config.Config.Consul.TLS.ServerName = ""
+	config.Config.Consul.TLS.SkipVerify = false
+	config.Config.Consul.HTTPTimeoutSeconds = 60
+	config.Config.Consul.KV.CrossDataCenterDistribution = crossDataCenterDistribution
+	config.Config.Consul.KV.Provider = "consul"
 }
 
 func mustConsulClient(t *testing.T) *consulapi.Client {
@@ -483,7 +483,7 @@ func TestConsulTokenSentAsHeaderNotQuery(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulAclToken = "secret-token"
+	config.Config.Consul.ACLToken = "secret-token"
 
 	store := newTestConsulStore(t)
 	if err := store.PutKeyValue("mysql/master/cluster", "mysql.example.com:3306"); err != nil {
@@ -521,7 +521,7 @@ func TestConsulJSONTokenWinsOverEnv(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulAclToken = "json-token"
+	config.Config.Consul.ACLToken = "json-token"
 
 	store := newTestConsulStore(t)
 	if err := store.PutKeyValue("mysql/master/cluster", "v"); err != nil {
@@ -575,7 +575,7 @@ func TestConsulDatacenterQueryParameter(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.ConsulDatacenter = "east"
+	config.Config.Consul.Datacenter = "east"
 
 	store := newTestConsulStore(t)
 	if err := store.PutKeyValue("mysql/master/cluster", "v"); err != nil {

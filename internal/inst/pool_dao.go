@@ -161,7 +161,7 @@ func ExpirePoolInstances() error {
 			where
 				registered_at < now() - interval ? minute
 			`,
-		config.Config.InstancePoolExpiryMinutes,
+		config.Config.Topology.Pools.ExpiryMinutes,
 	)
 	return log.Errore(err)
 }

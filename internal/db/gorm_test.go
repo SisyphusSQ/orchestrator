@@ -14,20 +14,20 @@ import (
 
 func useSQLiteBackendRuntime(t *testing.T) {
 	t.Helper()
-	previousBackendDB := config.Config.BackendDB
-	previousSQLiteFile := config.Config.SQLite3DataFile
-	previousSkipUpdate := config.Config.SkipOrchestratorDatabaseUpdate
+	previousBackendDB := config.Config.Metadata.Type
+	previousSQLiteFile := config.Config.Metadata.SQLite.DataFile
+	previousSkipUpdate := config.Config.Metadata.Schema.SkipUpdate
 	previousRuntime := processDatabaseRuntime
-	config.Config.BackendDB = "sqlite3"
-	config.Config.SQLite3DataFile = ":memory:"
-	config.Config.SkipOrchestratorDatabaseUpdate = true
+	config.Config.Metadata.Type = "sqlite3"
+	config.Config.Metadata.SQLite.DataFile = ":memory:"
+	config.Config.Metadata.Schema.SkipUpdate = true
 	processDatabaseRuntime = newDatabaseRuntime()
 	t.Cleanup(func() {
 		_ = processDatabaseRuntime.Close()
 		processDatabaseRuntime = previousRuntime
-		config.Config.BackendDB = previousBackendDB
-		config.Config.SQLite3DataFile = previousSQLiteFile
-		config.Config.SkipOrchestratorDatabaseUpdate = previousSkipUpdate
+		config.Config.Metadata.Type = previousBackendDB
+		config.Config.Metadata.SQLite.DataFile = previousSQLiteFile
+		config.Config.Metadata.Schema.SkipUpdate = previousSkipUpdate
 	})
 }
 

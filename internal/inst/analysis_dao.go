@@ -125,7 +125,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	args := []interface{}{lockedSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), policy.ReasonableReplicationLagSeconds, clusterName}
 	analysisQueryReductionClause := ``
 
-	if config.Config.ReduceReplicationAnalysisCount {
+	if config.Config.Topology.Analysis.ReduceCount {
 		analysisQueryReductionClause = `
 			HAVING
 				(
@@ -883,7 +883,7 @@ func ExpireInstanceAnalysisChangelog() error {
 			where
 				analysis_timestamp < now() - interval ? hour
 			`,
-		config.Config.UnseenInstanceForgetHours,
+		config.Config.Topology.Discovery.UnseenForgetHours,
 	)
 	return log.Errore(err)
 }

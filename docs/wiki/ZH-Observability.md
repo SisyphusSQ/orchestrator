@@ -2,7 +2,7 @@
 
 [English](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability) · **中文** · [Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-每个 HTTP listener 都提供节点本地的 Prometheus 指标与健康快照。这些路由遵循 `URLPrefix`、现有认证、TLS 和 mTLS，并且不会代理到 Raft Leader。
+每个 HTTP listener 都提供节点本地的 Prometheus 指标与健康快照。这些路由遵循 `server.urlPrefix`、现有认证、TLS 和 mTLS，并且不会代理到 Raft Leader。
 
 | 路由 | 含义 | 健康响应 |
 | --- | --- | --- |
@@ -34,8 +34,12 @@ Prometheus 必须逐个抓取 Raft 节点，不能只访问 Leader VIP。可在 
 
 ```json
 {
-  "OTelTraceEndpoint": "https://collector.example.com/v1/traces",
-  "OTelTraceSampleRatio": 0.1
+  "observability": {
+    "tracing": {
+      "endpoint": "https://collector.example.com/v1/traces",
+      "sampleRatio": 0.1
+    }
+  }
 }
 ```
 

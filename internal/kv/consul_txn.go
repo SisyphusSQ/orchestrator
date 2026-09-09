@@ -47,8 +47,8 @@ func clusterKeyPrefix(key, clusterMasterPrefix string) string {
 // ensures KVs for a single cluster are grouped into a single transaction. Prefixes
 // are sorted so grouping is stable across runs.
 func groupKVPairsByKeyPrefix(kvPairs consulapi.KVPairs) (groups []consulapi.KVPairs) {
-	maxOpsPerTxn := config.Config.ConsulMaxKVsPerTransaction
-	clusterMasterPrefix := config.Config.KVClusterMasterPrefix + "/"
+	maxOpsPerTxn := config.Config.Consul.KV.MaxKVsPerTransaction
+	clusterMasterPrefix := config.Config.Consul.KV.ClusterMasterPrefix + "/"
 	groupsMap := map[string]consulapi.KVPairs{}
 	var prefixes []string
 	seen := map[string]struct{}{}
@@ -261,7 +261,7 @@ func (this *consulTxnStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 		return nil
 	}
 
-	if !config.Config.ConsulCrossDataCenterDistribution {
+	if !config.Config.Consul.KV.CrossDataCenterDistribution {
 		return nil
 	}
 	if this.client == nil {

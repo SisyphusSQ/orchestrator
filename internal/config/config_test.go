@@ -16,7 +16,7 @@ const (
 )
 
 func init() {
-	Config.HostnameResolveMethod = "none"
+	Config.Topology.Hostname.ResolveMethod = "none"
 	log.SetLevel(log.ERROR)
 }
 
@@ -34,10 +34,10 @@ func writeNamedConfigFixture(t *testing.T, name, content string) string {
 	return configPath
 }
 
-func TestDecodeConfigurationSupportsJSONAndYAML(t *testing.T) {
+func TestDecodeConfigurationSupportsLayeredJSONAndYAML(t *testing.T) {
 	testCases := map[string]string{
-		"json": `{"Debug":true,"BackendDB":"sqlite3","SQLite3DataFile":"/tmp/orchestrator.db","DiscoverySeeds":["db:3306"],"ClusterNameToAlias":{"production":"main"}}`,
-		"yaml": "Debug: true\nBackendDB: sqlite3\nSQLite3DataFile: /tmp/orchestrator.db\nDiscoverySeeds:\n  - db:3306\nClusterNameToAlias:\n  production: main\n",
+		"json": `{"logging":{"debug":true},"metadata":{"type":"sqlite3","sqlite":{"dataFile":"/tmp/orchestrator.db"}},"topology":{"discovery":{"seeds":["db:3306"]},"classification":{"clusterNameToAlias":{"production":"main"}}}}`,
+		"yaml": "logging:\n  debug: true\nmetadata:\n  type: sqlite3\n  sqlite:\n    dataFile: /tmp/orchestrator.db\ntopology:\n  discovery:\n    seeds:\n      - db:3306\n  classification:\n    clusterNameToAlias:\n      production: main\n",
 	}
 	for name, content := range testCases {
 		t.Run(name, func(t *testing.T) {
@@ -45,14 +45,28 @@ func TestDecodeConfigurationSupportsJSONAndYAML(t *testing.T) {
 			if err := decodeConfiguration(strings.NewReader(content), configuration); err != nil {
 				t.Fatal(err)
 			}
-			if !configuration.Debug || configuration.BackendDB != "sqlite3" || configuration.SQLite3DataFile != "/tmp/orchestrator.db" {
+			if !configuration.Logging.Debug || configuration.Metadata.Type != "sqlite3" || configuration.Metadata.SQLite.DataFile != "/tmp/orchestrator.db" {
 				t.Fatalf("decoded scalar values = %#v", configuration)
 			}
-			if len(configuration.DiscoverySeeds) != 1 || configuration.DiscoverySeeds[0] != "db:3306" {
-				t.Fatalf("decoded list = %v", configuration.DiscoverySeeds)
+			if len(configuration.Topology.Discovery.Seeds) != 1 || configuration.Topology.Discovery.Seeds[0] != "db:3306" {
+				t.Fatalf("decoded list = %v", configuration.Topology.Discovery.Seeds)
 			}
-			if configuration.ClusterNameToAlias["production"] != "main" {
-				t.Fatalf("decoded map = %v", configuration.ClusterNameToAlias)
+			if configuration.Topology.Classification.ClusterNameToAlias["production"] != "main" {
+				t.Fatalf("decoded map = %v", configuration.Topology.Classification.ClusterNameToAlias)
+			}
+		})
+	}
+}
+
+func TestDecodeConfigurationRejectsFlatAndWrongCaseFields(t *testing.T) {
+	for name, content := range map[string]string{
+		"flat":             "RaftNodeID: node-1\n",
+		"wrong root case":  "Raft:\n  nodeID: node-1\n",
+		"wrong field case": "raft:\n  NodeID: node-1\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := decodeConfiguration(strings.NewReader(content), newConfiguration()); err == nil || !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("decode invalid configuration error = %v", err)
 			}
 		})
 	}
@@ -126,8 +140,8 @@ func TestDecodeConfigurationRejectsUnknownFields(t *testing.T) {
 
 func TestDecodeConfigurationRejectsDuplicateKeys(t *testing.T) {
 	for name, content := range map[string]string{
-		"json": `{"Debug": true, "Debug": false}`,
-		"yaml": "Debug: true\nDebug: false\n",
+		"json": `{"logging":{"debug":true,"debug":false}}`,
+		"yaml": "logging:\n  debug: true\n  debug: false\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := decodeConfiguration(strings.NewReader(content), newConfiguration()); err == nil {
@@ -138,7 +152,7 @@ func TestDecodeConfigurationRejectsDuplicateKeys(t *testing.T) {
 }
 
 func TestDecodeConfigurationRejectsMultipleYAMLDocuments(t *testing.T) {
-	err := decodeConfiguration(strings.NewReader("Debug: true\n---\nDebug: false\n"), newConfiguration())
+	err := decodeConfiguration(strings.NewReader("logging:\n  debug: true\n---\nlogging:\n  debug: false\n"), newConfiguration())
 	if err == nil || !strings.Contains(err.Error(), "multiple configuration documents") {
 		t.Fatalf("multiple documents error = %v", err)
 	}
@@ -146,8 +160,8 @@ func TestDecodeConfigurationRejectsMultipleYAMLDocuments(t *testing.T) {
 
 func TestDecodeConfigurationRejectsTrailingContent(t *testing.T) {
 	for name, content := range map[string]string{
-		"json": `{"Debug": true} {"Debug": false}`,
-		"yaml": "Debug: true\ninvalid trailing scalar\n",
+		"json": `{"logging":{"debug":true}} {"logging":{"debug":false}}`,
+		"yaml": "logging:\n  debug: true\ninvalid trailing scalar\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := decodeConfiguration(strings.NewReader(content), newConfiguration()); err == nil {
@@ -162,15 +176,15 @@ func TestReadIntoUsesContentInsteadOfFileExtension(t *testing.T) {
 		fileName string
 		content  string
 	}{
-		"yaml in json file": {fileName: "orchestrator.conf.json", content: "Debug: true\n"},
-		"json in yaml file": {fileName: "orchestrator.conf.yaml", content: `{"Debug": true}`},
+		"yaml in json file": {fileName: "orchestrator.conf.json", content: "logging:\n  debug: true\n"},
+		"json in yaml file": {fileName: "orchestrator.conf.yaml", content: `{"logging":{"debug":true}}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			configuration := newConfiguration()
 			if err := readInto(writeNamedConfigFixture(t, fixture.fileName, fixture.content), configuration); err != nil {
 				t.Fatal(err)
 			}
-			if !configuration.Debug {
+			if !configuration.Logging.Debug {
 				t.Fatal("configuration content was not applied")
 			}
 		})
@@ -179,14 +193,14 @@ func TestReadIntoUsesContentInsteadOfFileExtension(t *testing.T) {
 
 func TestReadIntoLayersJSONAndYAML(t *testing.T) {
 	configuration := newConfiguration()
-	if err := readInto(writeNamedConfigFixture(t, "base.json", `{"Debug": true, "ListenAddress": ":3000"}`), configuration); err != nil {
+	if err := readInto(writeNamedConfigFixture(t, "base.json", `{"logging":{"debug":true},"server":{"listen":{"address":":3000"}}}`), configuration); err != nil {
 		t.Fatal(err)
 	}
-	if err := readInto(writeNamedConfigFixture(t, "override.yaml", "Debug: false\n"), configuration); err != nil {
+	if err := readInto(writeNamedConfigFixture(t, "override.yaml", "logging:\n  debug: false\n"), configuration); err != nil {
 		t.Fatal(err)
 	}
-	if configuration.Debug || configuration.ListenAddress != ":3000" {
-		t.Fatalf("layered configuration = Debug:%t ListenAddress:%q", configuration.Debug, configuration.ListenAddress)
+	if configuration.Logging.Debug || configuration.Server.Listen.Address != ":3000" {
+		t.Fatalf("layered configuration = logging.debug:%t server.listen.address:%q", configuration.Logging.Debug, configuration.Server.Listen.Address)
 	}
 }
 
@@ -227,16 +241,16 @@ func TestRepositoryConfigurationFilesDecode(t *testing.T) {
 func TestRunningRaftRejectsIdentityReloadWithoutPartialChanges(t *testing.T) {
 	previous, locked := *Config, raftConfigurationLocked
 	t.Cleanup(func() { *Config = previous; raftConfigurationLocked = locked })
-	Config.RaftNodeID = "existing-node"
-	Config.RaftDataDir = t.TempDir()
+	Config.Raft.NodeID = "existing-node"
+	Config.Raft.DataDir = t.TempDir()
 	if err := Config.ValidateRaft(); err != nil {
 		t.Fatal(err)
 	}
 	LockRaftConfiguration()
-	if _, err := ForceRead(writeConfigFixture(t, `{"RaftNodeID":"replacement-node","Debug":false}`)); err == nil || !strings.Contains(err.Error(), "restart") {
+	if _, err := ForceRead(writeConfigFixture(t, `{"raft":{"nodeID":"replacement-node"},"logging":{"debug":false}}`)); err == nil || !strings.Contains(err.Error(), "restart") {
 		t.Fatalf("identity reload: %v", err)
 	}
-	if Config.RaftNodeID != "existing-node" || Config.Debug != previous.Debug {
+	if Config.Raft.NodeID != "existing-node" || Config.Logging.Debug != previous.Logging.Debug {
 		t.Fatal("invalid reload partially changed running configuration")
 	}
 }
@@ -251,14 +265,14 @@ func TestForceReadAllowsNonSeekableInput(t *testing.T) {
 
 	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestForceReadAllowsNonSeekableInput$")
 	cmd.Env = append(os.Environ(), forceReadStdinChildEnv+"=1")
-	cmd.Stdin = strings.NewReader("Debug: true\n")
+	cmd.Stdin = strings.NewReader("logging:\n  debug: true\n")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("expected non-seekable configuration input to remain accepted, got %v: %s", err, output)
 	}
 }
 
 func TestForceReadReturnsMalformedConfigurationError(t *testing.T) {
-	configPath := writeNamedConfigFixture(t, "malformed.conf.yaml", "Debug: [\n")
+	configPath := writeNamedConfigFixture(t, "malformed.conf.yaml", "logging:\n  debug: [\n")
 	_, err := ForceRead(configPath)
 	if err == nil {
 		t.Fatal("ForceRead() returned nil for malformed configuration")
@@ -270,33 +284,33 @@ func TestForceReadReturnsMalformedConfigurationError(t *testing.T) {
 
 func TestForceReadDoesNotApplyInvalidConfigurationPartially(t *testing.T) {
 	previous := *Config
-	Config.Debug = false
-	Config.BackendDB = "mysql"
-	Config.ClusterNameToAlias = map[string]string{"existing": "cluster"}
+	Config.Logging.Debug = false
+	Config.Metadata.Type = "mysql"
+	Config.Topology.Classification.ClusterNameToAlias = map[string]string{"existing": "cluster"}
 	t.Cleanup(func() {
 		*Config = previous
 	})
 
-	configPath := writeConfigFixture(t, `{"Debug":true,"BackendDB":"sqlite3","SQLite3DataFile":"","ClusterNameToAlias":{"new":"cluster"}}`)
+	configPath := writeConfigFixture(t, `{"logging":{"debug":true},"metadata":{"type":"sqlite3","sqlite":{"dataFile":""}},"topology":{"classification":{"clusterNameToAlias":{"new":"cluster"}}}}`)
 	_, err := ForceRead(configPath)
 	if err == nil {
 		t.Fatal("ForceRead() returned nil for invalid sqlite configuration")
 	}
-	if Config.Debug {
+	if Config.Logging.Debug {
 		t.Fatal("ForceRead() partially applied Debug from an invalid configuration")
 	}
-	if Config.BackendDB != "mysql" {
-		t.Fatalf("BackendDB = %q; want previous value %q", Config.BackendDB, "mysql")
+	if Config.Metadata.Type != "mysql" {
+		t.Fatalf("metadata.type = %q; want previous value %q", Config.Metadata.Type, "mysql")
 	}
-	if _, found := Config.ClusterNameToAlias["new"]; found {
+	if _, found := Config.Topology.Classification.ClusterNameToAlias["new"]; found {
 		t.Fatal("ForceRead() partially applied a map entry from an invalid configuration")
 	}
 }
 
 func TestPostReadRejectsUnsupportedAuthenticationMethod(t *testing.T) {
 	configuration := newConfiguration()
-	configuration.AuthenticationMethod = "oauth"
-	if err := configuration.postReadAdjustments(); err == nil || !strings.Contains(err.Error(), "unsupported AuthenticationMethod") {
+	configuration.Authentication.Method = "oauth"
+	if err := configuration.postReadAdjustments(); err == nil || !strings.Contains(err.Error(), "unsupported authentication.method") {
 		t.Fatalf("unsupported authentication method error = %v", err)
 	}
 }
@@ -304,12 +318,12 @@ func TestPostReadRejectsUnsupportedAuthenticationMethod(t *testing.T) {
 func TestRaft(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.RaftBind = "1.2.3.4:1008"
-		c.RaftNodeID = "node-1"
-		c.RaftDataDir = "/path/to/somewhere"
+		c.Raft.Bind = "1.2.3.4:1008"
+		c.Raft.NodeID = "node-1"
+		c.Raft.DataDir = "/path/to/somewhere"
 		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RaftAdvertise, c.RaftBind)
+		test.S(t).ExpectEquals(c.Raft.Advertise, c.Raft.Bind)
 	}
 	{
 		c := newConfiguration()
@@ -318,54 +332,54 @@ func TestRaft(t *testing.T) {
 	}
 	{
 		c := newConfiguration()
-		c.RaftDataDir = "/path/to/somewhere"
+		c.Raft.DataDir = "/path/to/somewhere"
 		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.RaftDataDir = "/path/to/somewhere"
-		c.RaftNodeID = "node-1"
+		c.Raft.DataDir = "/path/to/somewhere"
+		c.Raft.NodeID = "node-1"
 		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RaftAdvertise, c.RaftBind)
-		test.S(t).ExpectEquals(c.RaftNodeID, "node-1")
+		test.S(t).ExpectEquals(c.Raft.Advertise, c.Raft.Bind)
+		test.S(t).ExpectEquals(c.Raft.NodeID, "node-1")
 	}
 	{
 		c := newConfiguration()
-		c.RaftDataDir = "/path/to/somewhere"
-		c.RaftNodeID = "node-1"
-		c.RaftBind = ""
+		c.Raft.DataDir = "/path/to/somewhere"
+		c.Raft.NodeID = "node-1"
+		c.Raft.Bind = ""
 		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.RaftDataDir = "/path/to/somewhere"
-		c.RaftNodeID = "node-1"
-		c.RaftBind = "127.0.0.1"
-		c.DefaultRaftPort = 10008
+		c.Raft.DataDir = "/path/to/somewhere"
+		c.Raft.NodeID = "node-1"
+		c.Raft.Bind = "127.0.0.1"
+		c.Raft.DefaultPort = 10008
 		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RaftBind, "127.0.0.1:10008")
-		test.S(t).ExpectEquals(c.RaftAdvertise, "127.0.0.1:10008")
+		test.S(t).ExpectEquals(c.Raft.Bind, "127.0.0.1:10008")
+		test.S(t).ExpectEquals(c.Raft.Advertise, "127.0.0.1:10008")
 	}
 	{
 		c := newConfiguration()
-		c.RaftDataDir = "/path/to/somewhere"
-		c.RaftNodeID = "node-1"
-		c.RaftBind = "127.0.0.1:10008"
-		c.RaftAdvertise = "10.0.0.1"
-		c.DefaultRaftPort = 10008
+		c.Raft.DataDir = "/path/to/somewhere"
+		c.Raft.NodeID = "node-1"
+		c.Raft.Bind = "127.0.0.1:10008"
+		c.Raft.Advertise = "10.0.0.1"
+		c.Raft.DefaultPort = 10008
 		err := c.ValidateRaft()
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectEquals(c.RaftAdvertise, "10.0.0.1:10008")
-		test.S(t).ExpectEquals(c.RaftNodeID, "node-1")
+		test.S(t).ExpectEquals(c.Raft.Advertise, "10.0.0.1:10008")
+		test.S(t).ExpectEquals(c.Raft.NodeID, "node-1")
 	}
 	{
 		c := newConfiguration()
-		c.RaftDataDir = "/path/to/somewhere"
-		c.RaftNodeID = "node 1"
+		c.Raft.DataDir = "/path/to/somewhere"
+		c.Raft.NodeID = "node 1"
 		err := c.ValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
@@ -374,31 +388,31 @@ func TestRaft(t *testing.T) {
 func TestHttpAdvertise(t *testing.T) {
 	{
 		c := newConfiguration()
-		c.HTTPAdvertise = ""
+		c.Server.HTTPAdvertise = ""
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.HTTPAdvertise = "http://127.0.0.1:1234"
+		c.Server.HTTPAdvertise = "http://127.0.0.1:1234"
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.HTTPAdvertise = "http://127.0.0.1"
+		c.Server.HTTPAdvertise = "http://127.0.0.1"
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.HTTPAdvertise = "127.0.0.1:1234"
+		c.Server.HTTPAdvertise = "127.0.0.1:1234"
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
-		c.HTTPAdvertise = "http://127.0.0.1:1234/mypath"
+		c.Server.HTTPAdvertise = "http://127.0.0.1:1234/mypath"
 		err := c.postReadAdjustments()
 		test.S(t).ExpectNotNil(err)
 	}

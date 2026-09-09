@@ -46,18 +46,18 @@ func initializeBinlogDaoPostConfiguration() {
 }
 
 func compilePseudoGTIDPattern() (pseudoGTIDRegexp *regexp.Regexp, err error) {
-	log.Debugf("PseudoGTIDPatternIsFixedSubstring: %+v", config.Config.PseudoGTIDPatternIsFixedSubstring)
-	if config.Config.PseudoGTIDPatternIsFixedSubstring {
+	log.Debugf("pseudoGTID.patternIsFixedSubstring: %+v", config.Config.PseudoGTID.PatternIsFixedSubstring)
+	if config.Config.PseudoGTID.PatternIsFixedSubstring {
 		return nil, nil
 	}
-	log.Debugf("Compiling PseudoGTIDPattern: %q", config.Config.PseudoGTIDPattern)
-	return regexp.Compile(config.Config.PseudoGTIDPattern)
+	log.Debugf("Compiling pseudoGTID.pattern: %q", config.Config.PseudoGTID.Pattern)
+	return regexp.Compile(config.Config.PseudoGTID.Pattern)
 }
 
 // pseudoGTIDMatches attempts to match given string with pseudo GTID pattern/text.
 func pseudoGTIDMatches(pseudoGTIDRegexp *regexp.Regexp, binlogEntryInfo string) (found bool) {
-	if config.Config.PseudoGTIDPatternIsFixedSubstring {
-		return strings.Contains(binlogEntryInfo, config.Config.PseudoGTIDPattern)
+	if config.Config.PseudoGTID.PatternIsFixedSubstring {
+		return strings.Contains(binlogEntryInfo, config.Config.PseudoGTID.Pattern)
 	}
 	return pseudoGTIDRegexp.MatchString(binlogEntryInfo)
 }
@@ -95,9 +95,9 @@ func getLastPseudoGTIDEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey
 	for moreRowsExpected {
 		query := ""
 		if binlogCoordinates.Type == BinaryLog {
-			query = fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Config.BinlogEventsChunkSize)
+			query = fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Config.PseudoGTID.BinlogEventsChunkSize)
 		} else {
-			query = fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.BinlogEventsChunkSize), config.Config.BinlogEventsChunkSize)
+			query = fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.PseudoGTID.BinlogEventsChunkSize), config.Config.PseudoGTID.BinlogEventsChunkSize)
 		}
 
 		moreRowsExpected = false
@@ -264,7 +264,7 @@ func getLastExecutedEntryInRelaylog(instanceKey *InstanceKey, binlog string, min
 
 	step := 0
 	for moreRowsExpected {
-		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.BinlogEventsChunkSize), config.Config.BinlogEventsChunkSize)
+		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.PseudoGTID.BinlogEventsChunkSize), config.Config.PseudoGTID.BinlogEventsChunkSize)
 
 		moreRowsExpected = false
 		err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
@@ -338,7 +338,7 @@ func searchEventInRelaylog(instanceKey *InstanceKey, binlog string, searchEvent 
 
 	step := 0
 	for moreRowsExpected {
-		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.BinlogEventsChunkSize), config.Config.BinlogEventsChunkSize)
+		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.PseudoGTID.BinlogEventsChunkSize), config.Config.PseudoGTID.BinlogEventsChunkSize)
 
 		// We don't know in advance when we will hit the end of the binlog. We will implicitly understand it when our
 		// `show binlog events` query does not return any row.
@@ -428,7 +428,7 @@ func SearchEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey *InstanceK
 	}
 
 	for moreRowsExpected {
-		query := fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Config.BinlogEventsChunkSize)
+		query := fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Config.PseudoGTID.BinlogEventsChunkSize)
 
 		// We don't know in advance when we will hit the end of the binlog. We will implicitly understand it when our
 		// `show binlog events` query does not return any row.
@@ -558,7 +558,7 @@ func readBinlogEventsChunk(instanceKey *InstanceKey, startingCoordinates BinlogC
 	if startingCoordinates.LogFile == "" {
 		return events, log.Errorf("readBinlogEventsChunk: empty binlog file name for %+v.", *instanceKey)
 	}
-	query := fmt.Sprintf("show %s events in '%s' FROM %d LIMIT %d", commandToken, startingCoordinates.LogFile, startingCoordinates.LogPos, config.Config.BinlogEventsChunkSize)
+	query := fmt.Sprintf("show %s events in '%s' FROM %d LIMIT %d", commandToken, startingCoordinates.LogFile, startingCoordinates.LogPos, config.Config.PseudoGTID.BinlogEventsChunkSize)
 	err = orchestratordb.QueryDynamicRows(db, query, func(m orchestratordb.DynamicRow) error {
 		binlogEvent := BinlogEvent{}
 		binlogEvent.Coordinates.LogFile = m.GetString("Log_name")

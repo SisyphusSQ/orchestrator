@@ -10,8 +10,8 @@ import (
 var testCoordinates = BinlogCoordinates{LogFile: "mysql-bin.000010", LogPos: 108}
 
 func init() {
-	config.Config.HostnameResolveMethod = "none"
-	config.Config.KVClusterMasterPrefix = "test/master/"
+	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.Config.Consul.KV.ClusterMasterPrefix = "test/master/"
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

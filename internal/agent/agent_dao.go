@@ -75,7 +75,7 @@ func InitHttpClient() {
 		return net.DialTimeout(network, addr, httpTimeout)
 	}
 	httpTransport := &http.Transport{
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: config.Config.AgentSSLSkipVerify},
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: config.Config.Agents.TLS.SkipVerify},
 		Dial:                  dialTimeout,
 		ResponseHeaderTimeout: httpTimeout,
 	}
@@ -173,7 +173,7 @@ func ForgetLongUnseenAgents() error {
 				from host_agent
 			where
 				last_submitted < NOW() - interval ? hour`,
-		config.Config.UnseenAgentForgetHours,
+		config.Config.Agents.UnseenForgetHours,
 	)
 	return err
 }
@@ -192,7 +192,7 @@ func ReadOutdatedAgentsHosts() ([]string, error) {
 	type hostnameRow struct {
 		Hostname string `gorm:"column:hostname"`
 	}
-	rows, err := db.QueryOrchestratorRows[hostnameRow](context.Background(), query, config.Config.AgentPollMinutes)
+	rows, err := db.QueryOrchestratorRows[hostnameRow](context.Background(), query, config.Config.Agents.PollMinutes)
 	for _, row := range rows {
 		res = append(res, row.Hostname)
 	}
@@ -314,7 +314,7 @@ func UpdateAgentInfo(hostname string, agent Agent) error {
 // baseAgentUri returns the base URI for accessing an agent
 func baseAgentUri(agentHostname string, agentPort int) string {
 	protocol := "http"
-	if config.Config.AgentsUseSSL {
+	if config.Config.Agents.TLS.Enabled {
 		protocol = "https"
 	}
 	uri := fmt.Sprintf("%s://%s:%d/api", protocol, agentHostname, agentPort)
@@ -675,7 +675,7 @@ func FailStaleSeeds() error {
 								where
 									agent_seed.agent_seed_id = agent_seed_state.agent_seed_id
 						) < now() - interval ? minute`,
-		config.Config.StaleSeedFailMinutes,
+		config.Config.Agents.StaleSeedFailMinutes,
 	)
 	return err
 }
@@ -745,8 +745,8 @@ func executeSeed(seedId int64, targetHostname string, sourceHostname string) err
 	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("%s will now receive data in background", targetHostname), "")
 	ReceiveMySQLSeedData(targetHostname, seedId)
 
-	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Waiting %d seconds for %s to start listening for incoming data", config.Config.SeedWaitSecondsBeforeSend, targetHostname), "")
-	time.Sleep(time.Duration(config.Config.SeedWaitSecondsBeforeSend) * time.Second)
+	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Waiting %d seconds for %s to start listening for incoming data", config.Config.Agents.SeedWaitSecondsBeforeSend, targetHostname), "")
+	time.Sleep(time.Duration(config.Config.Agents.SeedWaitSecondsBeforeSend) * time.Second)
 
 	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("%s will now send data to %s in background", sourceHostname, targetHostname), "")
 	SendMySQLSeedData(sourceHostname, targetHostname, seedId)

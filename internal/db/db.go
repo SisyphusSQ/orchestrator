@@ -64,7 +64,7 @@ func OpenDiscoveryContext(ctx context.Context, host string, port int) (*sql.DB, 
 		topologyConnectionDiscovery,
 		host,
 		port,
-		time.Duration(config.Config.MySQLDiscoveryReadTimeoutSeconds)*time.Second,
+		time.Duration(config.Config.Topology.MySQL.DiscoveryReadTimeoutSeconds)*time.Second,
 	)
 }
 
@@ -75,7 +75,7 @@ func OpenTopologyContext(ctx context.Context, host string, port int) (*sql.DB, e
 		topologyConnectionOperation,
 		host,
 		port,
-		time.Duration(config.Config.MySQLTopologyReadTimeoutSeconds)*time.Second,
+		time.Duration(config.Config.Topology.MySQL.ReadTimeoutSeconds)*time.Second,
 	)
 }
 
@@ -87,11 +87,11 @@ func openTopologyContext(
 	readTimeout time.Duration,
 ) (*sql.DB, error) {
 	cfg := newTopologyMySQLConfig(host, port, readTimeout)
-	if config.Config.MySQLTopologyUseMutualTLS {
+	if config.Config.Topology.MySQL.UseMutualTLS {
 		if err := configureTopologyTLS(cfg); err != nil {
 			return nil, err
 		}
-	} else if config.Config.MySQLTopologyUseMixedTLS {
+	} else if config.Config.Topology.MySQL.UseMixedTLS {
 		required, err := requiresTLSContext(ctx, host, port, cfg)
 		if err != nil {
 			return nil, err
@@ -110,7 +110,7 @@ func IsSQLite() bool {
 }
 
 func isInMemorySQLite() bool {
-	return config.Config.IsSQLite() && strings.Contains(config.Config.SQLite3DataFile, ":memory:")
+	return config.Config.IsSQLite() && strings.Contains(config.Config.Metadata.SQLite.DataFile, ":memory:")
 }
 
 // OpenOrchestrator returns the process-owned orchestrator backend pool.
@@ -351,7 +351,7 @@ func initOrchestratorDBContext(ctx context.Context, db *sql.DB) error {
 		// Already deployed with this version
 		return nil
 	}
-	if config.Config.PanicIfDifferentDatabaseDeploy && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
+	if config.Config.Metadata.Schema.PanicOnDifferentDeployment && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
 		return fmt.Errorf("PanicIfDifferentDatabaseDeploy is set: configured version %s is not present in the database", config.RuntimeCLIFlags.ConfiguredVersion)
 	}
 	switch layout {

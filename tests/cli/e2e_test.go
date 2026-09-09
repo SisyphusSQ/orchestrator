@@ -111,7 +111,26 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 		})
 	}
 	httpPort := freePort(t)
-	config := map[string]any{"BackendDB": "mysql", "MySQLOrchestratorHost": "127.0.0.1", "MySQLOrchestratorPort": nodes[3].port, "MySQLOrchestratorUser": "root", "MySQLOrchestratorDatabase": "orchestrator_backend", "ListenAddress": fmt.Sprintf("127.0.0.1:%d", httpPort), "HostnameResolveMethod": "none", "MySQLHostnameResolveMethod": "none", "MySQLTopologyUser": "root", "MySQLConnectTimeoutSeconds": 1, "DiscoverByShowSlaveHosts": true, "Debug": false, "EnableSyslog": false, "AuditToSyslog": false, "RaftNodeID": "topology-e2e", "RaftDataDir": filepath.Join(dir, "raft"), "RaftBind": fmt.Sprintf("127.0.0.1:%d", freePort(t)), "InstancePollSeconds": 1}
+	config := map[string]any{
+		"metadata": map[string]any{
+			"type": "mysql",
+			"mysql": map[string]any{
+				"host": "127.0.0.1", "port": nodes[3].port, "user": "root", "database": "orchestrator_backend",
+			},
+		},
+		"server": map[string]any{"listen": map[string]any{"address": fmt.Sprintf("127.0.0.1:%d", httpPort)}},
+		"topology": map[string]any{
+			"mysql":     map[string]any{"user": "root"},
+			"hostname":  map[string]any{"resolveMethod": "none", "mysqlResolveMethod": "none"},
+			"discovery": map[string]any{"useShowReplicaHosts": true, "pollSeconds": 1},
+		},
+		"mysql":   map[string]any{"connectTimeoutSeconds": 1},
+		"logging": map[string]any{"debug": false, "syslog": map[string]any{"enabled": false}},
+		"audit":   map[string]any{"toSyslog": false},
+		"raft": map[string]any{
+			"nodeID": "topology-e2e", "dataDir": filepath.Join(dir, "raft"), "bind": fmt.Sprintf("127.0.0.1:%d", freePort(t)),
+		},
+	}
 	configPath := filepath.Join(dir, "server.json")
 	raw, err := json.Marshal(config)
 	if err != nil {

@@ -128,7 +128,7 @@ func RespondStatus(r Responder, status int, apiResponse *APIResponse) {
 }
 
 func setupMessagePrefix() {
-	act := config.Config.PrependMessagesWithOrcIdentity
+	act := config.Config.Server.ResponseIdentity.Mode
 	if act == "" || act == "none" {
 		return
 	}
@@ -156,8 +156,8 @@ func setupMessagePrefix() {
 			fallbackActive = true
 		}
 	}
-	if (fallbackActive || act == "custom") && config.Config.CustomOrcIdentity != "" {
-		hostname = config.Config.CustomOrcIdentity
+	if (fallbackActive || act == "custom") && config.Config.Server.ResponseIdentity.Custom != "" {
+		hostname = config.Config.Server.ResponseIdentity.Custom
 	}
 	if hostname != "" {
 		messagePrefix = fmt.Sprintf("Orchestrator %+v says: ", hostname)
@@ -2420,7 +2420,7 @@ func (this *HttpAPI) Agents(params Params, r Responder, req *http.Request, user 
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2441,7 +2441,7 @@ func (this *HttpAPI) Agent(params Params, r Responder, req *http.Request, user P
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2462,7 +2462,7 @@ func (this *HttpAPI) AgentUnmount(params Params, r Responder, req *http.Request,
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2483,7 +2483,7 @@ func (this *HttpAPI) AgentMountLV(params Params, r Responder, req *http.Request,
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2504,7 +2504,7 @@ func (this *HttpAPI) AgentCreateSnapshot(params Params, r Responder, req *http.R
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2525,7 +2525,7 @@ func (this *HttpAPI) AgentRemoveLV(params Params, r Responder, req *http.Request
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2546,7 +2546,7 @@ func (this *HttpAPI) AgentMySQLStop(params Params, r Responder, req *http.Reques
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2567,7 +2567,7 @@ func (this *HttpAPI) AgentMySQLStart(params Params, r Responder, req *http.Reque
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2587,7 +2587,7 @@ func (this *HttpAPI) AgentCustomCommand(params Params, r Responder, req *http.Re
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2609,7 +2609,7 @@ func (this *HttpAPI) AgentSeed(params Params, r Responder, req *http.Request, us
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2630,7 +2630,7 @@ func (this *HttpAPI) AgentActiveSeeds(params Params, r Responder, req *http.Requ
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2651,7 +2651,7 @@ func (this *HttpAPI) AgentRecentSeeds(params Params, r Responder, req *http.Requ
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2672,7 +2672,7 @@ func (this *HttpAPI) AgentSeedDetails(params Params, r Responder, req *http.Requ
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2694,7 +2694,7 @@ func (this *HttpAPI) AgentSeedStates(params Params, r Responder, req *http.Reque
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2716,7 +2716,7 @@ func (this *HttpAPI) Seeds(params Params, r Responder, req *http.Request, user P
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -2737,7 +2737,7 @@ func (this *HttpAPI) AbortSeed(params Params, r Responder, req *http.Request, us
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.Agents.ServeHTTP {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Agents not served"})
 		return
 	}
@@ -3914,10 +3914,10 @@ func (this *HttpAPI) RegisterRequests(m *Router) {
 	this.registerAPIRequest(m, "seeds", this.Seeds)
 
 	// Configurable status check endpoint
-	if config.Config.StatusEndpoint == config.DefaultStatusAPIEndpoint {
+	if config.Config.Server.Status.Endpoint == config.DefaultStatusAPIEndpoint {
 		this.registerAPIRequestNoProxy(m, "status", this.StatusCheck)
 	} else {
-		m.Get(config.Config.StatusEndpoint, this.StatusCheck)
+		m.Get(config.Config.Server.Status.Endpoint, this.StatusCheck)
 	}
 
 	setupMessagePrefix()

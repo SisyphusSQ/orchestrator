@@ -92,7 +92,7 @@ jobs:
     - name: Test Web served by Go
       run: |
         cat > "$RUNNER_TEMP/web-e2e.json" <<EOF
-        {"BackendDB":"sqlite","SQLite3DataFile":"$RUNNER_TEMP/web-e2e.db","ListenAddress":"127.0.0.1:3002","AuditToBackendDB":true,"RaftNodeID":"web-e2e","RaftDataDir":"$RUNNER_TEMP/web-e2e-raft","RaftBind":"127.0.0.1:10008"}
+        {"metadata":{"type":"sqlite","sqlite":{"dataFile":"$RUNNER_TEMP/web-e2e.db"}},"server":{"listen":{"address":"127.0.0.1:3002"}},"audit":{"toBackend":true},"raft":{"nodeID":"web-e2e","dataDir":"$RUNNER_TEMP/web-e2e-raft","bind":"127.0.0.1:10008"}}
         EOF
         mkdir -p "$RUNNER_TEMP/standalone-web"
         cp bin/orchestrator "$RUNNER_TEMP/standalone-web/orchestrator"

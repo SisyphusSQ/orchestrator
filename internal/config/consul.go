@@ -14,31 +14,31 @@ type ConsulEndpoint struct {
 }
 
 func (this *Configuration) normalizeAndValidateConsul() error {
-	provider, err := NormalizeConsulKVStoreProvider(this.ConsulKVStoreProvider)
+	provider, err := NormalizeConsulKVStoreProvider(this.Consul.KV.Provider)
 	if err != nil {
 		return err
 	}
-	this.ConsulKVStoreProvider = provider
+	this.Consul.KV.Provider = provider
 
-	if this.ConsulHttpTimeoutSeconds < 0 {
-		return fmt.Errorf("ConsulHttpTimeoutSeconds must be >= 0")
+	if this.Consul.HTTPTimeoutSeconds < 0 {
+		return fmt.Errorf("consul.httpTimeoutSeconds must be >= 0")
 	}
 
-	certSet := strings.TrimSpace(this.ConsulTLSCertFile) != ""
-	keySet := strings.TrimSpace(this.ConsulTLSPrivateKeyFile) != ""
+	certSet := strings.TrimSpace(this.Consul.TLS.CertFile) != ""
+	keySet := strings.TrimSpace(this.Consul.TLS.PrivateKeyFile) != ""
 	if certSet != keySet {
-		return fmt.Errorf("ConsulTLSCertFile and ConsulTLSPrivateKeyFile must both be set")
+		return fmt.Errorf("consul.tls.certFile and consul.tls.privateKeyFile must both be set")
 	}
 
-	address := strings.TrimSpace(this.ConsulAddress)
+	address := strings.TrimSpace(this.Consul.Address)
 	if address == "" {
-		if this.ConsulCrossDataCenterDistribution {
-			return fmt.Errorf("ConsulCrossDataCenterDistribution requires ConsulAddress")
+		if this.Consul.KV.CrossDataCenterDistribution {
+			return fmt.Errorf("consul.kv.crossDataCenterDistribution requires consul.address")
 		}
 		if consulTLSOptionsConfigured(this) {
-			return fmt.Errorf("Consul TLS options require an https ConsulAddress")
+			return fmt.Errorf("consul.tls options require an https consul.address")
 		}
-		if scheme := strings.TrimSpace(this.ConsulScheme); scheme != "" {
+		if scheme := strings.TrimSpace(this.Consul.Scheme); scheme != "" {
 			if _, err := normalizeConsulScheme(scheme); err != nil {
 				return err
 			}
@@ -46,15 +46,15 @@ func (this *Configuration) normalizeAndValidateConsul() error {
 		return nil
 	}
 
-	endpoint, err := NormalizeConsulEndpoint(address, this.ConsulScheme)
+	endpoint, err := NormalizeConsulEndpoint(address, this.Consul.Scheme)
 	if err != nil {
 		return err
 	}
 	// Keep an address-embedded scheme intact. Read and Reload apply multiple
 	// configuration files in sequence; stripping it here would let a later
 	// ConsulScheme value override the address on the next adjustment pass.
-	this.ConsulAddress = address
-	this.ConsulScheme = endpoint.Scheme
+	this.Consul.Address = address
+	this.Consul.Scheme = endpoint.Scheme
 
 	if consulTLSOptionsConfigured(this) && endpoint.Scheme != "https" {
 		return fmt.Errorf("Consul TLS options require https")
@@ -63,12 +63,12 @@ func (this *Configuration) normalizeAndValidateConsul() error {
 }
 
 func consulTLSOptionsConfigured(configuration *Configuration) bool {
-	return strings.TrimSpace(configuration.ConsulTLSCAFile) != "" ||
-		strings.TrimSpace(configuration.ConsulTLSCAPath) != "" ||
-		strings.TrimSpace(configuration.ConsulTLSCertFile) != "" ||
-		strings.TrimSpace(configuration.ConsulTLSPrivateKeyFile) != "" ||
-		strings.TrimSpace(configuration.ConsulTLSServerName) != "" ||
-		configuration.ConsulTLSSkipVerify
+	return strings.TrimSpace(configuration.Consul.TLS.CAFile) != "" ||
+		strings.TrimSpace(configuration.Consul.TLS.CAPath) != "" ||
+		strings.TrimSpace(configuration.Consul.TLS.CertFile) != "" ||
+		strings.TrimSpace(configuration.Consul.TLS.PrivateKeyFile) != "" ||
+		strings.TrimSpace(configuration.Consul.TLS.ServerName) != "" ||
+		configuration.Consul.TLS.SkipVerify
 }
 
 // NormalizeConsulEndpoint accepts host:port or http[s]://host:port.
@@ -76,7 +76,7 @@ func consulTLSOptionsConfigured(configuration *Configuration) bool {
 func NormalizeConsulEndpoint(address, scheme string) (ConsulEndpoint, error) {
 	address = strings.TrimSpace(address)
 	if address == "" {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress is empty")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address is empty")
 	}
 
 	if !strings.Contains(address, "://") {
@@ -99,27 +99,27 @@ func NormalizeConsulEndpoint(address, scheme string) (ConsulEndpoint, error) {
 
 	parsed, err := url.Parse(address)
 	if err != nil {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress has invalid URL syntax")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address has invalid URL syntax")
 	}
 	normalizedScheme, err := normalizeConsulScheme(parsed.Scheme)
 	if err != nil {
 		return ConsulEndpoint{}, err
 	}
 	if parsed.User != nil {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress must not include userinfo")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address must not include userinfo")
 	}
 	if parsed.Path != "" || parsed.RawPath != "" {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress must not include a path")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address must not include a path")
 	}
 	if parsed.RawQuery != "" || parsed.ForceQuery {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress must not include a query")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address must not include a query")
 	}
 	if parsed.Fragment != "" || strings.Contains(address, "#") {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress must not include a fragment")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address must not include a fragment")
 	}
 	host := parsed.Host
 	if host == "" {
-		return ConsulEndpoint{}, fmt.Errorf("ConsulAddress is missing host")
+		return ConsulEndpoint{}, fmt.Errorf("consul.address is missing host")
 	}
 	if err := validateConsulHostPort(host); err != nil {
 		return ConsulEndpoint{}, err
@@ -135,7 +135,7 @@ func NormalizeConsulKVStoreProvider(provider string) (string, error) {
 	case "consul-txn", "consul_txn":
 		return "consul-txn", nil
 	default:
-		return "", fmt.Errorf("ConsulKVStoreProvider %q is not supported; use consul or consul-txn", provider)
+		return "", fmt.Errorf("consul.kv.provider %q is not supported; use consul or consul-txn", provider)
 	}
 }
 
@@ -150,10 +150,10 @@ func normalizeConsulScheme(scheme string) (string, error) {
 
 func rejectConsulAddressExtras(address string) error {
 	if strings.Contains(address, "@") {
-		return fmt.Errorf("ConsulAddress must not include userinfo")
+		return fmt.Errorf("consul.address must not include userinfo")
 	}
 	if strings.ContainsAny(address, "/?#") {
-		return fmt.Errorf("ConsulAddress must not include a path, query, or fragment")
+		return fmt.Errorf("consul.address must not include a path, query, or fragment")
 	}
 	return nil
 }
@@ -161,13 +161,13 @@ func rejectConsulAddressExtras(address string) error {
 func validateConsulHostPort(address string) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return fmt.Errorf("ConsulAddress must be host:port or http[s]://host:port")
+		return fmt.Errorf("consul.address must be host:port or http[s]://host:port")
 	}
 	if strings.TrimSpace(host) == "" {
-		return fmt.Errorf("ConsulAddress is missing host")
+		return fmt.Errorf("consul.address is missing host")
 	}
 	if strings.TrimSpace(port) == "" {
-		return fmt.Errorf("ConsulAddress is missing port")
+		return fmt.Errorf("consul.address is missing port")
 	}
 	return nil
 }

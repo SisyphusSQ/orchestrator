@@ -2,7 +2,7 @@
 
 **English** · [中文](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-HTTP-API) · [Wiki home](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-The HTTP API is the contract used by both `orch` and the Web console. Its default base path is `/api`; prepend `URLPrefix` when configured.
+The HTTP API is the contract used by both `orch` and the Web console. Its default base path is `/api`; prepend `server.urlPrefix` when configured.
 
 ## Response contract
 

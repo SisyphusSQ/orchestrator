@@ -29,7 +29,7 @@ import (
 )
 
 func getProxyAuthUser(req *http.Request) string {
-	for _, user := range req.Header[config.Config.AuthUserHeader] {
+	for _, user := range req.Header[config.Config.Authentication.Proxy.UserHeader] {
 		return user
 	}
 	return ""
@@ -37,11 +37,11 @@ func getProxyAuthUser(req *http.Request) string {
 
 // isAuthorizedForWrite checks req to see whether authenticated user has write-privileges.
 func isAuthorizedForWrite(req *http.Request, user Principal) bool {
-	if config.Config.ReadOnly {
+	if config.Config.Server.ReadOnly {
 		return false
 	}
 
-	switch strings.ToLower(config.Config.AuthenticationMethod) {
+	switch strings.ToLower(config.Config.Authentication.Method) {
 	case "basic":
 		{
 			// The mere fact we're here means the user has passed authentication
@@ -59,13 +59,13 @@ func isAuthorizedForWrite(req *http.Request, user Principal) bool {
 	case "proxy":
 		{
 			authUser := getProxyAuthUser(req)
-			for _, configPowerAuthUser := range config.Config.PowerAuthUsers {
+			for _, configPowerAuthUser := range config.Config.Authentication.Power.Users {
 				if configPowerAuthUser == "*" || configPowerAuthUser == authUser {
 					return true
 				}
 			}
 			// check the user's group is one of those listed here
-			if len(config.Config.PowerAuthGroups) > 0 && os.UserInGroups(authUser, config.Config.PowerAuthGroups) {
+			if len(config.Config.Authentication.Power.Groups) > 0 && os.UserInGroups(authUser, config.Config.Authentication.Power.Groups) {
 				return true
 			}
 			return false
@@ -115,16 +115,16 @@ func isAuthorizedForConfiguration(req *http.Request, user Principal) bool {
 	if !isAuthorizedForAction(req, user) {
 		return false
 	}
-	if strings.TrimSpace(config.Config.AuthenticationMethod) == "" {
+	if strings.TrimSpace(config.Config.Authentication.Method) == "" {
 		return true
 	}
 	userID := getUserId(req, user)
-	for _, allowed := range config.Config.ConfigurationAdminUsers {
+	for _, allowed := range config.Config.Authentication.ConfigurationAdmins.Users {
 		if allowed == "*" || allowed == userID {
 			return true
 		}
 	}
-	return userID != "" && len(config.Config.ConfigurationAdminGroups) > 0 && os.UserInGroups(userID, config.Config.ConfigurationAdminGroups)
+	return userID != "" && len(config.Config.Authentication.ConfigurationAdmins.Groups) > 0 && os.UserInGroups(userID, config.Config.Authentication.ConfigurationAdmins.Groups)
 }
 
 func authenticateToken(publicToken string, resp http.ResponseWriter) error {
@@ -140,11 +140,11 @@ func authenticateToken(publicToken string, resp http.ResponseWriter) error {
 
 // getUserId returns the authenticated user id, if available, depending on authertication method.
 func getUserId(req *http.Request, user Principal) string {
-	if config.Config.ReadOnly {
+	if config.Config.Server.ReadOnly {
 		return ""
 	}
 
-	switch strings.ToLower(config.Config.AuthenticationMethod) {
+	switch strings.ToLower(config.Config.Authentication.Method) {
 	case "basic":
 		{
 			return string(user)

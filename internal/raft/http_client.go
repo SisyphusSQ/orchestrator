@@ -47,21 +47,21 @@ func GetRaftHttpTransport() (*http.Transport, error) {
 	}
 
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: config.Config.SSLSkipVerify,
+		InsecureSkipVerify: config.Config.Server.TLS.SkipVerify,
 	}
-	if config.Config.UseSSL {
-		caPool, err := ssl.ReadCAFile(config.Config.SSLCAFile)
+	if config.Config.Server.TLS.Enabled {
+		caPool, err := ssl.ReadCAFile(config.Config.Server.TLS.CAFile)
 		if err != nil {
 			return nil, err
 		}
 		tlsConfig.RootCAs = caPool
 
-		if config.Config.UseMutualTLS {
+		if config.Config.Server.TLS.MutualTLS {
 			var sslPEMPassword []byte
-			if ssl.IsEncryptedPEM(config.Config.SSLPrivateKeyFile) {
-				sslPEMPassword = ssl.GetPEMPassword(config.Config.SSLPrivateKeyFile)
+			if ssl.IsEncryptedPEM(config.Config.Server.TLS.PrivateKeyFile) {
+				sslPEMPassword = ssl.GetPEMPassword(config.Config.Server.TLS.PrivateKeyFile)
 			}
-			if err := ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.SSLCertFile, config.Config.SSLPrivateKeyFile, sslPEMPassword); err != nil {
+			if err := ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.Server.TLS.CertFile, config.Config.Server.TLS.PrivateKeyFile, sslPEMPassword); err != nil {
 				return nil, err
 			}
 		}
@@ -94,18 +94,18 @@ func HttpGetLeader(path string) (response []byte, err error) {
 		return nil, fmt.Errorf("Raft leader URI unknown")
 	}
 	leaderAPI := leaderURI
-	if config.Config.URLPrefix != "" {
+	if config.Config.Server.URLPrefix != "" {
 		// We know URLPrefix begind with "/"
-		leaderAPI = fmt.Sprintf("%s%s", leaderAPI, config.Config.URLPrefix)
+		leaderAPI = fmt.Sprintf("%s%s", leaderAPI, config.Config.Server.URLPrefix)
 	}
 	leaderAPI = fmt.Sprintf("%s/api", leaderAPI)
 
 	url := fmt.Sprintf("%s/%s", leaderAPI, path)
 
 	req, err := http.NewRequest("GET", url, nil)
-	switch strings.ToLower(config.Config.AuthenticationMethod) {
+	switch strings.ToLower(config.Config.Authentication.Method) {
 	case "basic", "multi":
-		req.SetBasicAuth(config.Config.HTTPAuthUser, config.Config.HTTPAuthPassword)
+		req.SetBasicAuth(config.Config.Authentication.Basic.User, config.Config.Authentication.Basic.Password)
 	}
 
 	res, err := httpClient.Do(req)

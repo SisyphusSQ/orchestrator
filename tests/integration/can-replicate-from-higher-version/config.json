@@ -1,3 +1,7 @@
 {
-  "LowerReplicaVersionAllowed": true
+  "topology": {
+    "compatibility": {
+      "lowerReplicaVersionAllowed": true
+    }
+  }
 }

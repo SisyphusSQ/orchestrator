@@ -14,6 +14,6 @@ Hook 支持 9 个阶段：故障检测后、故障切换前、主库切换后、
 
 Hook 以 Orchestrator 进程身份执行。每个配置必须设置单命令超时、失败策略与审计输出上限；常见密码、token、secret 与 API key 赋值会在审计前脱敏。页面“测试执行”会真实执行命令，必须先确认命令在当前环境中安全且幂等。
 
-当启用认证时，恢复配置写权限由 `ConfigurationAdminUsers` 与 `ConfigurationAdminGroups` 单独控制；空列表表示拒绝配置写入。未启用认证的本地部署允许配置写入，API 仍要求当前节点具备 Raft leader quorum。
+当启用认证时，恢复配置写权限由 `authentication.configurationAdmins.users` 与 `authentication.configurationAdmins.groups` 单独控制；空列表表示拒绝配置写入。未启用认证的本地部署允许配置写入，API 仍要求当前节点具备 Raft leader quorum。
 
 这是不兼容升级：旧版 YAML/JSON 恢复参数与 Hook 键不再被接受，也不会自动迁移。升级前应记录旧值，启动新版后在页面重新配置并回读生效值。

@@ -135,14 +135,14 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.InstanceWriteBufferSize)
+	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.Topology.WriteBuffer.Size)
 	observability.Gauge("orchestrator_write_buffer_items", "Current pending instance writes", func() int64 { return int64(len(instanceWriteBuffer)) })
-	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
-	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
+	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.Topology.Discovery.PollSeconds/2)*time.Second, time.Second)
+	forgetInstanceKeys = cache.New(time.Duration(config.Config.Topology.Discovery.PollSeconds*3)*time.Second, time.Second)
 	clusterInjectedPseudoGTIDCache = cache.New(time.Minute, time.Second)
 	// spin off instance write buffer flushing
 	go func() {
-		flushTick := time.Tick(time.Duration(config.Config.InstanceFlushIntervalMilliseconds) * time.Millisecond)
+		flushTick := time.Tick(time.Duration(config.Config.Topology.WriteBuffer.FlushIntervalMilliseconds) * time.Millisecond)
 		for {
 			// it is time to flush
 			select {
@@ -199,7 +199,7 @@ func ExecDBWriteFuncContext(ctx context.Context, f func() error) (resultErr erro
 func ExpireTableData(tableName string, timestampColumn string) error {
 	query := fmt.Sprintf("delete from %s where %s < NOW() - INTERVAL ? DAY", tableName, timestampColumn)
 	writeFunc := func() error {
-		_, err := db.ExecOrchestrator(query, config.Config.AuditPurgeDays)
+		_, err := db.ExecOrchestrator(query, config.Config.Audit.PurgeDays)
 		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
@@ -277,7 +277,7 @@ func ReadTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 func ReadTopologyInstanceContext(ctx context.Context, instanceKey *InstanceKey) (*Instance, error) {
 	instance, skipped, err := ReadTopologyInstanceBufferableContext(ctx, instanceKey, false, nil)
 	if skipped {
-		if config.Config.EnableDiscoveryFiltersLogs {
+		if config.Config.Topology.Discovery.FilterLogsEnabled {
 			log.Infof("Skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", instanceKey)
 		}
 		instance = nil
@@ -327,7 +327,7 @@ func unrecoverableError(err error) bool {
 // Check if the instance is a MaxScale binlog server (a proxy not a real
 // MySQL server) and also update the resolved hostname
 func (instance *Instance) checkMaxScale(database *sql.DB, latency *stopwatch.NamedStopwatch) (isMaxScale bool, resolvedHostname string, err error) {
-	if config.Config.SkipMaxScaleCheck {
+	if config.Config.Topology.Compatibility.SkipMaxScaleCheck {
 		return isMaxScale, resolvedHostname, err
 	}
 
@@ -525,7 +525,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	err = db.QueryDynamicRowsContext(ctx, topologyDB, instance.QSP.show_slave_status(), func(m db.DynamicRow) error {
 		user := m.GetString(instance.QSP.master_user())
 
-		if FiltersMatchReplicationIgnoreUsername(user, config.Config.DiscoveryIgnoreReplicationUsernameFilters) {
+		if FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
 			err = fmt.Errorf("Host %+v is excluded from discovery by DiscoveryIgnoreReplicationUsernameFilters.", *instanceKey)
 			instanceDiscoverySkipped = true
 			return err
@@ -617,7 +617,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 			goto Cleanup
 		}
 		partialSuccess = true // We at least managed to read something from the server.
-		switch strings.ToLower(config.Config.MySQLHostnameResolveMethod) {
+		switch strings.ToLower(config.Config.Topology.Hostname.MySQLResolveMethod) {
 		case "none":
 			resolvedHostname = instance.Key.Hostname
 		case "default", "hostname", "@@hostname":
@@ -753,7 +753,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 				if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
 					instance.SupportsOracleGTID = true
 				}
-				if config.Config.ReplicationCredentialsQuery != "" {
+				if config.Config.Topology.Replication.CredentialsQuery != "" {
 					instance.ReplicationCredentialsAvailable = true
 				} else if masterInfoRepositoryOnTable {
 					// mysql.slave_master_info table is still present in 8.4, no need for instance.QSP
@@ -774,8 +774,8 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		goto Cleanup
 	}
 	go ResolveHostnameIPs(instance.Key.Hostname)
-	if config.Config.DataCenterPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.DataCenterPattern); err == nil {
+	if config.Config.Topology.Classification.DataCenterPattern != "" {
+		if pattern, err := regexp.Compile(config.Config.Topology.Classification.DataCenterPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
 			if len(match) != 0 {
 				instance.DataCenter = match[1]
@@ -783,8 +783,8 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		}
 		// This can be overridden by later invocation of DetectDataCenterQuery
 	}
-	if config.Config.RegionPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.RegionPattern); err == nil {
+	if config.Config.Topology.Classification.RegionPattern != "" {
+		if pattern, err := regexp.Compile(config.Config.Topology.Classification.RegionPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
 			if len(match) != 0 {
 				instance.Region = match[1]
@@ -792,8 +792,8 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		}
 		// This can be overridden by later invocation of DetectRegionQuery
 	}
-	if config.Config.PhysicalEnvironmentPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.PhysicalEnvironmentPattern); err == nil {
+	if config.Config.Topology.Classification.PhysicalEnvironmentPattern != "" {
+		if pattern, err := regexp.Compile(config.Config.Topology.Classification.PhysicalEnvironmentPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
 			if len(match) != 0 {
 				instance.PhysicalEnvironment = match[1]
@@ -833,18 +833,18 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		goto Cleanup
 	}
 
-	if config.Config.ReplicationLagQuery != "" && !isMaxScale {
+	if config.Config.Topology.Replication.LagQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			if err := topologyDB.QueryRowContext(ctx, config.Config.ReplicationLagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
+			if err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Replication.LagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
 				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
 					log.Warningf("Host: %+v, instance.SlaveLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
 					instance.ReplicationLagSeconds.Int64 = 0
 				}
 			} else {
 				instance.ReplicationLagSeconds = instance.SecondsBehindMaster
-				logReadTopologyInstanceError(instanceKey, "ReplicationLagQuery", err)
+				logReadTopologyInstanceError(instanceKey, "topology.replication.lagQuery", err)
 			}
 		}()
 	}
@@ -873,7 +873,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	// 2. In case of DiscoverByShowSlaveHosts=false, I_S.processlist table is used.
 	// 	  It contains replica's replication user name, so the replica will be skipped
 	//    always.
-	if config.Config.DiscoverByShowSlaveHosts || isMaxScale {
+	if config.Config.Topology.Discovery.UseShowReplicaHosts || isMaxScale {
 		err := db.QueryDynamicRowsContext(ctx, topologyDB, instance.QSP.show_slave_hosts(),
 			func(m db.DynamicRow) error {
 				// MaxScale 1.1 may trigger an error with this command, but
@@ -895,10 +895,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 
 				replicaKey, err := NewResolveInstanceKey(host, port)
 				if err == nil && replicaKey.IsValid() {
-					if !FiltersMatchInstanceKey(replicaKey, config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-						if !FiltersMatchReplicationIgnoreUsername(user, config.Config.DiscoveryIgnoreReplicationUsernameFilters) {
+					if !FiltersMatchInstanceKey(replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
+						if !FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
 							instance.AddReplicaKey(replicaKey)
-						} else if config.Config.EnableDiscoveryFiltersLogs {
+						} else if config.Config.Topology.Discovery.FilterLogsEnabled {
 							log.Infof("Ignoring replica %+v of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", replicaKey, instanceKey)
 						}
 					}
@@ -925,10 +925,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 					// Note that here we assume that the replica port is the same as our port
 					// This is the best we can do, because there is no info about port in processlist.
 					replicaKey := InstanceKey{Hostname: cname, Port: instance.Key.Port}
-					if !FiltersMatchInstanceKey(&replicaKey, config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-						if !FiltersMatchReplicationIgnoreUsername(user, config.Config.DiscoveryIgnoreReplicationUsernameFilters) {
+					if !FiltersMatchInstanceKey(&replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
+						if !FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
 							instance.AddReplicaKey(&replicaKey)
-						} else if config.Config.EnableDiscoveryFiltersLogs {
+						} else if config.Config.Topology.Discovery.FilterLogsEnabled {
 							log.Infof("Ignoring replica %+v of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", replicaKey, instanceKey)
 						}
 					}
@@ -966,48 +966,48 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		}()
 	}
 
-	if config.Config.DetectDataCenterQuery != "" && !isMaxScale {
+	if config.Config.Topology.Classification.DetectDataCenterQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRowContext(ctx, config.Config.DetectDataCenterQuery).Scan(&instance.DataCenter)
-			logReadTopologyInstanceError(instanceKey, "DetectDataCenterQuery", err)
+			err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectDataCenterQuery).Scan(&instance.DataCenter)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectDataCenterQuery", err)
 		}()
 	}
 
-	if config.Config.DetectRegionQuery != "" && !isMaxScale {
+	if config.Config.Topology.Classification.DetectRegionQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRowContext(ctx, config.Config.DetectRegionQuery).Scan(&instance.Region)
-			logReadTopologyInstanceError(instanceKey, "DetectRegionQuery", err)
+			err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectRegionQuery).Scan(&instance.Region)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectRegionQuery", err)
 		}()
 	}
 
-	if config.Config.DetectPhysicalEnvironmentQuery != "" && !isMaxScale {
+	if config.Config.Topology.Classification.DetectPhysicalEnvironmentQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRowContext(ctx, config.Config.DetectPhysicalEnvironmentQuery).Scan(&instance.PhysicalEnvironment)
-			logReadTopologyInstanceError(instanceKey, "DetectPhysicalEnvironmentQuery", err)
+			err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectPhysicalEnvironmentQuery).Scan(&instance.PhysicalEnvironment)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectPhysicalEnvironmentQuery", err)
 		}()
 	}
 
-	if config.Config.DetectInstanceAliasQuery != "" && !isMaxScale {
+	if config.Config.Topology.Classification.DetectInstanceAliasQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRowContext(ctx, config.Config.DetectInstanceAliasQuery).Scan(&instance.InstanceAlias)
-			logReadTopologyInstanceError(instanceKey, "DetectInstanceAliasQuery", err)
+			err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectInstanceAliasQuery).Scan(&instance.InstanceAlias)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectInstanceAliasQuery", err)
 		}()
 	}
 
-	if config.Config.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
+	if config.Config.Topology.Classification.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			err := topologyDB.QueryRowContext(ctx, config.Config.DetectSemiSyncEnforcedQuery).Scan(&instance.SemiSyncPriority)
-			logReadTopologyInstanceError(instanceKey, "DetectSemiSyncEnforcedQuery", err)
+			err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectSemiSyncEnforcedQuery).Scan(&instance.SemiSyncPriority)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectSemiSyncEnforcedQuery", err)
 		}()
 	}
 
@@ -1022,15 +1022,15 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		// Pseudo GTID
 		// Depends on ReadInstanceClusterAttributes above
 		instance.UsingPseudoGTID = false
-		if config.Config.AutoPseudoGTID {
+		if config.Config.PseudoGTID.Auto {
 			var err error
 			instance.UsingPseudoGTID, err = isInjectedPseudoGTID(instance.ClusterName)
 			log.Errore(err)
-		} else if config.Config.DetectPseudoGTIDQuery != "" {
+		} else if config.Config.PseudoGTID.DetectQuery != "" {
 			waitGroup.Add(1)
 			go func() {
 				defer waitGroup.Done()
-				if resultData, err := db.QueryResultDataContext(ctx, topologyDB, config.Config.DetectPseudoGTIDQuery); err == nil {
+				if resultData, err := db.QueryResultDataContext(ctx, topologyDB, config.Config.PseudoGTID.DetectQuery); err == nil {
 					if len(resultData) > 0 {
 						if len(resultData[0]) > 0 {
 							if resultData[0][0].Valid && resultData[0][0].String == "1" {
@@ -1039,7 +1039,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 						}
 					}
 				} else {
-					logReadTopologyInstanceError(instanceKey, "DetectPseudoGTIDQuery", err)
+					logReadTopologyInstanceError(instanceKey, "pseudoGTID.detectQuery", err)
 				}
 			}()
 		}
@@ -1055,13 +1055,13 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	// Then check if the instance wants to set a different PromotionRule.
 	// We'll set it here on their behalf so there's no race between the first
 	// time an instance is discovered, and setting a rule like "must_not".
-	if config.Config.DetectPromotionRuleQuery != "" && !isMaxScale {
+	if config.Config.Topology.Classification.DetectPromotionRuleQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
 			var value string
-			err := topologyDB.QueryRowContext(ctx, config.Config.DetectPromotionRuleQuery).Scan(&value)
-			logReadTopologyInstanceError(instanceKey, "DetectPromotionRuleQuery", err)
+			err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectPromotionRuleQuery).Scan(&value)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectPromotionRuleQuery", err)
 			promotionRule, err := ParseCandidatePromotionRule(value)
 			logReadTopologyInstanceError(instanceKey, "ParseCandidatePromotionRule", err)
 			if err == nil {
@@ -1079,10 +1079,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	if !isMaxScale {
 		if instance.SuggestedClusterAlias == "" {
 			// Only need to do on masters
-			if config.Config.DetectClusterAliasQuery != "" {
+			if config.Config.Topology.Classification.DetectClusterAliasQuery != "" {
 				clusterAlias := ""
-				if err := topologyDB.QueryRowContext(ctx, config.Config.DetectClusterAliasQuery).Scan(&clusterAlias); err != nil {
-					logReadTopologyInstanceError(instanceKey, "DetectClusterAliasQuery", err)
+				if err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectClusterAliasQuery).Scan(&clusterAlias); err != nil {
+					logReadTopologyInstanceError(instanceKey, "topology.classification.detectClusterAliasQuery", err)
 				} else {
 					instance.SuggestedClusterAlias = clusterAlias
 				}
@@ -1096,12 +1096,12 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 			}
 		}
 	}
-	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" && !isMaxScale {
+	if instance.ReplicationDepth == 0 && config.Config.Topology.Classification.DetectClusterDomainQuery != "" && !isMaxScale {
 		// Only need to do on masters
 		domainName := ""
-		if err := topologyDB.QueryRowContext(ctx, config.Config.DetectClusterDomainQuery).Scan(&domainName); err != nil {
+		if err := topologyDB.QueryRowContext(ctx, config.Config.Topology.Classification.DetectClusterDomainQuery).Scan(&domainName); err != nil {
 			domainName = ""
-			logReadTopologyInstanceError(instanceKey, "DetectClusterDomainQuery", err)
+			logReadTopologyInstanceError(instanceKey, "topology.classification.detectClusterDomainQuery", err)
 		}
 		if domainName != "" {
 			latency.Start("backend")
@@ -1573,8 +1573,8 @@ func readInstanceRow(row instanceBackendRow) *Instance {
 	instance.ReplicationCredentialsAvailable = row.ReplicationCredentialsAvailable
 	instance.HasReplicationCredentials = row.HasReplicationCredentials
 	secondsSinceLastChecked := nullInt64AsNonNegativeUint(row.SecondsSinceLastChecked)
-	instance.IsUpToDate = secondsSinceLastChecked <= config.Config.InstancePollSeconds
-	instance.IsRecentlyChecked = secondsSinceLastChecked <= config.Config.InstancePollSeconds*5
+	instance.IsUpToDate = secondsSinceLastChecked <= config.Config.Topology.Discovery.PollSeconds
+	instance.IsRecentlyChecked = secondsSinceLastChecked <= config.Config.Topology.Discovery.PollSeconds*5
 	instance.LastSeenTimestamp = row.LastSeen.String
 	instance.IsLastCheckValid = row.LastCheckValid
 	instance.SecondsSinceLastSeen = row.SecondsSinceLastSeen
@@ -1833,7 +1833,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 			)
 		`
 
-	args := []interface{}{clusterName, clusterName, config.Config.InstancePollSeconds * 5, policy.ReasonableReplicationLagSeconds, policy.ReasonableReplicationLagSeconds}
+	args := []interface{}{clusterName, clusterName, config.Config.Topology.Discovery.PollSeconds * 5, policy.ReasonableReplicationLagSeconds, policy.ReasonableReplicationLagSeconds}
 	instances, err := readInstancesByCondition(condition, args, "")
 	if err != nil {
 		return instances, err
@@ -2005,7 +2005,7 @@ func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstan
 func filterOSCInstances(instances [](*Instance)) [](*Instance) {
 	result := [](*Instance){}
 	for _, instance := range instances {
-		if FiltersMatchInstanceKey(&instance.Key, config.Config.OSCIgnoreHostnameFilters) {
+		if FiltersMatchInstanceKey(&instance.Key, config.Config.OSC.IgnoreHostnames) {
 			continue
 		}
 		if instance.IsBinlogServer() {
@@ -2372,11 +2372,11 @@ func InjectUnseenMasters() error {
 	for _, masterKey := range unseenMasterKeys {
 		masterKey := masterKey
 
-		if FiltersMatchInstanceKey(&masterKey, config.Config.DiscoveryIgnoreMasterHostnameFilters) {
+		if FiltersMatchInstanceKey(&masterKey, config.Config.Topology.Discovery.IgnoreMasterHostnames) {
 			log.Debugf("InjectUnseenMasters: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", masterKey)
 			continue
 		}
-		if FiltersMatchInstanceKey(&masterKey, config.Config.DiscoveryIgnoreHostnameFilters) {
+		if FiltersMatchInstanceKey(&masterKey, config.Config.Topology.Discovery.IgnoreHostnames) {
 			log.Debugf("InjectUnseenMasters: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", masterKey)
 			continue
 		}
@@ -2397,7 +2397,7 @@ func InjectUnseenMasters() error {
 		// skip them.
 		_, skipped, _ := ReadTopologyInstanceBufferable(&masterKey, false, nil)
 		if skipped {
-			if config.Config.EnableDiscoveryFiltersLogs {
+			if config.Config.Topology.Discovery.FilterLogsEnabled {
 				log.Infof("InjectUnseenMasters: Skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", masterKey)
 			}
 			continue
@@ -2526,7 +2526,7 @@ func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 		Count    int    `gorm:"column:count_mysql_snapshots"`
 	}
 	res := make(map[string]int)
-	if !config.Config.ServeAgentsHttp || len(hostnames) == 0 {
+	if !config.Config.Agents.ServeHTTP || len(hostnames) == 0 {
 		return res, nil
 	}
 	args := make([]interface{}, len(hostnames))
@@ -2832,7 +2832,7 @@ func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 				else last_checked < now() - interval ? second
 			end
 			`
-	args := []interface{}{config.Config.InstancePollSeconds, 2 * config.Config.InstancePollSeconds}
+	args := []interface{}{config.Config.Topology.Discovery.PollSeconds, 2 * config.Config.Topology.Discovery.PollSeconds}
 
 	rows, err := db.QueryOrchestratorRows[instanceKeyRow](context.Background(), query, args...)
 	for _, row := range rows {
@@ -3142,7 +3142,7 @@ var instanceWriteBuffer chan instanceUpdateObject
 var forceFlushInstanceWriteBuffer = make(chan bool)
 
 func enqueueInstanceWrite(instance *Instance, instanceWasActuallyFound bool, lastError error) {
-	if len(instanceWriteBuffer) == config.Config.InstanceWriteBufferSize {
+	if len(instanceWriteBuffer) == config.Config.Topology.WriteBuffer.Size {
 		// Signal the "flushing" goroutine that there's work.
 		// We prefer doing all bulk flushes from one goroutine.
 		// Non blocking send to avoid blocking goroutines on sending a flush,
@@ -3168,7 +3168,7 @@ func flushInstanceWriteBuffer() {
 	// when one instance is flushed from the buffer then one discovery goroutine is ready to enqueue a new instance
 	// this is why we want to flush all instances in the buffer until a max of `InstanceWriteBufferSize`.
 	// Otherwise we can flush way more instances than what's expected.
-	for i := 0; i < config.Config.InstanceWriteBufferSize && len(instanceWriteBuffer) > 0; i++ {
+	for i := 0; i < config.Config.Topology.WriteBuffer.Size && len(instanceWriteBuffer) > 0; i++ {
 		upd := <-instanceWriteBuffer
 		if upd.instanceWasActuallyFound && upd.lastError == nil {
 			lastseen = append(lastseen, upd.instance)
@@ -3329,7 +3329,7 @@ func ForgetLongUnseenInstances() error {
 				from database_instance
 			where
 				last_seen < NOW() - interval ? hour`,
-		config.Config.UnseenInstanceForgetHours,
+		config.Config.Topology.Discovery.UnseenForgetHours,
 	)
 	if err != nil {
 		return log.Errore(err)

@@ -26,14 +26,21 @@ make build
 以 `conf/orchestrator-sample-sqlite.conf.yaml` 为起点。至少需要选择持久化路径并填写真实拓扑账号：
 
 ```yaml
-RaftNodeID: dev-1
-RaftDataDir: /absolute/path/orchestrator-raft
-RaftBind: 127.0.0.1:10008
-ListenAddress: 127.0.0.1:3000
-BackendDB: sqlite
-SQLite3DataFile: /absolute/path/orchestrator.sqlite3
-MySQLTopologyUser: orchestrator
-MySQLTopologyPassword: replace-me
+raft:
+  nodeID: dev-1
+  dataDir: /absolute/path/orchestrator-raft
+  bind: 127.0.0.1:10008
+server:
+  listen:
+    address: 127.0.0.1:3000
+metadata:
+  type: sqlite
+  sqlite:
+    dataFile: /absolute/path/orchestrator.sqlite3
+topology:
+  mysql:
+    user: orchestrator
+    password: replace-me
 ```
 
 配置文件含数据库凭据，应限制访问权限。
@@ -72,4 +79,4 @@ bin/orch --endpoint http://127.0.0.1:3000 topology --cluster db.example.com:3306
 - 将 Web/API 和 Raft 放在受控网络，验证真实代理、TLS/mTLS、认证、URL prefix、只读角色、指标抓取、日志收集与告警路由。
 - 在隔离拓扑中演练一次代表性发现、读取、受控写入、故障分析和回滚，并分别回读 MySQL、orchestrator、Raft、审计及外部路由/KV 状态。
 
-配置样例只是起点，不是生产策略。逐项对照 [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go)，并确保凭据不进入版本控制。
+配置样例只是起点，不是生产策略。逐项对照 [`internal/config/model.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/model.go)，并确保凭据不进入版本控制。
