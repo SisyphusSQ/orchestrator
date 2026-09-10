@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -164,6 +165,10 @@ func TestCanonicalMetadataSchemaExternalMySQL(t *testing.T) {
 		t.Fatalf("canonical final/pending marker counts = %d/%d; want 1/0", migrationCount, pendingMigrationCount)
 	}
 
+	if err := validateMetadataIDs(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+
 	var secondaryIndexCount int
 	if err := database.QueryRowContext(ctx, `
 		SELECT COUNT(*)
@@ -174,7 +179,65 @@ func TestCanonicalMetadataSchemaExternalMySQL(t *testing.T) {
 	`).Scan(&secondaryIndexCount); err != nil {
 		t.Fatalf("count external metadata secondary indexes: %v", err)
 	}
-	if secondaryIndexCount != 75 {
-		t.Fatalf("external secondary index count = %d; want 75", secondaryIndexCount)
+	if secondaryIndexCount != 108 {
+		t.Fatalf("external secondary index count = %d; want 108", secondaryIndexCount)
+	}
+}
+
+// TestMetadataIDMigrationExternalMySQL 的目标库必须预先为空；测试留下结构供独立回读。
+func TestMetadataIDMigrationExternalMySQL(t *testing.T) {
+	dsn := os.Getenv("ORCHESTRATOR_METADATA_ID_MIGRATION_TEST_DSN")
+	if dsn == "" {
+		t.Skip("ORCHESTRATOR_METADATA_ID_MIGRATION_TEST_DSN is not set")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
+	defer cancel()
+	database, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	var count int
+	if err := database.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("migration fixture database is not empty: %d tables", count)
+	}
+	previous := config.Config.Metadata.Type
+	config.Config.Metadata.Type = "mysql"
+	t.Cleanup(func() { config.Config.Metadata.Type = previous })
+	if err := deployCanonicalStatementsContext(ctx, database, metadataschema.StatementsV1()); err != nil {
+		t.Fatal(err)
+	}
+	before := map[string][]map[string]CellData{}
+	for _, table := range metadataschema.ManagedTables() {
+		if table == "orchestrator_schema_migrations" {
+			continue
+		}
+		seedMetadataRow(t, database, table, 41, true)
+		before[table] = snapshotRowMaps(t, database, table)
+	}
+	if err := migrateMetadataIDs(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateMetadataIDs(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMetadataIDs(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	for table, want := range before {
+		if got := snapshotRowMaps(t, database, table); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s data changed: got %v want %v", table, got, want)
+		}
+		seedMetadataRow(t, database, table, 42, false)
+		var maximum int64
+		if err := database.QueryRowContext(ctx, "SELECT MAX(id) FROM "+quoteMetadataIdentifier(table)).Scan(&maximum); err != nil {
+			t.Fatal(err)
+		}
+		if metadataschema.LegacyAutoID(table) != "" && maximum <= 41 {
+			t.Errorf("%s allocator regressed to %d", table, maximum)
+		}
 	}
 }

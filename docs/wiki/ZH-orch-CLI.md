@@ -56,6 +56,7 @@ orch which-api
 - `orchestrator server` 启动 Raft、HTTP/Web 和后台发现，除非显式关闭 discovery。
 - `orchestrator admin dump-config` 输出本地配置，可能暴露密钥。
 - `orchestrator admin redeploy-internal-db` 执行本地元数据库维护。
+- `orchestrator admin migrate-metadata-id --config=/absolute/path/orchestrator.yaml` 在停写和备份后将旧元数据库迁移为统一自增 `id` 主键。
 - `orchestrator admin access-token --owner ...` 在本地签发 access token。
 
 旧名称不保留别名：`continuous` 和 `http` 改为 `orchestrator server`；历史 `instance`、`downtimed`、detach/reattach 和 Raft election 形式改用 help 中的当前显式命令。no-op、发现行为等进程级服务选项不能通过远程请求修改。

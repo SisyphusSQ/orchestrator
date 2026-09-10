@@ -34,3 +34,18 @@ func TestServerOfflineHelpAndLocalCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMetadataMigrationCommandIsExplicit(t *testing.T) {
+	var output bytes.Buffer
+	called := false
+	err := execute([]string{"admin", "migrate-metadata-id", "--config", "isolated.json"}, &output, &output, func(options *commandOptions, name string) error {
+		called = true
+		if name != "migrate-metadata-id" || options.configFile != "isolated.json" {
+			t.Fatalf("command=%s config=%s", name, options.configFile)
+		}
+		return nil
+	})
+	if err != nil || !called {
+		t.Fatalf("called=%v err=%v", called, err)
+	}
+}

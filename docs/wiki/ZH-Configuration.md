@@ -42,7 +42,7 @@ server:
 
 进程持有一个元数据库连接池，并将拓扑发现与拓扑操作连接池分开。endpoint、凭据、TLS、超时、packet 限制、连接寿命或池大小变化后必须重启；reload 不会重建已打开的连接池。SQLite 使用一个进程级连接池，并要求绝对且可写的数据文件路径。
 
-空元数据库由可执行的 [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) 契约初始化；存量库继续走有序兼容补丁链。GORM 复用进程级连接池，不拥有 Schema 迁移。替换二进制或导入 DDL 前先阅读 [`迁移指南`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md)。
+空元数据库由可执行的 [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) 契约初始化；全部表使用自增 `id` 主键；旧库须停写、备份后执行 `orchestrator admin migrate-metadata-id`，普通启动不自动迁移。GORM 复用进程级连接池，不拥有 Schema 迁移。替换二进制或导入 DDL 前先阅读 [`迁移指南`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md)。
 
 ## 发现、分类与过滤
 

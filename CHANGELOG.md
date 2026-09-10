@@ -9,6 +9,7 @@
   - Require a durable `RaftNodeID` independent of bind/advertise/DNS, bootstrap a single seed voter, and manage membership through ID-aware HTTP APIs (`/api/raft/configuration`, `/bootstrap`, `/members`, `/leadership/transfer`, `/snapshot`).
   - Use official FileSnapshotStore plus one Bolt store for logs and stable state, remove Yield/peer/health-report control paths, and report readiness from VerifyLeader, configuration suffrage, and last-contact.
 - optimization
+  - 将全部 50 张元数据库表统一为自增 `id` 单列主键，保留业务唯一约束及旧编号值；存量库须停写、备份后执行 `orchestrator admin migrate-metadata-id`，普通启动不自动改表，详见 [Schema 迁移指南](docs/schema/migration-guide.md)。
   - 将服务端配置与运行时模型统一重构为按职责分组的 lowerCamel 分层结构，`dump-config` 同步输出分层 JSON；旧平铺字段不再兼容，部署前需按[升级指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)同步迁移配置文件、脚本和生成模板。
   - 将当前项目文档收敛到双语 GitHub Wiki，以 `docs/wiki/` 作为版本化来源；删除重复的历史 Markdown 和孤立图片，仅保留 Wiki 源文件、元数据 schema 与专项验证记录。
   - Consolidate the executable DDL for 47 metadata tables in `docs/schema/mysql.sql`, with `utf8mb4`, Chinese comments, and `idx_` / `unq_` index names. New databases use syntax shared by MySQL 5.7–8.0, TiDB, and OceanBase MySQL mode; existing databases retain the historical patch stream with an explicit migration marker, and SQLite initialization uses the same source.

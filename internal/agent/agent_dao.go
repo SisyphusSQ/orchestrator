@@ -52,7 +52,7 @@ type agentBackendRow struct {
 }
 
 type seedOperationRow struct {
-	SeedID         int64  `gorm:"column:agent_seed_id"`
+	SeedID         int64  `gorm:"column:id"`
 	TargetHostname string `gorm:"column:target_hostname"`
 	SourceHostname string `gorm:"column:source_hostname"`
 	StartTimestamp string `gorm:"column:start_timestamp"`
@@ -604,7 +604,7 @@ func updateSeedComplete(seedId int64, seedError error) error {
 					is_complete = 1,
 					is_successful = ?
 				where
-					agent_seed_id = ?
+					id = ?
 			`,
 		(seedError == nil),
 		seedId,
@@ -645,7 +645,7 @@ func updateSeedStateEntry(seedStateId int64, reason error) error {
 				agent_seed_state
 					set error_message = ?
 				where
-					agent_seed_state_id = ?
+					id = ?
 			`,
 		reason.Error(),
 		seedStateId,
@@ -673,7 +673,7 @@ func FailStaleSeeds() error {
 								from
 									agent_seed_state
 								where
-									agent_seed.agent_seed_id = agent_seed_state.agent_seed_id
+									agent_seed.id = agent_seed_state.agent_seed_id
 						) < now() - interval ? minute`,
 		config.Config.Agents.StaleSeedFailMinutes,
 	)
@@ -845,7 +845,7 @@ func readSeeds(whereCondition string, args []interface{}, limit string) ([]SeedO
 	res := []SeedOperation{}
 	query := fmt.Sprintf(`
 		select
-			agent_seed_id,
+			id,
 			target_hostname,
 			source_hostname,
 			start_timestamp,
@@ -856,7 +856,7 @@ func readSeeds(whereCondition string, args []interface{}, limit string) ([]SeedO
 			agent_seed
 		%s
 		order by
-			agent_seed_id desc
+			id desc
 		%s
 		`, whereCondition, limit)
 	rows, err := db.QueryOrchestratorRows[seedOperationRow](context.Background(), query, args...)
@@ -908,7 +908,7 @@ func ReadRecentCompletedSeedsForHost(hostname string) ([]SeedOperation, error) {
 func AgentSeedDetails(seedId int64) ([]SeedOperation, error) {
 	whereCondition := `
 		where
-			agent_seed_id = ?
+			id = ?
 		`
 	return readSeeds(whereCondition, []interface{}{seedId}, "")
 }
@@ -923,7 +923,7 @@ func ReadSeedStates(seedId int64) ([]SeedOperationState, error) {
 	res := []SeedOperationState{}
 	query := `
 		select
-			agent_seed_state_id,
+			id,
 			agent_seed_id,
 			state_timestamp,
 			state_action,
@@ -933,10 +933,10 @@ func ReadSeedStates(seedId int64) ([]SeedOperationState, error) {
 		where
 			agent_seed_id = ?
 		order by
-			agent_seed_state_id desc
+			id desc
 		`
 	type seedStateRow struct {
-		StateID        int64  `gorm:"column:agent_seed_state_id"`
+		StateID        int64  `gorm:"column:id"`
 		SeedID         int64  `gorm:"column:agent_seed_id"`
 		StateTimestamp string `gorm:"column:state_timestamp"`
 		Action         string `gorm:"column:state_action"`

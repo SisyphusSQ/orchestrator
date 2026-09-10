@@ -56,6 +56,7 @@ Local-only operations remain on the server binary:
 - `orchestrator server` starts Raft, HTTP/Web, and background discovery unless discovery is explicitly disabled.
 - `orchestrator admin dump-config` prints local configuration and may expose secrets.
 - `orchestrator admin redeploy-internal-db` performs local metadata maintenance.
+- `orchestrator admin migrate-metadata-id --config=/absolute/path/orchestrator.yaml` migrates old metadata primary keys to auto-increment `id` after stopping writers and taking a backup.
 - `orchestrator admin access-token --owner ...` issues a local access token.
 
 Removed names are not aliases: `continuous` and `http` become `orchestrator server`; historical `instance`, `downtimed`, detach/reattach, and Raft election forms use the current explicit command names shown by help. Process-wide server options such as no-op or discovery behavior cannot be changed by a remote request.

@@ -149,6 +149,12 @@ func runCommand(options *commandOptions, command string) error {
 	case "dump-config":
 		fmt.Println(config.Config.ToJSONString())
 		return nil
+	case "migrate-metadata-id":
+		config.RuntimeCLIFlags.MigrateMetadataIDs = true
+		config.RuntimeCLIFlags.ConfiguredVersion = ""
+		config.Config.Metadata.Schema.SkipUpdate = false
+		_, err := db.OpenOrchestratorContext(context.Background())
+		return err
 	case "redeploy-internal-db":
 		config.RuntimeCLIFlags.ConfiguredVersion = ""
 		_, err := inst.ReadClusters()

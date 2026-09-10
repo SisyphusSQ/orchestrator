@@ -32,7 +32,7 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 	res := []Maintenance{}
 	query := `
 		select
-			database_instance_maintenance_id,
+			id,
 			hostname,
 			port,
 			begin_timestamp,
@@ -45,10 +45,10 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 		where
 			maintenance_active = 1
 		order by
-			database_instance_maintenance_id
+			id
 		`
 	type maintenanceRow struct {
-		ID             uint   `gorm:"column:database_instance_maintenance_id"`
+		ID             uint   `gorm:"column:id"`
 		Hostname       string `gorm:"column:hostname"`
 		Port           int    `gorm:"column:port"`
 		BeginTimestamp string `gorm:"column:begin_timestamp"`
@@ -183,7 +183,7 @@ func ReadMaintenanceInstanceKey(maintenanceToken int64) (*InstanceKey, error) {
 		from
 			database_instance_maintenance
 		where
-			database_instance_maintenance_id = ?
+			id = ?
 			`
 
 	type maintenanceInstanceRow struct {
@@ -211,7 +211,7 @@ func EndMaintenance(maintenanceToken int64) (wasMaintenance bool, err error) {
 				maintenance_active = NULL,
 				end_timestamp = NOW()
 			where
-				database_instance_maintenance_id = ?
+				id = ?
 			`,
 		maintenanceToken,
 	)

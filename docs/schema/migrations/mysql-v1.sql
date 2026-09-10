@@ -1,26 +1,19 @@
 CREATE TABLE IF NOT EXISTS `orchestrator_schema_migrations` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `migration_id` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '稳定的结构迁移标识',
   `applied_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '结构迁移完成时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`migration_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '元数据库结构迁移记录';
 
-CREATE UNIQUE INDEX `unq_orchestrator_schema_migrations_identity` ON `orchestrator_schema_migrations` (`migration_id`);
-
 INSERT IGNORE INTO `orchestrator_schema_migrations` (`migration_id`, `applied_at`)
-VALUES ('canonical-v2-pending', CURRENT_TIMESTAMP);
+VALUES ('canonical-v1-pending', CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS `orchestrator_db_deployments` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `deployed_version` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '已初始化的 orchestrator 版本',
   `deployed_timestamp` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '版本初始化完成时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`deployed_version`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '应用版本与元数据库初始化记录';
 
-CREATE UNIQUE INDEX `unq_orchestrator_db_deployments_identity` ON `orchestrator_db_deployments` (`deployed_version`);
-
 CREATE TABLE IF NOT EXISTS `database_instance` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `last_checked` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一次完成检查的时间',
@@ -99,10 +92,8 @@ CREATE TABLE IF NOT EXISTS `database_instance` (
   `replication_group_members` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '复制组成员集合',
   `replication_group_primary_host` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' COMMENT '复制组主节点主机名',
   `replication_group_primary_port` SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '复制组主节点端口',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例发现状态与复制拓扑快照';
-
-CREATE UNIQUE INDEX `unq_database_instance_identity` ON `database_instance` (`hostname`, `port`);
 
 CREATE INDEX `idx_database_instance_cluster` ON `database_instance` (`cluster_name`);
 CREATE INDEX `idx_database_instance_last_checked` ON `database_instance` (`last_checked`);
@@ -111,7 +102,7 @@ CREATE INDEX `idx_database_instance_master` ON `database_instance` (`master_host
 CREATE INDEX `idx_database_instance_suggested_alias` ON `database_instance` (`suggested_cluster_alias`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_maintenance` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '维护记录主键',
+  `database_instance_maintenance_id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '维护记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '维护实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '维护实例端口',
   `maintenance_active` TINYINT DEFAULT NULL COMMENT '维护窗口是否生效',
@@ -122,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `database_instance_maintenance` (
   `processing_node_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '处理维护请求的节点主机名',
   `processing_node_token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '处理维护请求的节点令牌',
   `explicitly_bounded` TINYINT UNSIGNED NOT NULL COMMENT '维护窗口是否显式设置结束时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`database_instance_maintenance_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例维护窗口';
 
 CREATE UNIQUE INDEX `unq_instance_maintenance_active_host_port` ON `database_instance_maintenance` (`maintenance_active`, `hostname`, `port`);
@@ -130,7 +121,6 @@ CREATE INDEX `idx_instance_maintenance_active_begin` ON `database_instance_maint
 CREATE INDEX `idx_instance_maintenance_active_end` ON `database_instance_maintenance` (`maintenance_active`, `end_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_long_running_queries` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `process_id` BIGINT NOT NULL COMMENT '数据库会话标识',
@@ -142,29 +132,26 @@ CREATE TABLE IF NOT EXISTS `database_instance_long_running_queries` (
   `process_time_seconds` INT NOT NULL COMMENT '会话已运行秒数',
   `process_state` VARCHAR(128) NOT NULL COMMENT '会话执行状态',
   `process_info` VARCHAR(1024) NOT NULL COMMENT '会话语句摘要',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`, `process_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例长时间运行会话快照';
-
-CREATE UNIQUE INDEX `unq_database_instance_long_running_queries_identity` ON `database_instance_long_running_queries` (`hostname`, `port`, `process_id`);
 
 CREATE INDEX `idx_long_query_started_at` ON `database_instance_long_running_queries` (`process_started_at`);
 
 CREATE TABLE IF NOT EXISTS `audit` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '审计记录主键',
+  `audit_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '审计记录主键',
   `audit_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '审计事件发生时间',
   `audit_type` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '审计事件类型',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' COMMENT '关联实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '关联实例端口',
   `cluster_name` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '关联集群名称',
   `message` TEXT NOT NULL COMMENT '审计事件详情',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`audit_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'orchestrator 操作审计日志';
 
 CREATE INDEX `idx_audit_timestamp` ON `audit` (`audit_timestamp`);
 CREATE INDEX `idx_audit_host_port_timestamp` ON `audit` (`hostname`, `port`, `audit_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `host_agent` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Agent 主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT 'Agent 服务端口',
   `token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Agent 身份令牌',
@@ -173,10 +160,8 @@ CREATE TABLE IF NOT EXISTS `host_agent` (
   `last_seen` TIMESTAMP NULL DEFAULT NULL COMMENT '最近一次确认 Agent 在线的时间',
   `mysql_port` SMALLINT UNSIGNED DEFAULT NULL COMMENT 'Agent 管理的 MySQL 端口',
   `count_mysql_snapshots` SMALLINT UNSIGNED NOT NULL COMMENT 'Agent 持有的 MySQL 快照数量',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机 Agent 注册与健康状态';
-
-CREATE UNIQUE INDEX `unq_host_agent_identity` ON `host_agent` (`hostname`);
 
 CREATE INDEX `idx_host_agent_token` ON `host_agent` (`token`);
 CREATE INDEX `idx_host_agent_last_submitted` ON `host_agent` (`last_submitted`);
@@ -184,14 +169,14 @@ CREATE INDEX `idx_host_agent_last_checked` ON `host_agent` (`last_checked`);
 CREATE INDEX `idx_host_agent_last_seen` ON `host_agent` (`last_seen`);
 
 CREATE TABLE IF NOT EXISTS `agent_seed` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '种子任务主键',
+  `agent_seed_id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '种子任务主键',
   `target_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '目标主机名',
   `source_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '来源主机名',
   `start_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '种子任务开始时间',
   `end_timestamp` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '种子任务结束时间',
   `is_complete` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '种子任务是否完成',
   `is_successful` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '种子任务是否成功',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`agent_seed_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'Agent 数据种子任务';
 
 CREATE INDEX `idx_agent_seed_target_complete` ON `agent_seed` (`target_hostname`, `is_complete`);
@@ -201,27 +186,24 @@ CREATE INDEX `idx_agent_seed_complete_started` ON `agent_seed` (`is_complete`, `
 CREATE INDEX `idx_agent_seed_success_started` ON `agent_seed` (`is_successful`, `start_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `agent_seed_state` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '种子任务状态主键',
+  `agent_seed_state_id` INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '种子任务状态主键',
   `agent_seed_id` INT UNSIGNED NOT NULL COMMENT '关联的种子任务标识',
   `state_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '状态发生时间',
   `state_action` VARCHAR(127) NOT NULL COMMENT '状态动作',
   `error_message` VARCHAR(255) NOT NULL COMMENT '状态错误信息',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`agent_seed_state_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'Agent 种子任务状态流水';
 
 CREATE INDEX `idx_agent_seed_state_seed_time` ON `agent_seed_state` (`agent_seed_id`, `state_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `host_attributes` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主机名',
   `attribute_name` VARCHAR(128) NOT NULL COMMENT '属性名称',
   `attribute_value` VARCHAR(128) NOT NULL COMMENT '属性值',
   `submit_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '属性提交时间',
   `expire_timestamp` TIMESTAMP NULL DEFAULT NULL COMMENT '属性过期时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `attribute_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机自定义属性';
-
-CREATE UNIQUE INDEX `unq_host_attributes_identity` ON `host_attributes` (`hostname`, `attribute_name`);
 
 CREATE INDEX `idx_host_attributes_name` ON `host_attributes` (`attribute_name`);
 CREATE INDEX `idx_host_attributes_value` ON `host_attributes` (`attribute_value`);
@@ -229,32 +211,25 @@ CREATE INDEX `idx_host_attributes_submitted_at` ON `host_attributes` (`submit_ti
 CREATE INDEX `idx_host_attributes_expires_at` ON `host_attributes` (`expire_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `hostname_resolve` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '待解析主机名',
   `resolved_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '解析后的规范主机名',
   `resolved_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近解析时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机名正向解析缓存';
-
-CREATE UNIQUE INDEX `unq_hostname_resolve_identity` ON `hostname_resolve` (`hostname`);
 
 CREATE INDEX `idx_hostname_resolve_resolved_at` ON `hostname_resolve` (`resolved_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `cluster_alias` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `cluster_name` VARCHAR(128) NOT NULL COMMENT '集群名称',
   `alias` VARCHAR(128) NOT NULL COMMENT '集群展示别名',
   `last_registered` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '别名最近注册时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`cluster_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '自动发现的集群别名';
-
-CREATE UNIQUE INDEX `unq_cluster_alias_identity` ON `cluster_alias` (`cluster_name`);
 
 CREATE UNIQUE INDEX `unq_cluster_alias_alias` ON `cluster_alias` (`alias`);
 CREATE INDEX `idx_cluster_alias_registered_at` ON `cluster_alias` (`last_registered`);
 
 CREATE TABLE IF NOT EXISTS `node_health` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'orchestrator 节点主机名',
   `token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '节点进程令牌',
   `last_seen_active` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '节点最近活跃时间',
@@ -264,15 +239,13 @@ CREATE TABLE IF NOT EXISTS `node_health` (
   `first_seen_active` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '节点首次活跃时间',
   `db_backend` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' COMMENT '节点使用的元数据库后端',
   `incrementing_indicator` BIGINT NOT NULL DEFAULT 0 COMMENT '节点递增健康指示值',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `token`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'orchestrator 节点健康状态';
-
-CREATE UNIQUE INDEX `unq_node_health_identity` ON `node_health` (`hostname`, `token`);
 
 CREATE INDEX `idx_node_health_last_seen_active` ON `node_health` (`last_seen_active`);
 
 CREATE TABLE IF NOT EXISTS `topology_recovery` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '恢复记录主键',
+  `recovery_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '恢复记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '故障实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '故障实例端口',
   `in_active_period` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '恢复是否处于活动窗口',
@@ -301,7 +274,7 @@ CREATE TABLE IF NOT EXISTS `topology_recovery` (
   `last_detection_id` BIGINT UNSIGNED NOT NULL COMMENT '关联的最近故障检测标识',
   `successor_alias` VARCHAR(128) DEFAULT NULL COMMENT '恢复后继实例别名',
   `uid` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '恢复流程稳定标识',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`recovery_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '拓扑故障恢复执行记录';
 
 CREATE UNIQUE INDEX `unq_topology_recovery_active_instance` ON `topology_recovery` (`hostname`, `port`, `in_active_period`, `end_active_period_unixtime`);
@@ -314,33 +287,26 @@ CREATE INDEX `idx_topology_recovery_detection` ON `topology_recovery` (`last_det
 CREATE INDEX `idx_topology_recovery_uid` ON `topology_recovery` (`uid`);
 
 CREATE TABLE IF NOT EXISTS `hostname_unresolve` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '规范主机名',
   `unresolved_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '规范化前的主机名',
   `last_registered` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '映射最近注册时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机名反向映射缓存';
-
-CREATE UNIQUE INDEX `unq_hostname_unresolve_identity` ON `hostname_unresolve` (`hostname`);
 
 CREATE INDEX `idx_hostname_unresolve_original` ON `hostname_unresolve` (`unresolved_hostname`);
 CREATE INDEX `idx_hostname_unresolve_registered_at` ON `hostname_unresolve` (`last_registered`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_pool` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `pool` VARCHAR(128) NOT NULL COMMENT '实例所属资源池',
   `registered_at` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '资源池关系注册时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`, `pool`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例资源池关系';
-
-CREATE UNIQUE INDEX `unq_database_instance_pool_identity` ON `database_instance_pool` (`hostname`, `port`, `pool`);
 
 CREATE INDEX `idx_database_instance_pool_name` ON `database_instance_pool` (`pool`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_topology_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `snapshot_unix_timestamp` INT UNSIGNED NOT NULL COMMENT '拓扑快照 Unix 时间',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
@@ -348,29 +314,23 @@ CREATE TABLE IF NOT EXISTS `database_instance_topology_history` (
   `master_port` SMALLINT UNSIGNED NOT NULL COMMENT '快照中的上游端口',
   `cluster_name` VARCHAR(128) NOT NULL COMMENT '快照中的集群名称',
   `version` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '快照中的数据库版本',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`snapshot_unix_timestamp`, `hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库复制拓扑历史快照';
-
-CREATE UNIQUE INDEX `unq_database_instance_topology_history_identity` ON `database_instance_topology_history` (`snapshot_unix_timestamp`, `hostname`, `port`);
 
 CREATE INDEX `idx_topology_history_snapshot_cluster` ON `database_instance_topology_history` (`snapshot_unix_timestamp`, `cluster_name`);
 
 CREATE TABLE IF NOT EXISTS `candidate_database_instance` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '候选实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '候选实例端口',
   `last_suggested` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一次候选建议时间',
   `priority` TINYINT NOT NULL DEFAULT 1 COMMENT '候选优先级，正值倾向提升，负值倾向回避',
   `promotion_rule` VARCHAR(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'neutral' COMMENT '实例提升规则',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '故障恢复候选实例策略';
-
-CREATE UNIQUE INDEX `unq_candidate_database_instance_identity` ON `candidate_database_instance` (`hostname`, `port`);
 
 CREATE INDEX `idx_candidate_instance_suggested_at` ON `candidate_database_instance` (`last_suggested`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_downtime` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '停机实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '停机实例端口',
   `downtime_active` TINYINT DEFAULT NULL COMMENT '停机窗口是否生效',
@@ -378,15 +338,13 @@ CREATE TABLE IF NOT EXISTS `database_instance_downtime` (
   `end_timestamp` TIMESTAMP NULL DEFAULT NULL COMMENT '停机窗口结束时间',
   `owner` VARCHAR(128) NOT NULL COMMENT '停机登记人',
   `reason` TEXT NOT NULL COMMENT '停机原因',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例计划停机窗口';
-
-CREATE UNIQUE INDEX `unq_database_instance_downtime_identity` ON `database_instance_downtime` (`hostname`, `port`);
 
 CREATE INDEX `idx_instance_downtime_end` ON `database_instance_downtime` (`end_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `topology_failure_detection` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '故障检测记录主键',
+  `detection_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '故障检测记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '故障实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '故障实例端口',
   `in_active_period` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '检测是否处于活动窗口',
@@ -400,53 +358,44 @@ CREATE TABLE IF NOT EXISTS `topology_failure_detection` (
   `count_affected_slaves` INT UNSIGNED NOT NULL COMMENT '受影响下游实例数量',
   `slave_hosts` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '受影响下游实例列表',
   `is_actionable` TINYINT NOT NULL DEFAULT 0 COMMENT '检测结果是否可触发恢复',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`detection_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '拓扑故障检测记录';
 
 CREATE UNIQUE INDEX `unq_failure_detection_active_instance` ON `topology_failure_detection` (`hostname`, `port`, `in_active_period`, `end_active_period_unixtime`, `is_actionable`);
 CREATE INDEX `idx_failure_detection_active_started` ON `topology_failure_detection` (`in_active_period`, `start_active_period`);
 
 CREATE TABLE IF NOT EXISTS `hostname_resolve_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `resolved_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '解析后的规范主机名',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '解析前主机名',
   `resolved_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '解析记录时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`resolved_hostname`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机名正向解析历史';
-
-CREATE UNIQUE INDEX `unq_hostname_resolve_history_identity` ON `hostname_resolve_history` (`resolved_hostname`);
 
 CREATE INDEX `idx_hostname_resolve_history_source` ON `hostname_resolve_history` (`hostname`);
 CREATE INDEX `idx_hostname_resolve_history_at` ON `hostname_resolve_history` (`resolved_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `hostname_unresolve_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `unresolved_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '规范化前主机名',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '规范主机名',
   `last_registered` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '映射最近注册时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`unresolved_hostname`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机名反向映射历史';
-
-CREATE UNIQUE INDEX `unq_hostname_unresolve_history_identity` ON `hostname_unresolve_history` (`unresolved_hostname`);
 
 CREATE INDEX `idx_hostname_unresolve_history_host` ON `hostname_unresolve_history` (`hostname`);
 CREATE INDEX `idx_hostname_unresolve_history_at` ON `hostname_unresolve_history` (`last_registered`);
 
 CREATE TABLE IF NOT EXISTS `cluster_domain_name` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `cluster_name` VARCHAR(128) NOT NULL COMMENT '集群名称',
   `domain_name` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '集群对外域名',
   `last_registered` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '域名最近注册时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`cluster_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '集群域名映射';
-
-CREATE UNIQUE INDEX `unq_cluster_domain_name_identity` ON `cluster_domain_name` (`cluster_name`);
 
 CREATE INDEX `idx_cluster_domain_name_domain` ON `cluster_domain_name` (`domain_name`(32));
 CREATE INDEX `idx_cluster_domain_name_registered_at` ON `cluster_domain_name` (`last_registered`);
 
 CREATE TABLE IF NOT EXISTS `master_position_equivalence` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '等价位点记录主键',
+  `equivalence_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '等价位点记录主键',
   `master1_hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '第一实例主机名',
   `master1_port` SMALLINT UNSIGNED NOT NULL COMMENT '第一实例端口',
   `master1_binary_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '第一实例 binlog 文件名',
@@ -456,7 +405,7 @@ CREATE TABLE IF NOT EXISTS `master_position_equivalence` (
   `master2_binary_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '第二实例 binlog 文件名',
   `master2_binary_log_pos` BIGINT UNSIGNED NOT NULL COMMENT '第二实例 binlog 位点',
   `last_suggested` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '等价关系最近建议时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`equivalence_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '跨实例 binlog 等价位点';
 
 CREATE UNIQUE INDEX `unq_master_position_equivalence_pair` ON `master_position_equivalence` (`master1_hostname`, `master1_port`, `master1_binary_log_file`, `master1_binary_log_pos`, `master2_hostname`, `master2_port`);
@@ -464,7 +413,7 @@ CREATE INDEX `idx_master_position_equivalence_second` ON `master_position_equiva
 CREATE INDEX `idx_master_position_equivalence_suggested` ON `master_position_equivalence` (`last_suggested`);
 
 CREATE TABLE IF NOT EXISTS `async_request` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '异步请求主键',
+  `request_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '异步请求主键',
   `command` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '异步请求命令',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '来源实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '来源实例端口',
@@ -475,69 +424,63 @@ CREATE TABLE IF NOT EXISTS `async_request` (
   `begin_timestamp` TIMESTAMP NULL DEFAULT NULL COMMENT '请求开始时间',
   `end_timestamp` TIMESTAMP NULL DEFAULT NULL COMMENT '请求结束时间',
   `story` TEXT NOT NULL COMMENT '请求执行过程说明',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`request_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的异步拓扑请求';
 
 CREATE INDEX `idx_async_request_begin` ON `async_request` (`begin_timestamp`);
 CREATE INDEX `idx_async_request_end` ON `async_request` (`end_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `blocked_topology_recovery` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '被阻塞实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '被阻塞实例端口',
   `cluster_name` VARCHAR(128) NOT NULL COMMENT '被阻塞集群名称',
   `analysis` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '被阻塞的故障分析代码',
   `last_blocked_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近阻塞时间',
   `blocking_recovery_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '造成阻塞的恢复记录标识',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '被其他恢复流程阻塞的拓扑恢复';
-
-CREATE UNIQUE INDEX `unq_blocked_topology_recovery_identity` ON `blocked_topology_recovery` (`hostname`, `port`);
 
 CREATE INDEX `idx_blocked_recovery_cluster_at` ON `blocked_topology_recovery` (`cluster_name`, `last_blocked_timestamp`);
 CREATE INDEX `idx_blocked_recovery_at` ON `blocked_topology_recovery` (`last_blocked_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_last_analysis` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `analysis_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近分析时间',
   `analysis` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '最近分析结果代码',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例最近分析结果';
-
-CREATE UNIQUE INDEX `unq_database_instance_last_analysis_identity` ON `database_instance_last_analysis` (`hostname`, `port`);
 
 CREATE INDEX `idx_instance_last_analysis_at` ON `database_instance_last_analysis` (`analysis_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_analysis_changelog` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '分析变更记录主键',
+  `changelog_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '分析变更记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `analysis_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '分析结果发生时间',
   `analysis` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '分析结果代码',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`changelog_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例分析结果变更流水';
 
 CREATE INDEX `idx_instance_analysis_log_at` ON `database_instance_analysis_changelog` (`analysis_timestamp`);
 CREATE INDEX `idx_instance_analysis_log_host_port_at` ON `database_instance_analysis_changelog` (`hostname`, `port`, `analysis_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `node_health_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '节点健康历史主键',
+  `history_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '节点健康历史主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'orchestrator 节点主机名',
   `token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '节点进程令牌',
   `first_seen_active` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '节点首次活跃时间',
   `extra_info` VARCHAR(128) NOT NULL COMMENT '节点附加状态',
   `command` VARCHAR(128) NOT NULL COMMENT '节点启动命令',
   `app_version` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '' COMMENT '节点应用版本',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`history_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'orchestrator 节点健康历史';
 
 CREATE UNIQUE INDEX `unq_node_health_history_host_token` ON `node_health_history` (`hostname`, `token`);
 CREATE INDEX `idx_node_health_history_first_seen` ON `node_health_history` (`first_seen_active`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_coordinates_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '复制位点历史主键',
+  `history_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '复制位点历史主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `recorded_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '复制位点记录时间',
@@ -546,28 +489,28 @@ CREATE TABLE IF NOT EXISTS `database_instance_coordinates_history` (
   `binary_log_pos` BIGINT UNSIGNED NOT NULL COMMENT 'binlog 位点',
   `relay_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'relay log 文件名',
   `relay_log_pos` BIGINT UNSIGNED NOT NULL COMMENT 'relay log 位点',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`history_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例复制位点历史';
 
 CREATE INDEX `idx_instance_coordinates_host_port_at` ON `database_instance_coordinates_history` (`hostname`, `port`, `recorded_timestamp`);
 CREATE INDEX `idx_instance_coordinates_recorded_at` ON `database_instance_coordinates_history` (`recorded_timestamp`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_binlog_files_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'binlog 文件历史主键',
+  `history_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'binlog 文件历史主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `binary_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'binlog 文件名',
   `binary_log_pos` BIGINT UNSIGNED NOT NULL COMMENT 'binlog 文件最大已知位点',
   `first_seen` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次发现文件时间',
   `last_seen` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '最近发现文件时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`history_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的数据库实例 binlog 文件历史';
 
 CREATE UNIQUE INDEX `unq_instance_binlog_files_host_port_file` ON `database_instance_binlog_files_history` (`hostname`, `port`, `binary_log_file`);
 CREATE INDEX `idx_instance_binlog_files_last_seen` ON `database_instance_binlog_files_history` (`last_seen`);
 
 CREATE TABLE IF NOT EXISTS `access_token` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '访问令牌记录主键',
+  `access_token_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '访问令牌记录主键',
   `public_token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '公开令牌标识',
   `secret_token` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '私密令牌内容',
   `generated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '令牌生成时间',
@@ -575,14 +518,13 @@ CREATE TABLE IF NOT EXISTS `access_token` (
   `is_acquired` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '令牌是否已领取',
   `is_reentrant` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '令牌是否允许重复领取',
   `acquired_at` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '令牌领取时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`access_token_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '短期访问令牌';
 
 CREATE UNIQUE INDEX `unq_access_token_public_token` ON `access_token` (`public_token`);
 CREATE INDEX `idx_access_token_generated_at` ON `access_token` (`generated_at`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_recent_relaylog_history` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `current_relay_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '当前 relay log 文件名',
@@ -591,159 +533,126 @@ CREATE TABLE IF NOT EXISTS `database_instance_recent_relaylog_history` (
   `prev_relay_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '上一 relay log 文件名',
   `prev_relay_log_pos` BIGINT UNSIGNED NOT NULL COMMENT '上一 relay log 位点',
   `prev_seen` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '上一位点观察时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的最近 relay log 位点';
-
-CREATE UNIQUE INDEX `unq_database_instance_recent_relaylog_history_identity` ON `database_instance_recent_relaylog_history` (`hostname`, `port`);
 
 CREATE INDEX `idx_recent_relaylog_current_seen` ON `database_instance_recent_relaylog_history` (`current_seen`);
 
 CREATE TABLE IF NOT EXISTS `orchestrator_metadata` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `anchor` TINYINT UNSIGNED NOT NULL COMMENT '单行记录锚点',
   `last_deployed_version` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '最近部署的应用版本',
   `last_deployed_timestamp` TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00' COMMENT '最近部署完成时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`anchor`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的旧版部署元数据';
 
-CREATE UNIQUE INDEX `unq_orchestrator_metadata_identity` ON `orchestrator_metadata` (`anchor`);
-
 CREATE TABLE IF NOT EXISTS `global_recovery_disable` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `disable_recovery` TINYINT UNSIGNED NOT NULL COMMENT '值为 1 时全局禁用恢复',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`disable_recovery`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '全局恢复禁用开关';
 
-CREATE UNIQUE INDEX `unq_global_recovery_disable_identity` ON `global_recovery_disable` (`disable_recovery`);
-
 CREATE TABLE IF NOT EXISTS `cluster_alias_override` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `cluster_name` VARCHAR(128) NOT NULL COMMENT '集群名称',
   `alias` VARCHAR(128) NOT NULL COMMENT '人工覆盖的集群别名',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`cluster_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '集群别名人工覆盖';
 
-CREATE UNIQUE INDEX `unq_cluster_alias_override_identity` ON `cluster_alias_override` (`cluster_name`);
-
 CREATE TABLE IF NOT EXISTS `topology_recovery_steps` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '恢复步骤记录主键',
+  `recovery_step_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '恢复步骤记录主键',
   `recovery_uid` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '关联的恢复流程标识',
   `audit_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '恢复步骤记录时间',
   `message` TEXT NOT NULL COMMENT '恢复步骤说明',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`recovery_step_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '拓扑恢复步骤审计流水';
 
 CREATE INDEX `idx_topology_recovery_steps_uid` ON `topology_recovery_steps` (`recovery_uid`);
 
 CREATE TABLE IF NOT EXISTS `raft_store` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旧版 Raft 键值记录主键',
+  `store_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旧版 Raft 键值记录主键',
   `store_key` VARBINARY(512) NOT NULL COMMENT '旧版 Raft 键',
   `store_value` BLOB NOT NULL COMMENT '旧版 Raft 值',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`store_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的旧版 SQL Raft 存储';
 
 CREATE INDEX `idx_raft_store_key` ON `raft_store` (`store_key`);
 
 CREATE TABLE IF NOT EXISTS `raft_log` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旧版 Raft 日志索引',
+  `log_index` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旧版 Raft 日志索引',
   `term` BIGINT NOT NULL COMMENT '旧版 Raft 任期',
   `log_type` INT NOT NULL COMMENT '旧版 Raft 日志类型',
   `data` BLOB NOT NULL COMMENT '旧版 Raft 日志内容',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`log_index`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的旧版 SQL Raft 日志';
 
 CREATE TABLE IF NOT EXISTS `raft_snapshot` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旧版 Raft 快照主键',
+  `snapshot_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旧版 Raft 快照主键',
   `snapshot_name` VARCHAR(128) NOT NULL COMMENT '旧版 Raft 快照名称',
   `snapshot_meta` VARCHAR(4096) NOT NULL COMMENT '旧版 Raft 快照元数据',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '旧版 Raft 快照创建时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`snapshot_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '兼容保留的旧版 SQL Raft 快照';
 
 CREATE UNIQUE INDEX `unq_raft_snapshot_name` ON `raft_snapshot` (`snapshot_name`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_peer_analysis` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `peer` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '执行分析的对等节点',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `analysis_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '对等节点分析时间',
   `analysis` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '对等节点分析结果代码',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`peer`, `hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '多节点数据库实例分析结果';
 
-CREATE UNIQUE INDEX `unq_database_instance_peer_analysis_identity` ON `database_instance_peer_analysis` (`peer`, `hostname`, `port`);
-
 CREATE TABLE IF NOT EXISTS `database_instance_tls` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `required` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '实例连接是否要求 TLS',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例 TLS 要求缓存';
 
-CREATE UNIQUE INDEX `unq_database_instance_tls_identity` ON `database_instance_tls` (`hostname`, `port`);
-
 CREATE TABLE IF NOT EXISTS `kv_store` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `store_key` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '键值条目键名',
   `store_value` TEXT NOT NULL COMMENT '键值条目内容',
   `last_updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '键值条目最近更新时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`store_key`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = 'orchestrator 内部键值存储';
 
-CREATE UNIQUE INDEX `unq_kv_store_identity` ON `kv_store` (`store_key`);
-
 CREATE TABLE IF NOT EXISTS `cluster_injected_pseudo_gtid` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `cluster_name` VARCHAR(128) NOT NULL COMMENT '集群名称',
   `time_injected` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近注入伪 GTID 的时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`cluster_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '集群伪 GTID 注入时间';
 
-CREATE UNIQUE INDEX `unq_cluster_injected_pseudo_gtid_identity` ON `cluster_injected_pseudo_gtid` (`cluster_name`);
-
 CREATE TABLE IF NOT EXISTS `hostname_ips` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '主机名',
   `ipv4` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'IPv4 地址',
   `ipv6` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'IPv6 地址',
   `last_updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '地址映射最近更新时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '主机名与 IP 地址缓存';
 
-CREATE UNIQUE INDEX `unq_hostname_ips_identity` ON `hostname_ips` (`hostname`);
-
 CREATE TABLE IF NOT EXISTS `database_instance_tags` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `tag_name` VARCHAR(128) NOT NULL COMMENT '标签名称',
   `tag_value` VARCHAR(128) NOT NULL COMMENT '标签值',
   `last_updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '标签最近更新时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`, `tag_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例标签';
-
-CREATE UNIQUE INDEX `unq_database_instance_tags_identity` ON `database_instance_tags` (`hostname`, `port`, `tag_name`);
 
 CREATE INDEX `idx_database_instance_tags_name` ON `database_instance_tags` (`tag_name`);
 
 CREATE TABLE IF NOT EXISTS `database_instance_stale_binlog_coordinates` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `hostname` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '数据库实例主机名',
   `port` SMALLINT UNSIGNED NOT NULL COMMENT '数据库实例端口',
   `binary_log_file` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '长期未变化的 binlog 文件名',
   `binary_log_pos` BIGINT UNSIGNED NOT NULL COMMENT '长期未变化的 binlog 位点',
   `first_seen` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次确认位点未变化的时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`hostname`, `port`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '数据库实例停滞 binlog 位点';
-
-CREATE UNIQUE INDEX `unq_database_instance_stale_binlog_coordinates_identity` ON `database_instance_stale_binlog_coordinates` (`hostname`, `port`);
 
 CREATE INDEX `idx_stale_binlog_coordinates_first_seen` ON `database_instance_stale_binlog_coordinates` (`first_seen`);
 
 CREATE TABLE IF NOT EXISTS `recovery_policy` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `scope_type` VARCHAR(16) NOT NULL COMMENT '作用域类型：global 或 cluster',
   `scope_key` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '全局为 *，集群为显式别名',
   `policy_json` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '仅保存用户覆盖的稀疏策略 JSON',
@@ -751,13 +660,10 @@ CREATE TABLE IF NOT EXISTS `recovery_policy` (
   `updated_by` VARCHAR(128) NOT NULL COMMENT '最近修改人',
   `change_reason` VARCHAR(512) NOT NULL COMMENT '最近修改原因',
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近修改时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`scope_type`, `scope_key`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '页面化恢复策略覆盖';
 
-CREATE UNIQUE INDEX `unq_recovery_policy_identity` ON `recovery_policy` (`scope_type`, `scope_key`);
-
 CREATE TABLE IF NOT EXISTS `recovery_hook_profile` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `profile_id` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Hook 配置稳定标识',
   `profile_name` VARCHAR(128) NOT NULL COMMENT 'Hook 配置名称',
   `commands_json` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '顺序执行的命令 JSON 数组',
@@ -769,13 +675,10 @@ CREATE TABLE IF NOT EXISTS `recovery_hook_profile` (
   `updated_by` VARCHAR(128) NOT NULL COMMENT '最近修改人',
   `change_reason` VARCHAR(512) NOT NULL COMMENT '最近修改原因',
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近修改时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`profile_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '恢复 Hook 可复用配置';
 
-CREATE UNIQUE INDEX `unq_recovery_hook_profile_identity` ON `recovery_hook_profile` (`profile_id`);
-
 CREATE TABLE IF NOT EXISTS `recovery_hook_assignment` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '记录主键',
   `scope_type` VARCHAR(16) NOT NULL COMMENT '作用域类型：global 或 cluster',
   `scope_key` VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '全局为 *，集群为显式别名',
   `phase` VARCHAR(64) NOT NULL COMMENT '恢复生命周期阶段',
@@ -785,13 +688,11 @@ CREATE TABLE IF NOT EXISTS `recovery_hook_assignment` (
   `updated_by` VARCHAR(128) NOT NULL COMMENT '最近修改人',
   `change_reason` VARCHAR(512) NOT NULL COMMENT '最近修改原因',
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近修改时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`scope_type`, `scope_key`, `phase`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '全局与集群恢复 Hook 分配';
 
-CREATE UNIQUE INDEX `unq_recovery_hook_assignment_identity` ON `recovery_hook_assignment` (`scope_type`, `scope_key`, `phase`);
-
 INSERT IGNORE INTO `orchestrator_schema_migrations` (`migration_id`, `applied_at`)
-VALUES ('canonical-v2', CURRENT_TIMESTAMP);
+VALUES ('canonical-v1', CURRENT_TIMESTAMP);
 
 DELETE FROM `orchestrator_schema_migrations`
-WHERE `migration_id` = 'canonical-v2-pending';
+WHERE `migration_id` = 'canonical-v1-pending';

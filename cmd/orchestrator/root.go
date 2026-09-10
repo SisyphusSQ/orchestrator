@@ -38,7 +38,7 @@ func execute(args []string, stdout, stderr io.Writer, run func(*commandOptions, 
 	server.Flags().BoolVar(&options.discovery, "discovery", true, "Enable automatic topology discovery")
 	root.AddCommand(server)
 	admin := &cobra.Command{Use: "admin", Short: "Local server maintenance; requires server configuration", Args: cobra.NoArgs}
-	for _, name := range []string{"dump-config", "redeploy-internal-db", "access-token", "suggest-promoted-replacement"} {
+	for _, name := range []string{"dump-config", "redeploy-internal-db", "migrate-metadata-id", "access-token", "suggest-promoted-replacement"} {
 		command := &cobra.Command{Use: name, Short: name, Args: cobra.NoArgs, RunE: func(*cobra.Command, []string) error {
 			if name == "access-token" && options.owner == "" {
 				return fmt.Errorf("--owner is required")
