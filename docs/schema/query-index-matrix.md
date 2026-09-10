@@ -41,4 +41,42 @@
 | `database_instance_tags` | `idx_database_instance_tags_name` | 按标签名筛选数据库实例 |
 | `database_instance_stale_binlog_coordinates` | `idx_stale_binlog_coordinates_first_seen` | 按首次停滞时间清理位点记录 |
 
-主键不在上表重复列出。所有主键和唯一索引的 `NULL` 语义保持现有契约；对存量库也不会在本次升级中重建或改名。
+所有表均使用单列自增主键 `id`。以下索引保留原主键的业务唯一性和列顺序：
+
+| 表 | 唯一索引 | 业务唯一键 |
+| --- | --- | --- |
+| `orchestrator_schema_migrations` | `unq_orchestrator_schema_migrations_identity` | `migration_id` |
+| `orchestrator_db_deployments` | `unq_orchestrator_db_deployments_identity` | `deployed_version` |
+| `database_instance` | `unq_database_instance_identity` | `hostname`, `port` |
+| `database_instance_long_running_queries` | `unq_database_instance_long_running_queries_identity` | `hostname`, `port`, `process_id` |
+| `host_agent` | `unq_host_agent_identity` | `hostname` |
+| `host_attributes` | `unq_host_attributes_identity` | `hostname`, `attribute_name` |
+| `hostname_resolve` | `unq_hostname_resolve_identity` | `hostname` |
+| `cluster_alias` | `unq_cluster_alias_identity` | `cluster_name` |
+| `node_health` | `unq_node_health_identity` | `hostname`, `token` |
+| `hostname_unresolve` | `unq_hostname_unresolve_identity` | `hostname` |
+| `database_instance_pool` | `unq_database_instance_pool_identity` | `hostname`, `port`, `pool` |
+| `database_instance_topology_history` | `unq_database_instance_topology_history_identity` | `snapshot_unix_timestamp`, `hostname`, `port` |
+| `candidate_database_instance` | `unq_candidate_database_instance_identity` | `hostname`, `port` |
+| `database_instance_downtime` | `unq_database_instance_downtime_identity` | `hostname`, `port` |
+| `hostname_resolve_history` | `unq_hostname_resolve_history_identity` | `resolved_hostname` |
+| `hostname_unresolve_history` | `unq_hostname_unresolve_history_identity` | `unresolved_hostname` |
+| `cluster_domain_name` | `unq_cluster_domain_name_identity` | `cluster_name` |
+| `blocked_topology_recovery` | `unq_blocked_topology_recovery_identity` | `hostname`, `port` |
+| `database_instance_last_analysis` | `unq_database_instance_last_analysis_identity` | `hostname`, `port` |
+| `database_instance_recent_relaylog_history` | `unq_database_instance_recent_relaylog_history_identity` | `hostname`, `port` |
+| `orchestrator_metadata` | `unq_orchestrator_metadata_identity` | `anchor` |
+| `global_recovery_disable` | `unq_global_recovery_disable_identity` | `disable_recovery` |
+| `cluster_alias_override` | `unq_cluster_alias_override_identity` | `cluster_name` |
+| `database_instance_peer_analysis` | `unq_database_instance_peer_analysis_identity` | `peer`, `hostname`, `port` |
+| `database_instance_tls` | `unq_database_instance_tls_identity` | `hostname`, `port` |
+| `kv_store` | `unq_kv_store_identity` | `store_key` |
+| `cluster_injected_pseudo_gtid` | `unq_cluster_injected_pseudo_gtid_identity` | `cluster_name` |
+| `hostname_ips` | `unq_hostname_ips_identity` | `hostname` |
+| `database_instance_tags` | `unq_database_instance_tags_identity` | `hostname`, `port`, `tag_name` |
+| `database_instance_stale_binlog_coordinates` | `unq_database_instance_stale_binlog_coordinates_identity` | `hostname`, `port` |
+| `recovery_policy` | `unq_recovery_policy_identity` | `scope_type`, `scope_key` |
+| `recovery_hook_profile` | `unq_recovery_hook_profile_identity` | `profile_id` |
+| `recovery_hook_assignment` | `unq_recovery_hook_assignment_identity` | `scope_type`, `scope_key`, `phase` |
+
+存量迁移保留已有二级索引名称；新增业务唯一索引使用 `unq_<table>_identity`，SQLite 以表内唯一约束表示同一契约。

@@ -173,6 +173,7 @@ const (
 	metadataSchemaBootstrap metadataSchemaLayout = iota
 	metadataSchemaLegacy
 	metadataSchemaCanonical
+	metadataSchemaUpgrade
 )
 
 func detectMetadataSchemaLayoutContext(ctx context.Context, db *sql.DB) (metadataSchemaLayout, error) {
@@ -213,32 +214,49 @@ func detectMetadataSchemaLayoutContext(ctx context.Context, db *sql.DB) (metadat
 		return metadataSchemaLegacy, nil
 	}
 
-	var canonicalMigrationCount int
-	var pendingMigrationCount int
+	var canonicalMigrationCount, pendingMigrationCount, previousMigrationCount, upgradePendingCount int
 	if err := db.QueryRowContext(ctx, `
-		SELECT
-			COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0)
-		FROM orchestrator_schema_migrations
-	`, metadataschema.CanonicalMigration, metadataschema.CanonicalMigrationPending).Scan(
-		&canonicalMigrationCount,
-		&pendingMigrationCount,
-	); err != nil {
+ SELECT
+ COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0),
+ COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0),
+ COALESCE(SUM(CASE WHEN migration_id IN (?, ?) THEN 1 ELSE 0 END), 0),
+ COALESCE(SUM(CASE WHEN migration_id = ? THEN 1 ELSE 0 END), 0)
+ FROM orchestrator_schema_migrations`, metadataschema.CanonicalMigration, metadataschema.CanonicalMigrationPending,
+		metadataschema.PreviousCanonicalMigration, metadataschema.PreviousCanonicalMigration+"-pending", metadataschema.UpgradeMigrationPending).Scan(
+		&canonicalMigrationCount, &pendingMigrationCount, &previousMigrationCount, &upgradePendingCount); err != nil {
 		return metadataSchemaBootstrap, fmt.Errorf("inspect canonical schema migration: %w", err)
+	}
+	if upgradePendingCount > 0 {
+		return metadataSchemaUpgrade, nil
 	}
 	if canonicalMigrationCount > 0 {
 		if managedTableCount != len(tables) {
-			return metadataSchemaBootstrap, fmt.Errorf(
-				"canonical metadata schema has %d of %d managed tables",
-				managedTableCount,
-				len(tables),
-			)
+			return metadataSchemaBootstrap, fmt.Errorf("canonical metadata schema has %d of %d managed tables", managedTableCount, len(tables))
+		}
+		if err := validateMetadataIDs(ctx, db); err != nil {
+			return metadataSchemaCanonical, err
 		}
 		return metadataSchemaCanonical, nil
 	}
-	if pendingMigrationCount > 0 || managedTableCount == 1 {
+	if previousMigrationCount > 0 {
+		return metadataSchemaUpgrade, nil
+	}
+	if pendingMigrationCount > 0 {
 		return metadataSchemaBootstrap, nil
 	}
+	if managedTableCount == 1 {
+		columns, err := metadataColumns(ctx, db, "orchestrator_schema_migrations")
+		if err != nil {
+			return metadataSchemaBootstrap, err
+		}
+		for _, column := range columns {
+			if column.name == "id" {
+				return metadataSchemaBootstrap, nil
+			}
+		}
+		return metadataSchemaUpgrade, nil
+	}
+
 	return metadataSchemaLegacy, nil
 }
 
@@ -347,7 +365,19 @@ func initOrchestratorDBContext(ctx context.Context, db *sql.DB) error {
 	if layoutErr != nil {
 		return layoutErr
 	}
-	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
+	if layout == metadataSchemaLegacy || layout == metadataSchemaUpgrade {
+		if !config.RuntimeCLIFlags.MigrateMetadataIDs {
+			return fmt.Errorf("metadata schema requires explicit id migration; stop all writers, back up the database, then run orchestrator admin migrate-metadata-id --config=<config>")
+		}
+		if err := prepareMetadataIDMigration(ctx, db, layout); err != nil {
+			return err
+		}
+		if err := migrateMetadataIDs(ctx, db); err != nil {
+			return err
+		}
+		layout = metadataSchemaCanonical
+	}
+	if layout == metadataSchemaCanonical && versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
 		// Already deployed with this version
 		return nil
 	}
@@ -357,15 +387,14 @@ func initOrchestratorDBContext(ctx context.Context, db *sql.DB) error {
 	switch layout {
 	case metadataSchemaBootstrap:
 		log.Debug("Bootstrapping or resuming canonical metadata schema")
-		if err := deployCanonicalStatementsContext(ctx, db, metadataschema.Statements()); err != nil {
+		statements := metadataschema.Statements()
+		if err := deployCanonicalStatementsContext(ctx, db, statements[:len(statements)-2]); err != nil {
 			return err
 		}
-	case metadataSchemaLegacy:
-		log.Debug("Migrating legacy metadata schema")
-		if err := deployStatementsContext(ctx, db, generateSQLBase); err != nil {
+		if err := validateMetadataIDs(ctx, db); err != nil {
 			return err
 		}
-		if err := deployStatementsContext(ctx, db, generateSQLPatches); err != nil {
+		if err := deployCanonicalStatementsContext(ctx, db, statements[len(statements)-2:]); err != nil {
 			return err
 		}
 	case metadataSchemaCanonical:

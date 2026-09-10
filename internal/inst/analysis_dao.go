@@ -476,7 +476,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			cluster_domain_name.cluster_name = master_instance.cluster_name
 		)
 	WHERE
-		database_instance_maintenance.database_instance_maintenance_id IS NULL
+		database_instance_maintenance.id IS NULL
 		AND ? IN ('', master_instance.cluster_name)
 	GROUP BY
 		master_instance.hostname,

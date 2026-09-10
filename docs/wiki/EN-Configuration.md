@@ -42,7 +42,7 @@ MySQL-compatible backends include MySQL 5.7–8.0, TiDB, and OceanBase MySQL mod
 
 The process owns one backend pool and separate topology discovery and operation pools. Changes to endpoints, credentials, TLS, timeouts, packet limits, lifetimes, or pool sizes require restart; reload does not rebuild open pools. SQLite uses one process-owned pool and requires an absolute writable file path.
 
-Empty metadata databases are initialized from the executable [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) contract. Existing databases continue through the ordered compatibility patch stream. GORM reuses the process-owned pool and does not own schema migration. Read the [`migration guide`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md) before replacing a binary or importing DDL.
+Empty metadata databases are initialized from the executable [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) contract. Every table uses an auto-increment `id` primary key. Stop writers and back up existing databases before running `orchestrator admin migrate-metadata-id`; normal startup does not migrate old primary keys. GORM reuses the process-owned pool and does not own schema migration. Read the [`migration guide`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md) before replacing a binary or importing DDL.
 
 ## Discovery, classification, and filters
 

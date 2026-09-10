@@ -30,11 +30,13 @@ Current `main` can contain changes newer than the latest published release. Trea
 
 Configuration is grouped by responsibility under `server`, `raft`, `metadata`, `topology`, `authentication`, `agents`, `observability`, and related sections, with lowerCamel nested keys. Legacy fields are not converted automatically: for example, migrate `RaftNodeID`, `BackendDB`, `MySQLTopologyUser`, and `ConsulAddress` to `raft.nodeID`, `metadata.type`, `topology.mysql.user`, and `consul.address`. Generate each environment's new configuration from the checked-in `conf/` samples, validate `dump-config` and startup with the matching binary, then roll it out. Rollback must restore both the old binary and its matching flat configuration.
 
-### Canonical metadata schema
+### Metadata schema with uniform auto-increment primary keys
 
-New empty metadata databases initialize from [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql), using the common MySQL 5.7–8.0, TiDB, and OceanBase MySQL-mode subset and deriving SQLite structure from the same authority. New databases receive `canonical-v1`; existing databases continue the historical ordered patch stream and receive `legacy-v1`. The upgrade does not rebuild large existing tables, convert charsets, rename old indexes, or delete compatibility tables.
+All 50 tables use the single auto-increment primary key `id`. Former business primary keys become unique indexes; existing auto-increment columns are renamed while retaining their values. Empty databases execute [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) and receive `canonical-v2` only after validation. Normal startup does not migrate `canonical-v1` or `legacy-v1` databases.
 
-Back up every node's independent backend. Test the exact target product/version in an isolated empty database, then read back `orchestrator_schema_migrations`, `orchestrator_db_deployments`, managed table count, and representative reads/writes. Never import `mysql.sql` into a non-empty database. For rollback of a newly created canonical database, prefer restoring the pre-upgrade backup; older binaries do not understand the marker and may replay legacy patches.
+This upgrade requires stopped writers. Stop all nodes and external writers, back up each independent metadata database and its matching Raft directory, then run `orchestrator admin migrate-metadata-id --config=/absolute/path/orchestrator.yaml` with the new binary. The migration validates each table, retains a pending marker on failure, and resumes from the actual structure. Read back primary keys, business uniqueness, historical IDs and linked records before starting the cluster. See the [schema migration guide](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md) for engine boundaries and rollback.
+
+Never import `mysql.sql` into a non-empty database or run mixed binaries that expect different column names. Old Raft snapshots map historical ID column names on restore; new node-local surrogate IDs are excluded. Rollback requires the previous binary and matching metadata/Raft backups, not deleting a migration marker.
 
 ### Raft-only server
 

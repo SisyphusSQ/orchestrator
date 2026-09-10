@@ -30,11 +30,13 @@
 
 配置按 `server`、`raft`、`metadata`、`topology`、`authentication`、`agents`、`observability` 等职责分组，嵌套键使用 lowerCamel。旧字段不会被自动转换，例如 `RaftNodeID`、`BackendDB`、`MySQLTopologyUser` 和 `ConsulAddress` 分别迁移为 `raft.nodeID`、`metadata.type`、`topology.mysql.user` 和 `consul.address`。先从仓库 `conf/` 样例生成每个环境的新配置，用同版本二进制执行 `dump-config` 与启动验证，再进行滚动替换；回退必须同时恢复旧二进制和匹配的旧配置。
 
-### 规范化元数据库 Schema
+### 统一自增主键的元数据库 Schema
 
-全新空元数据库由 [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql) 初始化，采用 MySQL 5.7–8.0、TiDB 与 OceanBase MySQL 模式的共同语法子集，并从同一权威源生成 SQLite 结构。新库写入 `canonical-v1`；存量库继续历史有序补丁链并写入 `legacy-v1`。升级不会重建存量大表、转换字符集、重命名旧索引或删除兼容表。
+全部 50 张表使用 `id` 自增单列主键，原业务主键转为唯一索引，原自增编号列改名并保留数值。新空库执行 [`docs/schema/mysql.sql`](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/mysql.sql)，校验后写入 `canonical-v2`。旧 `canonical-v1` / `legacy-v1` 不在普通启动时自动迁移。
 
-升级前备份每个节点的独立元数据库，在隔离空库中验证准确的目标产品和版本；升级后回读 `orchestrator_schema_migrations`、`orchestrator_db_deployments`、受管表数量和代表性读写。不得把 `mysql.sql` 导入非空库。新建 canonical 数据库需要回滚时优先恢复升级前备份；旧二进制不理解新标记，可能重新执行历史补丁。
+这是停写升级：先停止所有节点及外部写入者，备份每个节点的独立元数据库和 Raft 数据目录，使用新二进制执行 `orchestrator admin migrate-metadata-id --config=/absolute/path/orchestrator.yaml`。逐表成功后才写完成标记，失败保留 pending 并按真实结构续跑。回读主键、业务唯一性、历史编号和关联读写后再启动集群。详细路线、SQLite/引擎边界及回退见 [Schema 迁移指南](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/schema/migration-guide.md)。
+
+不要向非空库导入 `mysql.sql`，不要混跑依赖旧列名的新旧二进制。旧 Raft 快照通过编号列名映射恢复；新增节点本地代理 id 不进入快照。回退须恢复旧二进制及匹配的元数据库/Raft 备份，不能只删除迁移标记。
 
 ### 仅支持 Raft 的服务端
 

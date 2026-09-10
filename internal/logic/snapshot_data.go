@@ -81,37 +81,86 @@ func writeTableData(tableName string, data *db.NamedResultData) error {
 	return log.Errore(err)
 }
 
-func CreateSnapshotData() *SnapshotData {
+// CreateSnapshotData 读取完整快照；任何表读取失败都不输出部分快照。
+func CreateSnapshotData() (*SnapshotData, error) {
 	snapshotData := NewSnapshotData()
 
 	snapshotData.LeaderURI = orcraft.LeaderURI.Get()
 	// keys
-	snapshotData.Keys, _ = inst.ReadAllInstanceKeys()
-	snapshotData.MinimalInstances, _ = inst.ReadAllMinimalInstances()
-	snapshotData.RecoveryDisabled, _ = IsRecoveryDisabled()
+	var err error
+	snapshotData.Keys, err = inst.ReadAllInstanceKeys()
+	if err != nil {
+		return nil, err
+	}
+	snapshotData.MinimalInstances, err = inst.ReadAllMinimalInstances()
+	if err != nil {
+		return nil, err
+	}
+	snapshotData.RecoveryDisabled, err = IsRecoveryDisabled()
+	if err != nil {
+		return nil, err
+	}
 
-	readTableData("cluster_alias", &snapshotData.ClusterAlias)
-	readTableData("cluster_alias_override", &snapshotData.ClusterAliasOverride)
-	readTableData("cluster_domain_name", &snapshotData.ClusterDomainName)
-	readTableData("access_token", &snapshotData.AccessToken)
-	readTableData("host_attributes", &snapshotData.HostAttributes)
-	readTableData("database_instance_tags", &snapshotData.InstanceTags)
-	readTableData("database_instance_pool", &snapshotData.PoolInstances)
-	readTableData("hostname_resolve", &snapshotData.HostnameResolves)
-	readTableData("hostname_unresolve", &snapshotData.HostnameUnresolves)
-	readTableData("database_instance_downtime", &snapshotData.DowntimedInstances)
-	readTableData("candidate_database_instance", &snapshotData.Candidates)
-	readTableData("topology_failure_detection", &snapshotData.Detections)
-	readTableData("kv_store", &snapshotData.KVStore)
-	readTableData("topology_recovery", &snapshotData.Recovery)
-	readTableData("topology_recovery_steps", &snapshotData.RecoverySteps)
-	readTableData("recovery_policy", &snapshotData.RecoveryPolicy)
-	readTableData("recovery_hook_profile", &snapshotData.RecoveryHookProfiles)
-	readTableData("recovery_hook_assignment", &snapshotData.RecoveryHookAssignments)
-	readTableData("cluster_injected_pseudo_gtid", &snapshotData.InjectedPseudoGTIDClusters)
+	if err := readTableData("cluster_alias", &snapshotData.ClusterAlias); err != nil {
+		return nil, err
+	}
+	if err := readTableData("cluster_alias_override", &snapshotData.ClusterAliasOverride); err != nil {
+		return nil, err
+	}
+	if err := readTableData("cluster_domain_name", &snapshotData.ClusterDomainName); err != nil {
+		return nil, err
+	}
+	if err := readTableData("access_token", &snapshotData.AccessToken); err != nil {
+		return nil, err
+	}
+	if err := readTableData("host_attributes", &snapshotData.HostAttributes); err != nil {
+		return nil, err
+	}
+	if err := readTableData("database_instance_tags", &snapshotData.InstanceTags); err != nil {
+		return nil, err
+	}
+	if err := readTableData("database_instance_pool", &snapshotData.PoolInstances); err != nil {
+		return nil, err
+	}
+	if err := readTableData("hostname_resolve", &snapshotData.HostnameResolves); err != nil {
+		return nil, err
+	}
+	if err := readTableData("hostname_unresolve", &snapshotData.HostnameUnresolves); err != nil {
+		return nil, err
+	}
+	if err := readTableData("database_instance_downtime", &snapshotData.DowntimedInstances); err != nil {
+		return nil, err
+	}
+	if err := readTableData("candidate_database_instance", &snapshotData.Candidates); err != nil {
+		return nil, err
+	}
+	if err := readTableData("topology_failure_detection", &snapshotData.Detections); err != nil {
+		return nil, err
+	}
+	if err := readTableData("kv_store", &snapshotData.KVStore); err != nil {
+		return nil, err
+	}
+	if err := readTableData("topology_recovery", &snapshotData.Recovery); err != nil {
+		return nil, err
+	}
+	if err := readTableData("topology_recovery_steps", &snapshotData.RecoverySteps); err != nil {
+		return nil, err
+	}
+	if err := readTableData("recovery_policy", &snapshotData.RecoveryPolicy); err != nil {
+		return nil, err
+	}
+	if err := readTableData("recovery_hook_profile", &snapshotData.RecoveryHookProfiles); err != nil {
+		return nil, err
+	}
+	if err := readTableData("recovery_hook_assignment", &snapshotData.RecoveryHookAssignments); err != nil {
+		return nil, err
+	}
+	if err := readTableData("cluster_injected_pseudo_gtid", &snapshotData.InjectedPseudoGTIDClusters); err != nil {
+		return nil, err
+	}
 
 	log.Debugf("raft snapshot data created")
-	return snapshotData
+	return snapshotData, nil
 }
 
 type SnapshotDataCreatorApplier struct {
@@ -123,7 +172,10 @@ func NewSnapshotDataCreatorApplier() *SnapshotDataCreatorApplier {
 }
 
 func (this *SnapshotDataCreatorApplier) GetData() (data []byte, err error) {
-	snapshotData := CreateSnapshotData()
+	snapshotData, err := CreateSnapshotData()
+	if err != nil {
+		return nil, err
+	}
 	b, err := json.Marshal(snapshotData)
 	if err != nil {
 		return b, err
@@ -145,6 +197,7 @@ func (this *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
 	if err != nil {
 		return err
 	}
+	defer zr.Close()
 	if err := json.NewDecoder(zr).Decode(&snapshotData); err != nil {
 		return err
 	}
@@ -160,10 +213,15 @@ func (this *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
 
 		discardedKeys := 0
 		// Forget instances that were not in snapshot
-		existingKeys, _ := inst.ReadAllInstanceKeys()
+		existingKeys, err := inst.ReadAllInstanceKeys()
+		if err != nil {
+			return err
+		}
 		for _, existingKey := range existingKeys {
 			if !snapshotInstanceKeyMap.HasKey(existingKey) {
-				inst.ForgetInstance(&existingKey)
+				if err := inst.ForgetInstance(&existingKey); err != nil {
+					return err
+				}
 				discardedKeys++
 			}
 		}
@@ -181,7 +239,7 @@ func (this *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
 				if err := inst.WriteInstance(minimalInstance.ToInstance(), false, nil); err == nil {
 					discoveredKeys++
 				} else {
-					log.Errore(err)
+					return err
 				}
 			}
 		}
@@ -199,30 +257,70 @@ func (this *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
 		}
 		log.Debugf("raft snapshot restore: discovered %+v keys", discoveredKeys)
 	}
-	writeTableData("cluster_alias", &snapshotData.ClusterAlias)
-	writeTableData("cluster_alias_override", &snapshotData.ClusterAliasOverride)
-	writeTableData("cluster_domain_name", &snapshotData.ClusterDomainName)
-	writeTableData("access_token", &snapshotData.AccessToken)
-	writeTableData("host_attributes", &snapshotData.HostAttributes)
-	writeTableData("database_instance_tags", &snapshotData.InstanceTags)
-	writeTableData("database_instance_pool", &snapshotData.PoolInstances)
-	writeTableData("hostname_resolve", &snapshotData.HostnameResolves)
-	writeTableData("hostname_unresolve", &snapshotData.HostnameUnresolves)
-	writeTableData("database_instance_downtime", &snapshotData.DowntimedInstances)
-	writeTableData("candidate_database_instance", &snapshotData.Candidates)
-	writeTableData("kv_store", &snapshotData.KVStore)
-	writeTableData("topology_recovery", &snapshotData.Recovery)
-	writeTableData("topology_failure_detection", &snapshotData.Detections)
-	writeTableData("topology_recovery_steps", &snapshotData.RecoverySteps)
-	writeTableData("recovery_policy", &snapshotData.RecoveryPolicy)
-	writeTableData("recovery_hook_profile", &snapshotData.RecoveryHookProfiles)
-	writeTableData("recovery_hook_assignment", &snapshotData.RecoveryHookAssignments)
+	if err := writeTableData("cluster_alias", &snapshotData.ClusterAlias); err != nil {
+		return err
+	}
+	if err := writeTableData("cluster_alias_override", &snapshotData.ClusterAliasOverride); err != nil {
+		return err
+	}
+	if err := writeTableData("cluster_domain_name", &snapshotData.ClusterDomainName); err != nil {
+		return err
+	}
+	if err := writeTableData("access_token", &snapshotData.AccessToken); err != nil {
+		return err
+	}
+	if err := writeTableData("host_attributes", &snapshotData.HostAttributes); err != nil {
+		return err
+	}
+	if err := writeTableData("database_instance_tags", &snapshotData.InstanceTags); err != nil {
+		return err
+	}
+	if err := writeTableData("database_instance_pool", &snapshotData.PoolInstances); err != nil {
+		return err
+	}
+	if err := writeTableData("hostname_resolve", &snapshotData.HostnameResolves); err != nil {
+		return err
+	}
+	if err := writeTableData("hostname_unresolve", &snapshotData.HostnameUnresolves); err != nil {
+		return err
+	}
+	if err := writeTableData("database_instance_downtime", &snapshotData.DowntimedInstances); err != nil {
+		return err
+	}
+	if err := writeTableData("candidate_database_instance", &snapshotData.Candidates); err != nil {
+		return err
+	}
+	if err := writeTableData("kv_store", &snapshotData.KVStore); err != nil {
+		return err
+	}
+	if err := writeTableData("topology_recovery", &snapshotData.Recovery); err != nil {
+		return err
+	}
+	if err := writeTableData("topology_failure_detection", &snapshotData.Detections); err != nil {
+		return err
+	}
+	if err := writeTableData("topology_recovery_steps", &snapshotData.RecoverySteps); err != nil {
+		return err
+	}
+	if err := writeTableData("recovery_policy", &snapshotData.RecoveryPolicy); err != nil {
+		return err
+	}
+	if err := writeTableData("recovery_hook_profile", &snapshotData.RecoveryHookProfiles); err != nil {
+		return err
+	}
+	if err := writeTableData("recovery_hook_assignment", &snapshotData.RecoveryHookAssignments); err != nil {
+		return err
+	}
 	recoverypolicy.Invalidate()
-	writeTableData("cluster_injected_pseudo_gtid", &snapshotData.InjectedPseudoGTIDClusters)
+	if err := writeTableData("cluster_injected_pseudo_gtid", &snapshotData.InjectedPseudoGTIDClusters); err != nil {
+		return err
+	}
 
 	// recovery disable
 	{
-		SetRecoveryDisabled(snapshotData.RecoveryDisabled)
+		if err := SetRecoveryDisabled(snapshotData.RecoveryDisabled); err != nil {
+			return err
+		}
 	}
 	log.Debugf("raft snapshot restore applied")
 	return nil

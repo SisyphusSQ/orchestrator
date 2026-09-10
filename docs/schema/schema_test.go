@@ -29,6 +29,13 @@ func TestMySQLSchemaContract(t *testing.T) {
 		t.Fatalf("managed tables do not match schema\ngot:\n%s\nwant:\n%s", strings.Join(actualTables, "\n"), strings.Join(wantTables, "\n"))
 	}
 
+	tableDefinitions := regexp.MustCompile("(?s)CREATE TABLE IF NOT EXISTS `([a-z0-9_]+)` \\((.*?)\\) ENGINE").FindAllStringSubmatch(mysqlSchema, -1)
+	for _, definition := range tableDefinitions {
+		if !strings.Contains(definition[2], "`id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT") || !strings.Contains(definition[2], "PRIMARY KEY (`id`)") || strings.Count(definition[2], "AUTO_INCREMENT") != 1 {
+			t.Errorf("%s must have exactly one auto-increment id primary key", definition[1])
+		}
+	}
+
 	upperSchema := strings.ToUpper(mysqlSchema)
 	tableOptions := ") ENGINE = INNODB DEFAULT CHARSET = UTF8MB4 COLLATE = UTF8MB4_GENERAL_CI COMMENT ="
 	if count := strings.Count(upperSchema, tableOptions); count != len(managedTables) {
@@ -50,8 +57,8 @@ func TestMySQLSchemaContract(t *testing.T) {
 
 	indexPattern := regexp.MustCompile("(?m)^CREATE (?:UNIQUE )?INDEX `([a-z0-9_]+)`")
 	indexMatches := indexPattern.FindAllStringSubmatch(mysqlSchema, -1)
-	if len(indexMatches) != 75 {
-		t.Fatalf("secondary index count = %d; want 75", len(indexMatches))
+	if len(indexMatches) != 108 {
+		t.Fatalf("secondary index count = %d; want 108", len(indexMatches))
 	}
 	seenIndexes := make(map[string]struct{}, len(indexMatches))
 	for _, match := range indexMatches {
@@ -107,8 +114,8 @@ func TestStatementsAreIndependentCopies(t *testing.T) {
 	if len(first) == 0 || len(first) != len(second) {
 		t.Fatalf("statement counts = %d/%d", len(first), len(second))
 	}
-	if len(first) != 128 {
-		t.Fatalf("statement count = %d; want 128", len(first))
+	if len(first) != 161 {
+		t.Fatalf("statement count = %d; want 161", len(first))
 	}
 	first[0] = "changed"
 	if second[0] == first[0] {

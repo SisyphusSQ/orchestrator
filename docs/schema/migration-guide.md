@@ -1,53 +1,67 @@
-# 元数据库迁移指南
+# 元数据库主键迁移指南
+
+## 目标与前置条件
+
+本次把全部 50 张表统一为单列自增 `id`。旧自增编号原值保留；业务字段原主键转为唯一约束。存量迁移不转换字符集、业务列类型或重命名无关索引，不删除兼容表。
+
+这是物理结构的不兼容升级，旧二进制仍会查询旧编号列。必须停止使用目标元数据库的 Orchestrator 和外部写入者，备份数据库及对应 Raft 数据目录，安排停机窗口。每个 Raft 节点继续使用各自独立元数据库，不允许新旧进程共享写后端。整个集群协调升级后再恢复服务；不承诺新旧二进制混跑。
+
+MySQL DDL 可能重建表、占用额外磁盘并阻塞写入，不能依赖事务回滚。TiDB/OceanBase 的存量 ALTER 必须在精确目标版本上预演，通过对应平台变更流程执行；语法可接受不等于在线行为相同。
 
 ## 空库初始化
 
-当运行时确认目标库不存在任何受管表时，直接执行 [`mysql.sql`](mysql.sql)。第一张表是 `orchestrator_schema_migrations`，随后写入 `canonical-v1-pending`；全部表和索引完成后才写入 `canonical-v1` 并清除 pending。若进程在中途退出，下次启动会识别 pending 标记并继续执行幂等建表语句。续跑只容忍同名二级索引已经存在；其他 canonical DDL 错误会终止初始化，不会写入完成标记。
+空库执行 [mysql.sql](mysql.sql)，首先建迁移记录表及其业务唯一索引，再写 `canonical-v2-pending`。所有 DDL 成功且回读主键/业务唯一性通过后，才写 `canonical-v2` 并删除 pending。重复初始化只容忍同名索引已经存在；其他 DDL 错误直接返回。完成标记存在但表缺失或主键契约不符合时拒绝初始化，不自动用空表掩盖数据丢失。
 
-若已经存在 `canonical-v1` 完成标记但受管表数量不足，运行时会拒绝启动迁移，不会自动重建空表掩盖数据丢失；应先从备份恢复并核对原因。
+## 存量升级命令
 
-MySQL 后端数据库由应用创建时会显式使用 `utf8mb4_general_ci`。SQLite 则把同一组语句转换为 SQLite 方言，不维护另一份手写结构。
+确认目标配置中的数据库主机、数据库名或 SQLite 文件路径及备份后，在停写窗口执行：
 
-## 存量数据库升级
+```bash
+orchestrator admin migrate-metadata-id --config=/absolute/path/orchestrator.yaml
+```
 
-只要库内已经存在受管表且没有 canonical pending/完成标记，运行时就继续执行 `generateSQLBase` 与 `generateSQLPatches`，并在完成后写入 `legacy-v1`。当前 base/patch DDL 新建的表和字段同样使用 `utf8mb4`，但这条路线不会在线转换已经存在的字符列；它仍保留原有字段顺序、索引名和补丁容错行为。
+该命令会关闭 `skipUpdate`，使用配置中的元数据库，不启动 HTTP、发现或 Raft 服务。它不是只读检查命令，不能在服务仍写入时执行。普通 `server`、`admin redeploy-internal-db` 和 `--enable-database-update` 都不会自动执行旧库主键迁移。
 
-本次升级不会对存量大表自动执行以下高风险操作：
+升级路线：
 
-- 全表 `CONVERT TO CHARACTER SET utf8mb4`；
-- 重命名旧索引；
-- 把 `promotion_rule` 从 `ENUM` 改为 `VARCHAR`；
-- 删除当前源码未引用的兼容表；
-- 修正 `processcing_node_token` 的历史拼写。
+1. 完整 `canonical-v1` 使用已有结构；`canonical-v1-pending` 或只有旧迁移表的中断初始化先续跑冻结的 [mysql-v1.sql](migrations/mysql-v1.sql)。
+2. 无 canonical 标记的 legacy 库先完成已有 base/patch 链，再进入主键迁移。历史补丁仅在这个显式入口执行。
+3. 预检全部表的原主键；已有非主键 `id`、未知主键或缺表时停止。已迁移表必须满足新 `id` 和业务唯一约束，不能仅凭列存在判断完成。
+4. 写入 `auto-id-v2-pending`；逐表迁移并回读。旧自增列改名为 `id`，MySQL 同时统一为 `BIGINT UNSIGNED`；业务主键表增加 `id` 并保留业务唯一键。
+5. MySQL 每张表用一条 ALTER；SQLite 每张表在事务内建立新结构、按列复制数据、替换旧表并重建原索引/触发器。SQLite 使用原表定义，保留原业务列与额外列；不手写第二份目标 schema。
+6. 全部表校验成功后事务写入 `canonical-v2` 并清除 pending。旧 `canonical-v1` / `legacy-v1` 标记保留作为历史记录。
 
-原因是这些操作可能重建表、占用额外磁盘、阻塞写入，并且 MySQL、TiDB 与 OceanBase 的在线 DDL 和回退语义不同。若需要让存量库的物理结构与 canonical DDL 完全一致，应另建变更卡，先采集数据量、索引使用、脏数据、平台能力和回滚窗口，再逐表迁移。
+迁移按照真实结构识别进度，不依赖每表重复记录。MySQL 多表 DDL 无整体事务：失败可能留下已迁移的前半部分表。保留停写状态，排除明确错误后重新执行同一命令；`auto-id-v2-pending` 会阻止重放旧 DDL，已完成表只校验。不要在部分迁移状态下启动旧二进制或手工写完成标记。
 
-canonical 空库与当前 base/patch DDL 都以 `utf8mb4` 为字符集；存量库中此前已存在的 `ascii`、`latin1` 或三字节 `utf8` 列不会被本次启动流程自动重建。canonical 与完整历史补丁链保持相同的表、字段、主键、`NULL` 约束及二级索引列契约；其余有意差异包括中文注释、规范化索引名，`promotion_rule` 从 `ENUM` 改为 `VARCHAR(16)`，拓扑历史的 `cluster_name` 从不可完整索引的 `TINYTEXT` 改为 `VARCHAR(128)`，以及三个原本没有显式默认值的非空时间字段使用安全的 `1971-01-01 00:00:00`。这些差异只作用于新建 canonical 库，不会在线改写存量库。
+SQLite 表复制需要额外磁盘。若报未知结构、同名临时表或自定义依赖错误，先检查实际对象和备份；不要盲目删表。自定义视图、外键或外部消费者不属于受管 schema 契约，迁移前必须识别并安排同步变更。
 
-## 上线前检查
+## Raft 快照与业务编号
 
-1. 确认每个 Raft 节点仍使用自己的独立元数据库，不让不同节点或新旧部署共享一个写后端。
-2. 备份元数据库，并记录当前应用版本、表数、字符集、排序规则与 `orchestrator_db_deployments`。
-3. 在相同产品和精确版本的隔离空库运行外部 Schema 测试。
-4. 对存量库先升级一个非生产副本，确认写入 `legacy-v1`，再验证发现、维护、标签、审计和故障恢复记录。
-5. 观察启动日志中选择的是 `canonical` 还是 `legacy`，并核对应用版本部署记录。
+- 原业务主键表新增的 `id` 是节点本地代理键，不写入快照；恢复时也过滤这类本地 `id`，继续以业务唯一键匹配。
+- 已有自增编号的快照使用历史列名，例如 `recovery_id`、`detection_id`、`recovery_step_id`；恢复到新结构时映射为 `id`，保留数值。旧快照可由新版本读取。
+- `last_detection_id` 等关联列继续保存业务编号，不随其引用的主键列一起改名。
+- 快照读取、逐表写入失败会返回错误。恢复不是跨全部表的原子替换；发生错误时不能把部分恢复当作成功。
+- API 的恢复/维护/Agent 等业务 ID 字段保持原契约。数据库列名统一不等于外部 API 字段统一。
 
-## 回读
+## 回读与业务验证
 
 ```sql
 SELECT migration_id, applied_at
 FROM orchestrator_schema_migrations
 ORDER BY applied_at, migration_id;
 
+SELECT table_name, column_name, column_type, extra
+FROM information_schema.columns
+WHERE table_schema = DATABASE() AND column_key = 'PRI'
+ORDER BY table_name;
+
 SELECT deployed_version, deployed_timestamp
 FROM orchestrator_db_deployments
 ORDER BY deployed_timestamp DESC;
 ```
 
-禁止仅根据进程启动成功判断迁移完成；还应回读受管表数、关键字段、关键索引，并执行代表性的业务读写。
+应有 50 张受管表，每张主键仅为 `id`；MySQL 中均为无符号 BIGINT 和 auto_increment。检查原业务唯一键、行数、历史自增值及关联关系，再执行实例发现、维护、审计、恢复记录、策略/Hook 保存及快照恢复验证。不能只根据命令退出成功判断业务验收完成。
 
 ## 回退
 
-- 存量 `legacy-v1` 数据库没有被批量改写，可在停止新进程后恢复旧二进制和匹配配置。
-- 新建的 `canonical-v1` 数据库包含旧代码需要的表和字段，但旧二进制不理解 canonical 标记，启动时可能再次执行历史补丁并补出旧索引名。回退前应恢复数据库备份，或在确认结构完整后使用 `SkipOrchestratorDatabaseUpdate` 阻止旧二进制改写结构。
-- MySQL DDL 不能依赖事务回滚。任何真实结构回退都必须基于备份、反向 DDL 和独立回读，不得假设 `ROLLBACK` 能撤销建表或改表。
+保留原二进制、配置及匹配的元数据库/Raft 备份。停止新进程后恢复完整备份及旧二进制，再独立回读。不能只换回旧二进制：其旧列名已不存在。不能以 `ROLLBACK` 撤销 MySQL DDL，也不能通过删除完成标记伪装回退。`metadata.schema.skipUpdate` 不会恢复旧字段。

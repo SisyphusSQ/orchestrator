@@ -33,7 +33,7 @@ import (
 )
 
 type topologyRecoveryRow struct {
-	RecoveryID             int64          `gorm:"column:recovery_id"`
+	RecoveryID             int64          `gorm:"column:id"`
 	UID                    string         `gorm:"column:uid"`
 	Hostname               string         `gorm:"column:hostname"`
 	Port                   int            `gorm:"column:port"`
@@ -64,7 +64,7 @@ type topologyRecoveryRow struct {
 }
 
 type failureDetectionRow struct {
-	DetectionID            int64         `gorm:"column:detection_id"`
+	DetectionID            int64         `gorm:"column:id"`
 	Hostname               string        `gorm:"column:hostname"`
 	Port                   int           `gorm:"column:port"`
 	Active                 bool          `gorm:"column:is_active"`
@@ -89,7 +89,7 @@ type blockedRecoveryRow struct {
 }
 
 type topologyRecoveryStepRow struct {
-	ID          int64  `gorm:"column:recovery_step_id"`
+	ID          int64  `gorm:"column:id"`
 	RecoveryUID string `gorm:"column:recovery_uid"`
 	AuditAt     string `gorm:"column:audit_at"`
 	Message     string `gorm:"column:message"`
@@ -277,7 +277,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 	sqlResult, err := db.ExecOrchestratorSQLContext(context.Background(), `
 			insert ignore
 				into topology_recovery (
-					recovery_id,
+					id,
 					uid,
 					hostname,
 					port,
@@ -311,7 +311,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
-					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
+					(select ifnull(max(id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
 		db.NilIfZero(topologyRecovery.Id),
@@ -461,7 +461,7 @@ func ExpireBlockedRecoveries() error {
 				blocked_topology_recovery.port
 			from
 				blocked_topology_recovery
-				left join topology_recovery on (blocking_recovery_id = topology_recovery.recovery_id and acknowledged = 0)
+				left join topology_recovery on (blocking_recovery_id = topology_recovery.id and acknowledged = 0)
 			where
 				acknowledged is null
 		`
@@ -543,7 +543,7 @@ func AcknowledgeAllRecoveries(owner string, comment string) (countAcknowledgedEn
 // AcknowledgeRecovery acknowledges a particular recovery.
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
 func AcknowledgeRecovery(recoveryId int64, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	whereClause := `recovery_id = ?`
+	whereClause := `id = ?`
 	return acknowledgeRecoveries(owner, comment, false, whereClause, []interface{}{recoveryId})
 }
 
@@ -650,7 +650,7 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
 	res := []*TopologyRecovery{}
 	query := fmt.Sprintf(`
 		select
-      recovery_id,
+      id,
 			uid,
       hostname,
       port,
@@ -683,7 +683,7 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
 			topology_recovery
 		%s
 		order by
-			recovery_id desc
+			id desc
 		%s
 		`, whereCondition, limit)
 	rows, err := db.QueryOrchestratorRows[topologyRecoveryRow](context.Background(), query, args...)
@@ -763,7 +763,7 @@ func ReadCompletedRecoveries(page int) ([]*TopologyRecovery, error) {
 
 // ReadRecovery reads completed recovery entry/audit entries from topology_recovery
 func ReadRecovery(recoveryId int64) ([]*TopologyRecovery, error) {
-	whereClause := `where recovery_id = ?`
+	whereClause := `where id = ?`
 	return readRecoveries(whereClause, ``, []interface{}{recoveryId})
 }
 
@@ -803,7 +803,7 @@ func readFailureDetections(whereCondition string, limit string, args []interface
 	res := []*TopologyRecovery{}
 	query := fmt.Sprintf(`
 		select
-      detection_id,
+      id,
       hostname,
       port,
       in_active_period as is_active,
@@ -816,12 +816,12 @@ func readFailureDetections(whereCondition string, limit string, args []interface
       cluster_alias,
       count_affected_slaves,
       slave_hosts,
-      (select max(recovery_id) from topology_recovery where topology_recovery.last_detection_id = detection_id) as related_recovery_id
+      (select max(id) from topology_recovery where topology_recovery.last_detection_id = topology_failure_detection.id) as related_recovery_id
 		from
 			topology_failure_detection
 		%s
 		order by
-			detection_id desc
+			id desc
 		%s
 		`, whereCondition, limit)
 	rows, err := db.QueryOrchestratorRows[failureDetectionRow](context.Background(), query, args...)
@@ -849,7 +849,7 @@ func ReadRecentFailureDetections(clusterAlias string, page int) ([]*TopologyReco
 
 // ReadFailureDetection
 func ReadFailureDetection(detectionId int64) ([]*TopologyRecovery, error) {
-	whereClause := `where detection_id = ?`
+	whereClause := `where id = ?`
 	return readFailureDetections(whereClause, ``, []interface{}{detectionId})
 }
 
@@ -889,7 +889,7 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 	sqlResult, err := db.ExecOrchestratorSQLContext(context.Background(), `
 			insert ignore
 				into topology_recovery_steps (
-					recovery_step_id, recovery_uid, audit_at, message
+					id, recovery_uid, audit_at, message
 				) values (?, ?, now(), ?)
 			`, db.NilIfZero(topologyRecoveryStep.Id), topologyRecoveryStep.RecoveryUID, topologyRecoveryStep.Message,
 	)
@@ -905,13 +905,13 @@ func ReadTopologyRecoverySteps(recoveryUID string) ([]TopologyRecoveryStep, erro
 	res := []TopologyRecoveryStep{}
 	query := `
 		select
-			recovery_step_id, recovery_uid, audit_at, message
+			id, recovery_uid, audit_at, message
 		from
 			topology_recovery_steps
 		where
 			recovery_uid=?
 		order by
-			recovery_step_id asc
+			id asc
 		`
 	rows, err := db.QueryOrchestratorRows[topologyRecoveryStepRow](context.Background(), query, recoveryUID)
 	for _, row := range rows {

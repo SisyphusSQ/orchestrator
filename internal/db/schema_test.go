@@ -193,8 +193,8 @@ func TestCanonicalMetadataSchemaResumesSQLite(t *testing.T) {
 	`).Scan(&secondaryIndexCount); err != nil {
 		t.Fatalf("count canonical SQLite secondary indexes: %v", err)
 	}
-	if secondaryIndexCount != 75 {
-		t.Fatalf("canonical SQLite secondary index count after follow-up version = %d; want 75", secondaryIndexCount)
+	if secondaryIndexCount != 108 {
+		t.Fatalf("canonical SQLite secondary index count after follow-up version = %d; want 108", secondaryIndexCount)
 	}
 }
 
@@ -324,7 +324,7 @@ func sqliteSecondaryIndexContracts(t *testing.T, database *sql.DB, table string)
 	return result
 }
 
-func TestCanonicalMetadataSchemaPreservesLegacyTableShape(t *testing.T) {
+func TestMigratedMetadataSchemaMatchesCanonicalContract(t *testing.T) {
 	useSQLiteMetadataBackend(t)
 	ctx := context.Background()
 
@@ -347,6 +347,10 @@ func TestCanonicalMetadataSchemaPreservesLegacyTableShape(t *testing.T) {
 		t.Fatalf("legacy metadata table count = %d; want %d", legacyTableCount, want)
 	}
 
+	if err := migrateMetadataIDs(ctx, legacy); err != nil {
+		t.Fatalf("migrate legacy ids: %v", err)
+	}
+
 	for _, table := range metadataschema.ManagedTables() {
 		canonicalShape := sqliteTableShape(t, canonical, table)
 		legacyShape := sqliteTableShape(t, legacy, table)
@@ -361,7 +365,7 @@ func TestCanonicalMetadataSchemaPreservesLegacyTableShape(t *testing.T) {
 	}
 }
 
-func TestLegacyMetadataSchemaRemainsPatchDriven(t *testing.T) {
+func TestLegacyMetadataSchemaRequiresExplicitMigration(t *testing.T) {
 	useSQLiteMetadataBackend(t)
 	database := openMetadataSchemaSQLite(t)
 	ctx := context.Background()
@@ -389,6 +393,12 @@ func TestLegacyMetadataSchemaRemainsPatchDriven(t *testing.T) {
 		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
+	if err := initOrchestratorDBContext(ctx, database); err == nil {
+		t.Fatal("legacy schema upgraded without explicit authorization")
+	}
+	previousMigration := config.RuntimeCLIFlags.MigrateMetadataIDs
+	config.RuntimeCLIFlags.MigrateMetadataIDs = true
+	t.Cleanup(func() { config.RuntimeCLIFlags.MigrateMetadataIDs = previousMigration })
 	if err := initOrchestratorDBContext(ctx, database); err != nil {
 		t.Fatalf("upgrade legacy metadata schema: %v", err)
 	}
@@ -408,7 +418,33 @@ func TestLegacyMetadataSchemaRemainsPatchDriven(t *testing.T) {
 	if err != nil {
 		t.Fatalf("detect upgraded legacy layout: %v", err)
 	}
-	if layout != metadataSchemaLegacy {
-		t.Fatalf("upgraded layout = %d; want legacy", layout)
+	if layout != metadataSchemaCanonical {
+		t.Fatalf("upgraded layout = %d; want canonical", layout)
+	}
+}
+
+func TestPendingBootstrapIsNotSkippedByDeploymentVersion(t *testing.T) {
+	useSQLiteMetadataBackend(t)
+	database := openMetadataSchemaSQLite(t)
+	ctx := context.Background()
+	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
+	previousPanic := config.Config.Metadata.Schema.PanicOnDifferentDeployment
+	config.RuntimeCLIFlags.ConfiguredVersion = "already-recorded"
+	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
+	t.Cleanup(func() {
+		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
+		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanic
+	})
+	if err := deployCanonicalStatementsContext(ctx, database, metadataschema.Statements()[:12]); err != nil {
+		t.Fatal(err)
+	}
+	if err := registerOrchestratorDeploymentContext(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	if err := initOrchestratorDBContext(ctx, database); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateMetadataIDs(ctx, database); err != nil {
+		t.Fatal(err)
 	}
 }

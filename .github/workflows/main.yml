@@ -9,7 +9,7 @@ on:
 
 jobs:
   metadata-schema-mysql:
-    name: Metadata schema / MySQL ${{ matrix.mysql }}
+    name: Metadata schema / MySQL ${{ matrix.mysql }} / ${{ matrix.scenario }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,6 +17,9 @@ jobs:
         mysql:
           - "5.7.44"
           - "8.0.46"
+        scenario:
+          - CanonicalMetadataSchemaExternalMySQL
+          - MetadataIDMigrationExternalMySQL
     services:
       mysql:
         image: mysql:${{ matrix.mysql }}
@@ -42,7 +45,8 @@ jobs:
     - name: Validate canonical metadata schema
       env:
         ORCHESTRATOR_METADATA_SCHEMA_TEST_DSN: root@tcp(127.0.0.1:3306)/orchestrator_schema?interpolateParams=true
-      run: go test ./internal/db -run '^TestCanonicalMetadataSchemaExternalMySQL$' -count=1 -v
+        ORCHESTRATOR_METADATA_ID_MIGRATION_TEST_DSN: root@tcp(127.0.0.1:3306)/orchestrator_schema?interpolateParams=true
+      run: go test ./internal/db -run '^Test${{ matrix.scenario }}$' -count=1 -v
 
   build:
 

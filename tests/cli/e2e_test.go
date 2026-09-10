@@ -207,7 +207,8 @@ func TestHTTPTopologyLifecycle(t *testing.T) {
 	eventually(t, 15*time.Second, func() bool { return replicaSourcePort(t, nodes[2].db) == nodes[1].port })
 	orch("discover", "-i", instance(1))
 	orch("which-cluster-master", "--cluster", instance(1))
-	t.Log("independent MySQL backend and single-node Raft: discovery, maintenance, tags, GTID relocation, replication data readback and forced failover passed")
+	orch("raft-snapshot")
+	t.Log("independent MySQL backend and single-node Raft: discovery, maintenance, tags, GTID relocation, replication data readback, forced failover and Raft snapshot passed")
 }
 func freePort(t *testing.T) int {
 	t.Helper()

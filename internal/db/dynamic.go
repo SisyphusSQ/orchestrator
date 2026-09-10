@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	metadataschema "github.com/openark/orchestrator/docs/schema"
 	"time"
 
 	"github.com/openark/orchestrator/internal/observability"
@@ -275,11 +277,20 @@ func ScanTableContext(ctx context.Context, database *sql.DB, tableName string) (
 	if err := validateSQLIdentifier(tableName); err != nil {
 		return NamedResultData{}, err
 	}
-	return queryNamedResultDataContext(ctx, database, "select * from "+tableName)
+	result, err := queryNamedResultDataContext(ctx, database, "select * from "+tableName)
+	if err != nil {
+		return NamedResultData{}, err
+	}
+	return snapshotIdentityColumns(tableName, result, true)
 }
 
 func WriteTableContext(ctx context.Context, database *sql.DB, tableName string, data NamedResultData) (returnErr error) {
 	if err := validateSQLIdentifier(tableName); err != nil {
+		return err
+	}
+	var err error
+	data, err = snapshotIdentityColumns(tableName, data, false)
+	if err != nil {
 		return err
 	}
 	if len(data.Data) == 0 || len(data.Columns) == 0 {
@@ -320,4 +331,58 @@ func NilIfZero(value int64) interface{} {
 		return nil
 	}
 	return value
+}
+
+// snapshotIdentityColumns 保持快照中的历史编号名称，同时排除节点本地新增代理键。
+func snapshotIdentityColumns(table string, data NamedResultData, export bool) (NamedResultData, error) {
+	result := NamedResultData{}
+	old := metadataschema.LegacyAutoID(table)
+	localID := len(metadataschema.BusinessKey(table)) > 0
+	var positions []int
+	seen := make(map[string]bool)
+	for i, column := range data.Columns {
+		if localID && column == "id" {
+			continue
+		}
+		if old != "" {
+			if export && column == "id" {
+				column = old
+			}
+			if !export && column == old {
+				column = "id"
+			}
+		}
+		if seen[column] {
+			return NamedResultData{}, fmt.Errorf("duplicate snapshot column %s for %s", column, table)
+		}
+		seen[column] = true
+		result.Columns = append(result.Columns, column)
+		positions = append(positions, i)
+	}
+	if len(data.Data) > 0 {
+		required := metadataschema.BusinessKey(table)
+		if old != "" {
+			identity := "id"
+			if export {
+				identity = old
+			}
+			required = []string{identity}
+		}
+		for _, column := range required {
+			if !seen[column] {
+				return NamedResultData{}, fmt.Errorf("snapshot for %s is missing identity column %s", table, column)
+			}
+		}
+	}
+	for rowIndex, row := range data.Data {
+		if len(row) != len(data.Columns) {
+			return NamedResultData{}, fmt.Errorf("snapshot row %d has %d cells; want %d", rowIndex, len(row), len(data.Columns))
+		}
+		projected := RowData{}
+		for _, i := range positions {
+			projected = append(projected, row[i])
+		}
+		result.Data = append(result.Data, projected)
+	}
+	return result, nil
 }

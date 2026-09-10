@@ -159,7 +159,7 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 	}
 	query := fmt.Sprintf(`
 		select
-			audit_id,
+			id,
 			audit_timestamp,
 			audit_type,
 			hostname,
@@ -175,7 +175,7 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 		`, whereCondition)
 	args = append(args, config.AuditPageSize, page*config.AuditPageSize)
 	type auditRow struct {
-		ID        int64  `gorm:"column:audit_id"`
+		ID        int64  `gorm:"column:id"`
 		Timestamp string `gorm:"column:audit_timestamp"`
 		Type      string `gorm:"column:audit_type"`
 		Hostname  string `gorm:"column:hostname"`
