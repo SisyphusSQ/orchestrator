@@ -83,7 +83,7 @@ var (
 	ErrTimeout                 = newError(ClassIndeterminate, "raft future timed out")
 )
 
-func invalidArgument(format string, args ...interface{}) *Error {
+func invalidArgument(format string, args ...any) *Error {
 	return newError(ClassInvalidArgument, fmt.Sprintf(format, args...))
 }
 
@@ -91,8 +91,7 @@ func classifyRaftError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var typed *Error
-	if errors.As(err, &typed) {
+	if typed, ok := errors.AsType[*Error](err); ok {
 		return typed
 	}
 	switch {
@@ -119,8 +118,7 @@ func classifyLeadershipTransferError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var typed *Error
-	if errors.As(err, &typed) {
+	if typed, ok := errors.AsType[*Error](err); ok {
 		return typed
 	}
 	switch {
@@ -144,12 +142,11 @@ func ClassOf(err error) Class {
 	if err == nil {
 		return ""
 	}
-	var typed *Error
-	if errors.As(err, &typed) {
+	if typed, ok := errors.AsType[*Error](err); ok {
 		return typed.Class
 	}
 	classified := classifyRaftError(err)
-	if errors.As(classified, &typed) {
+	if typed, ok := errors.AsType[*Error](classified); ok {
 		return typed.Class
 	}
 	return ClassFailed

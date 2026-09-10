@@ -66,7 +66,7 @@ func TestKnownPaths(t *testing.T) {
 
 	pathsMap := make(map[string]bool)
 	for _, path := range registeredPaths {
-		pathBase := strings.Split(path, "/")[0]
+		pathBase, _, _ := strings.Cut(path, "/")
 		pathsMap[pathBase] = true
 	}
 	test.S(t).ExpectTrue(pathsMap["health"])

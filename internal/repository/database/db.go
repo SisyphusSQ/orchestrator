@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -32,12 +31,10 @@ import (
 // IsDuplicateKeyError identifies backend uniqueness violations without relying
 // on error text so optimistic-create callers can report a stable conflict.
 func IsDuplicateKeyError(err error) bool {
-	var mysqlError *mysql.MySQLError
-	if errors.As(err, &mysqlError) {
+	if mysqlError, ok := errors.AsType[*mysql.MySQLError](err); ok {
 		return mysqlError.Number == 1062
 	}
-	var sqliteError sqlite3.Error
-	if errors.As(err, &sqliteError) {
+	if sqliteError, ok := errors.AsType[sqlite3.Error](err); ok {
 		return sqliteError.ExtendedCode == sqlite3.ErrConstraintPrimaryKey || sqliteError.ExtendedCode == sqlite3.ErrConstraintUnique
 	}
 	return false
@@ -107,10 +104,6 @@ func IsSQLite() bool {
 	return config.Config.IsSQLite()
 }
 
-func isInMemorySQLite() bool {
-	return config.Config.IsSQLite() && strings.Contains(config.Config.Metadata.SQLite.DataFile, ":memory:")
-}
-
 // OpenOrchestrator returns the process-owned orchestrator backend pool.
 // New code should use OpenOrchestratorContext so cancellation reaches the driver.
 func OpenOrchestrator() (*sql.DB, error) {
@@ -124,27 +117,14 @@ func translateStatement(statement string) (string, error) {
 	return statement, nil
 }
 
-// execInternal
-func execInternal(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
-	return execInternalContext(context.Background(), db, query, args...)
-}
-
-func execInternalContext(ctx context.Context, db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
-	translated, err := translateStatement(query)
-	if err != nil {
-		return nil, err
-	}
-	return db.ExecContext(ctx, translated, args...)
-}
-
 // ExecOrchestrator will execute given query on the orchestrator backend database.
-func ExecOrchestrator(query string, args ...interface{}) (sql.Result, error) {
+func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
 	return ExecOrchestratorContext(context.Background(), query, args...)
 }
 
 // ExecOrchestratorContext executes a backend statement with caller-provided
 // cancellation and deadline semantics.
-func ExecOrchestratorContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func ExecOrchestratorContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	handle, err := OpenOrchestratorGORMContext(ctx)
 	if err != nil {
 		return nil, err

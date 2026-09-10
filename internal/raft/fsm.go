@@ -29,7 +29,7 @@ import (
 type fsm Store
 
 // Apply applies a Raft log entry to the key-value store.
-func (f *fsm) Apply(l *raft.Log) interface{} {
+func (f *fsm) Apply(l *raft.Log) any {
 	var c storeCommand
 	if err := json.Unmarshal(l.Data, &c); err != nil {
 		log.Errorf("failed to unmarshal command: %s", err.Error())

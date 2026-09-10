@@ -30,10 +30,10 @@ type HttpAgentsAPI struct {
 	URLPrefix string
 }
 
-var AgentsAPI HttpAgentsAPI = HttpAgentsAPI{}
+var AgentsAPI HttpAgentsAPI
 
 // SubmitAgent registers an agent. It is initiated by an agent to register itself.
-func (this *HttpAgentsAPI) SubmitAgent(params Params, r Responder) {
+func (api *HttpAgentsAPI) SubmitAgent(params Params, r Responder) {
 	port, err := strconv.Atoi(params["port"])
 	if err != nil {
 		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -49,7 +49,7 @@ func (this *HttpAgentsAPI) SubmitAgent(params Params, r Responder) {
 }
 
 // SetHostAttribute is a utility method that allows per-host key-value store.
-func (this *HttpAgentsAPI) SetHostAttribute(params Params, r Responder, req *http.Request) {
+func (api *HttpAgentsAPI) SetHostAttribute(params Params, r Responder, req *http.Request) {
 	err := attributes.SetHostAttributes(params["host"], params["attrVame"], params["attrValue"])
 
 	if err != nil {
@@ -61,7 +61,7 @@ func (this *HttpAgentsAPI) SetHostAttribute(params Params, r Responder, req *htt
 }
 
 // GetHostAttributeByAttributeName returns a host attribute
-func (this *HttpAgentsAPI) GetHostAttributeByAttributeName(params Params, r Responder, req *http.Request) {
+func (api *HttpAgentsAPI) GetHostAttributeByAttributeName(params Params, r Responder, req *http.Request) {
 
 	output, err := attributes.GetHostAttributesByAttribute(params["attr"], req.URL.Query().Get("valueMatch"))
 
@@ -74,7 +74,7 @@ func (this *HttpAgentsAPI) GetHostAttributeByAttributeName(params Params, r Resp
 }
 
 // AgentsHosts provides list of agent host names
-func (this *HttpAgentsAPI) AgentsHosts(params Params, r Responder, req *http.Request) string {
+func (api *HttpAgentsAPI) AgentsHosts(params Params, r Responder, req *http.Request) string {
 	agents, err := agent.ReadAgents()
 	hostnames := []string{}
 	for _, agent := range agents {
@@ -95,7 +95,7 @@ func (this *HttpAgentsAPI) AgentsHosts(params Params, r Responder, req *http.Req
 }
 
 // AgentsInstances provides list of assumed MySQL instances (host:port)
-func (this *HttpAgentsAPI) AgentsInstances(params Params, r Responder, req *http.Request) string {
+func (api *HttpAgentsAPI) AgentsInstances(params Params, r Responder, req *http.Request) string {
 	agents, err := agent.ReadAgents()
 	hostnames := []string{}
 	for _, agent := range agents {
@@ -115,16 +115,16 @@ func (this *HttpAgentsAPI) AgentsInstances(params Params, r Responder, req *http
 	return ""
 }
 
-func (this *HttpAgentsAPI) AgentPing(params Params, r Responder, req *http.Request) {
+func (api *HttpAgentsAPI) AgentPing(params Params, r Responder, req *http.Request) {
 	writeHTTPJSON(r, 200, "OK")
 }
 
 // RegisterRequests makes for the de-facto list of known API calls
-func (this *HttpAgentsAPI) RegisterRequests(m *Router) {
-	m.Get(this.URLPrefix+"/api/submit-agent/:host/:port/:token", this.SubmitAgent)
-	m.Get(this.URLPrefix+"/api/host-attribute/:host/:attrVame/:attrValue", this.SetHostAttribute)
-	m.Get(this.URLPrefix+"/api/host-attribute/attr/:attr/", this.GetHostAttributeByAttributeName)
-	m.Get(this.URLPrefix+"/api/agents-hosts", this.AgentsHosts)
-	m.Get(this.URLPrefix+"/api/agents-instances", this.AgentsInstances)
-	m.Get(this.URLPrefix+"/api/agent-ping", this.AgentPing)
+func (api *HttpAgentsAPI) RegisterRequests(m *Router) {
+	m.Get(api.URLPrefix+"/api/submit-agent/:host/:port/:token", api.SubmitAgent)
+	m.Get(api.URLPrefix+"/api/host-attribute/:host/:attrVame/:attrValue", api.SetHostAttribute)
+	m.Get(api.URLPrefix+"/api/host-attribute/attr/:attr/", api.GetHostAttributeByAttributeName)
+	m.Get(api.URLPrefix+"/api/agents-hosts", api.AgentsHosts)
+	m.Get(api.URLPrefix+"/api/agents-instances", api.AgentsInstances)
+	m.Get(api.URLPrefix+"/api/agent-ping", api.AgentPing)
 }

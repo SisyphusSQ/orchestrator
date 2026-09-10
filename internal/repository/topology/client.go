@@ -200,8 +200,7 @@ func (c *Client) ReadGroupReplicationMembers(ctx context.Context) (members []mod
 		WHERE MEMBER_STATE != 'OFFLINE'
 	`)
 	if err != nil {
-		var mysqlError *mysql.MySQLError
-		if errors.As(err, &mysqlError) {
+		if mysqlError, ok := errors.AsType[*mysql.MySQLError](err); ok {
 			switch mysqlError.Number {
 			case 1146, 1193:
 				return nil, nil, false, nil

@@ -22,7 +22,7 @@ import (
 
 // OracleGtidSet represents a set of GTID ranges as depicted by Retrieved_Gtid_Set, Executed_Gtid_Set or @@gtid_purged.
 type OracleGtidSet struct {
-	GtidEntries [](*OracleGtidSetEntry)
+	GtidEntries []*OracleGtidSetEntry
 }
 
 // Example input:  `230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10539,
@@ -35,8 +35,8 @@ func NewOracleGtidSet(gtidSet string) (res *OracleGtidSet, err error) {
 	if gtidSet == "" {
 		return res, nil
 	}
-	entries := strings.Split(gtidSet, ",")
-	for _, entry := range entries {
+	entries := strings.SplitSeq(gtidSet, ",")
+	for entry := range entries {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue
@@ -53,9 +53,9 @@ func NewOracleGtidSet(gtidSet string) (res *OracleGtidSet, err error) {
 // RemoveUUID removes entries that belong to given UUID.
 // By way of how this works there can only be one entry matching our UUID, but we generalize.
 // We keep order of entries.
-func (this *OracleGtidSet) RemoveUUID(uuid string) (removed bool) {
-	filteredEntries := [](*OracleGtidSetEntry){}
-	for _, entry := range this.GtidEntries {
+func (set *OracleGtidSet) RemoveUUID(uuid string) (removed bool) {
+	filteredEntries := []*OracleGtidSetEntry{}
+	for _, entry := range set.GtidEntries {
 		if entry.UUID == uuid {
 			removed = true
 		} else {
@@ -63,24 +63,24 @@ func (this *OracleGtidSet) RemoveUUID(uuid string) (removed bool) {
 		}
 	}
 	if removed {
-		this.GtidEntries = filteredEntries
+		set.GtidEntries = filteredEntries
 	}
 	return removed
 }
 
 // RetainUUID retains only entries that belong to given UUID.
-func (this *OracleGtidSet) RetainUUID(uuid string) (anythingRemoved bool) {
-	return this.RetainUUIDs([]string{uuid})
+func (set *OracleGtidSet) RetainUUID(uuid string) (anythingRemoved bool) {
+	return set.RetainUUIDs([]string{uuid})
 }
 
 // RetainUUIDs retains only entries that belong to given UUIDs.
-func (this *OracleGtidSet) RetainUUIDs(uuids []string) (anythingRemoved bool) {
+func (set *OracleGtidSet) RetainUUIDs(uuids []string) (anythingRemoved bool) {
 	retainUUIDs := map[string]bool{}
 	for _, uuid := range uuids {
 		retainUUIDs[uuid] = true
 	}
-	filteredEntries := [](*OracleGtidSetEntry){}
-	for _, entry := range this.GtidEntries {
+	filteredEntries := []*OracleGtidSetEntry{}
+	for _, entry := range set.GtidEntries {
 		if retainUUIDs[entry.UUID] {
 			filteredEntries = append(filteredEntries, entry)
 		} else {
@@ -88,15 +88,15 @@ func (this *OracleGtidSet) RetainUUIDs(uuids []string) (anythingRemoved bool) {
 		}
 	}
 	if anythingRemoved {
-		this.GtidEntries = filteredEntries
+		set.GtidEntries = filteredEntries
 	}
 	return anythingRemoved
 }
 
 // SharedUUIDs returns UUIDs (range-less) that are shared between the two sets
-func (this *OracleGtidSet) SharedUUIDs(other *OracleGtidSet) (shared []string) {
+func (set *OracleGtidSet) SharedUUIDs(other *OracleGtidSet) (shared []string) {
 	thisUUIDs := map[string]bool{}
-	for _, entry := range this.GtidEntries {
+	for _, entry := range set.GtidEntries {
 		thisUUIDs[entry.UUID] = true
 	}
 	for _, entry := range other.GtidEntries {
@@ -108,21 +108,21 @@ func (this *OracleGtidSet) SharedUUIDs(other *OracleGtidSet) (shared []string) {
 }
 
 // String returns a user-friendly string representation of this entry
-func (this *OracleGtidSet) Explode() (result [](*OracleGtidSetEntry)) {
-	for _, entries := range this.GtidEntries {
+func (set *OracleGtidSet) Explode() (result []*OracleGtidSetEntry) {
+	for _, entries := range set.GtidEntries {
 		result = append(result, entries.Explode()...)
 	}
 	return result
 }
 
-func (this *OracleGtidSet) String() string {
+func (set *OracleGtidSet) String() string {
 	tokens := []string{}
-	for _, entry := range this.GtidEntries {
+	for _, entry := range set.GtidEntries {
 		tokens = append(tokens, entry.String())
 	}
 	return strings.Join(tokens, ",")
 }
 
-func (this *OracleGtidSet) IsEmpty() bool {
-	return len(this.GtidEntries) == 0
+func (set *OracleGtidSet) IsEmpty() bool {
+	return len(set.GtidEntries) == 0
 }

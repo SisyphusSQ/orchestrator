@@ -18,7 +18,7 @@ type memoryApp struct {
 	data []byte
 }
 
-func (m *memoryApp) ApplyCommand(op string, value []byte) interface{} {
+func (m *memoryApp) ApplyCommand(op string, value []byte) any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.ops = append(m.ops, op)

@@ -296,7 +296,7 @@ func (store *Store) Close() error {
 	return errors.Join(errs...)
 }
 
-func (store *Store) genericCommand(op string, bytes []byte) (response interface{}, err error) {
+func (store *Store) genericCommand(op string, bytes []byte) (response any, err error) {
 	if store == nil || store.raft == nil {
 		return nil, ErrNotRunning
 	}

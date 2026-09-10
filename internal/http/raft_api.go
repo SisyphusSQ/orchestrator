@@ -42,7 +42,7 @@ func raftHTTPStatus(err error) int {
 	}
 }
 
-func respondRaft(r Responder, err error, okMessage string, details interface{}) {
+func respondRaft(r Responder, err error, okMessage string, details any) {
 	if err == nil {
 		Respond(r, &APIResponse{Code: OK, Message: okMessage, Details: details})
 		return
@@ -55,15 +55,15 @@ func respondRaft(r Responder, err error, okMessage string, details interface{}) 
 	})
 }
 
-func decodeOptionalJSON(req *http.Request, dst interface{}) error {
+func decodeOptionalJSON(req *http.Request, dst any) error {
 	return decodeRaftJSON(req, dst, true)
 }
 
-func decodeRequiredJSON(req *http.Request, dst interface{}) error {
+func decodeRequiredJSON(req *http.Request, dst any) error {
 	return decodeRaftJSON(req, dst, false)
 }
 
-func decodeRaftJSON(req *http.Request, dst interface{}, optional bool) error {
+func decodeRaftJSON(req *http.Request, dst any, optional bool) error {
 	if req == nil || req.Body == nil {
 		if optional {
 			return nil
@@ -108,12 +108,12 @@ func expectedIndexFromRequest(req *http.Request, bodyIndex *uint64) (*uint64, er
 	return &value, nil
 }
 
-func (this *HttpAPI) RaftConfiguration(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftConfiguration(params Params, r Responder, req *http.Request, user Principal) {
 	view, err := orcraft.GetClusterView()
 	respondRaft(r, err, "raft configuration", view)
 }
 
-func (this *HttpAPI) RaftBootstrap(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftBootstrap(params Params, r Responder, req *http.Request, user Principal) {
 	if !isAuthorizedForWrite(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -122,7 +122,7 @@ func (this *HttpAPI) RaftBootstrap(params Params, r Responder, req *http.Request
 	respondRaft(r, err, "raft cluster bootstrapped", view)
 }
 
-func (this *HttpAPI) RaftAddMember(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftAddMember(params Params, r Responder, req *http.Request, user Principal) {
 	if !isAuthorizedForWrite(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -146,7 +146,7 @@ func (this *HttpAPI) RaftAddMember(params Params, r Responder, req *http.Request
 	respondRaft(r, err, "raft member added", view)
 }
 
-func (this *HttpAPI) RaftRemoveMember(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftRemoveMember(params Params, r Responder, req *http.Request, user Principal) {
 	if !isAuthorizedForWrite(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -173,7 +173,7 @@ func (this *HttpAPI) RaftRemoveMember(params Params, r Responder, req *http.Requ
 	respondRaft(r, err, "raft member removed", view)
 }
 
-func (this *HttpAPI) RaftLeadershipTransfer(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftLeadershipTransfer(params Params, r Responder, req *http.Request, user Principal) {
 	if !isAuthorizedForWrite(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -187,7 +187,7 @@ func (this *HttpAPI) RaftLeadershipTransfer(params Params, r Responder, req *htt
 	respondRaft(r, err, "raft leadership transfer requested", nil)
 }
 
-func (this *HttpAPI) RaftSnapshot(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftSnapshot(params Params, r Responder, req *http.Request, user Principal) {
 	if !isAuthorizedForWrite(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -196,7 +196,7 @@ func (this *HttpAPI) RaftSnapshot(params Params, r Responder, req *http.Request,
 	respondRaft(r, err, "snapshot created", nil)
 }
 
-func (this *HttpAPI) RaftState(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftState(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
@@ -204,7 +204,7 @@ func (this *HttpAPI) RaftState(params Params, r Responder, req *http.Request, us
 	writeHTTPJSON(r, http.StatusOK, orcraft.GetState().String())
 }
 
-func (this *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
@@ -215,7 +215,7 @@ func (this *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, u
 	})
 }
 
-func (this *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
@@ -228,7 +228,7 @@ func (this *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, u
 	writeHTTPJSON(r, http.StatusOK, "healthy")
 }
 
-func (this *HttpAPI) RaftStatus(params Params, r Responder, req *http.Request, user Principal) {
+func (api *HttpAPI) RaftStatus(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
 		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
@@ -239,7 +239,7 @@ func (this *HttpAPI) RaftStatus(params Params, r Responder, req *http.Request, u
 		respondRaft(r, err, "", status)
 		return
 	}
-	writeHTTPJSON(r, http.StatusOK, map[string]interface{}{
+	writeHTTPJSON(r, http.StatusOK, map[string]any{
 		"status":        status,
 		"configuration": view,
 		"leaderURI":     orcraft.LeaderURI.Get(),

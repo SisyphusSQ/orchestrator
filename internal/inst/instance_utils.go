@@ -19,6 +19,7 @@ package inst
 import (
 	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -46,18 +47,18 @@ func NewMajorVersionsSortedByCount(versionsCount map[string]int) *majorVersionsS
 	}
 }
 
-func (this *majorVersionsSortedByCount) Len() int { return len(this.versions) }
-func (this *majorVersionsSortedByCount) Swap(i, j int) {
-	this.versions[i], this.versions[j] = this.versions[j], this.versions[i]
+func (sorter *majorVersionsSortedByCount) Len() int { return len(sorter.versions) }
+func (sorter *majorVersionsSortedByCount) Swap(i, j int) {
+	sorter.versions[i], sorter.versions[j] = sorter.versions[j], sorter.versions[i]
 }
-func (this *majorVersionsSortedByCount) Less(i, j int) bool {
-	if this.versionsCount[this.versions[i]] == this.versionsCount[this.versions[j]] {
-		return this.versions[i] > this.versions[j]
+func (sorter *majorVersionsSortedByCount) Less(i, j int) bool {
+	if sorter.versionsCount[sorter.versions[i]] == sorter.versionsCount[sorter.versions[j]] {
+		return sorter.versions[i] > sorter.versions[j]
 	}
-	return this.versionsCount[this.versions[i]] < this.versionsCount[this.versions[j]]
+	return sorter.versionsCount[sorter.versions[i]] < sorter.versionsCount[sorter.versions[j]]
 }
-func (this *majorVersionsSortedByCount) First() string {
-	return this.versions[0]
+func (sorter *majorVersionsSortedByCount) First() string {
+	return sorter.versions[0]
 }
 
 // majorVersionsSortedByCount sorts (major) versions:
@@ -79,87 +80,87 @@ func NewBinlogFormatSortedByCount(formatsCount map[string]int) *binlogFormatSort
 	}
 }
 
-func (this *binlogFormatSortedByCount) Len() int { return len(this.formats) }
-func (this *binlogFormatSortedByCount) Swap(i, j int) {
-	this.formats[i], this.formats[j] = this.formats[j], this.formats[i]
+func (sorter *binlogFormatSortedByCount) Len() int { return len(sorter.formats) }
+func (sorter *binlogFormatSortedByCount) Swap(i, j int) {
+	sorter.formats[i], sorter.formats[j] = sorter.formats[j], sorter.formats[i]
 }
-func (this *binlogFormatSortedByCount) Less(i, j int) bool {
-	if this.formatsCount[this.formats[i]] == this.formatsCount[this.formats[j]] {
-		return IsSmallerBinlogFormat(this.formats[j], this.formats[i])
+func (sorter *binlogFormatSortedByCount) Less(i, j int) bool {
+	if sorter.formatsCount[sorter.formats[i]] == sorter.formatsCount[sorter.formats[j]] {
+		return IsSmallerBinlogFormat(sorter.formats[j], sorter.formats[i])
 	}
-	return this.formatsCount[this.formats[i]] < this.formatsCount[this.formats[j]]
+	return sorter.formatsCount[sorter.formats[i]] < sorter.formatsCount[sorter.formats[j]]
 }
-func (this *binlogFormatSortedByCount) First() string {
-	return this.formats[0]
+func (sorter *binlogFormatSortedByCount) First() string {
+	return sorter.formats[0]
 }
 
 // InstancesSorterByExec sorts instances by executed binlog coordinates
 type InstancesSorterByExec struct {
-	instances  [](*Instance)
+	instances  []*Instance
 	dataCenter string
 }
 
-func NewInstancesSorterByExec(instances [](*Instance), dataCenter string) *InstancesSorterByExec {
+func NewInstancesSorterByExec(instances []*Instance, dataCenter string) *InstancesSorterByExec {
 	return &InstancesSorterByExec{
 		instances:  instances,
 		dataCenter: dataCenter,
 	}
 }
 
-func (this *InstancesSorterByExec) Len() int { return len(this.instances) }
-func (this *InstancesSorterByExec) Swap(i, j int) {
-	this.instances[i], this.instances[j] = this.instances[j], this.instances[i]
+func (sorter *InstancesSorterByExec) Len() int { return len(sorter.instances) }
+func (sorter *InstancesSorterByExec) Swap(i, j int) {
+	sorter.instances[i], sorter.instances[j] = sorter.instances[j], sorter.instances[i]
 }
-func (this *InstancesSorterByExec) Less(i, j int) bool {
+func (sorter *InstancesSorterByExec) Less(i, j int) bool {
 	// Returning "true" in this function means [i] is "smaller" than [j],
 	// which will lead to [j] be a better candidate for promotion
 
 	// Sh*t happens. We just might get nil while attempting to discover/recover
-	if this.instances[i] == nil {
+	if sorter.instances[i] == nil {
 		return false
 	}
-	if this.instances[j] == nil {
+	if sorter.instances[j] == nil {
 		return true
 	}
-	if this.instances[i].ExecBinlogCoordinates.Equals(&this.instances[j].ExecBinlogCoordinates) {
+	if sorter.instances[i].ExecBinlogCoordinates.Equals(&sorter.instances[j].ExecBinlogCoordinates) {
 		// Secondary sorting: "smaller" if not logging replica updates
-		if this.instances[j].LogReplicationUpdatesEnabled && !this.instances[i].LogReplicationUpdatesEnabled {
+		if sorter.instances[j].LogReplicationUpdatesEnabled && !sorter.instances[i].LogReplicationUpdatesEnabled {
 			return true
 		}
 		// Next sorting: "smaller" if of higher version (this will be reversed eventually)
 		// Idea is that given 5.6 a& 5.7 both of the exact position, we will want to promote
 		// the 5.6 on top of 5.7, as the other way around is invalid
-		if this.instances[j].IsSmallerMajorVersion(this.instances[i]) {
+		if sorter.instances[j].IsSmallerMajorVersion(sorter.instances[i]) {
 			return true
 		}
 		// Next sorting: "smaller" if of larger binlog-format (this will be reversed eventually)
 		// Idea is that given ROW & STATEMENT both of the exact position, we will want to promote
 		// the STATEMENT on top of ROW, as the other way around is invalid
-		if this.instances[j].IsSmallerBinlogFormat(this.instances[i]) {
+		if sorter.instances[j].IsSmallerBinlogFormat(sorter.instances[i]) {
 			return true
 		}
 		// Prefer local datacenter:
-		if this.instances[j].DataCenter == this.dataCenter && this.instances[i].DataCenter != this.dataCenter {
+		if sorter.instances[j].DataCenter == sorter.dataCenter && sorter.instances[i].DataCenter != sorter.dataCenter {
 			return true
 		}
 		// Prefer if not having errant GTID
-		if this.instances[j].GtidErrant == "" && this.instances[i].GtidErrant != "" {
+		if sorter.instances[j].GtidErrant == "" && sorter.instances[i].GtidErrant != "" {
 			return true
 		}
 		// Prefer candidates:
-		if this.instances[j].PromotionRule.BetterThan(this.instances[i].PromotionRule) {
+		if sorter.instances[j].PromotionRule.BetterThan(sorter.instances[i].PromotionRule) {
 			return true
 		}
 	}
-	return this.instances[i].ExecBinlogCoordinates.SmallerThan(&this.instances[j].ExecBinlogCoordinates)
+	return sorter.instances[i].ExecBinlogCoordinates.SmallerThan(&sorter.instances[j].ExecBinlogCoordinates)
 }
 
 // filterInstancesByPattern will filter given array of instances according to regular expression pattern
-func filterInstancesByPattern(instances [](*Instance), pattern string) [](*Instance) {
+func filterInstancesByPattern(instances []*Instance, pattern string) []*Instance {
 	if pattern == "" {
 		return instances
 	}
-	filtered := [](*Instance){}
+	filtered := []*Instance{}
 	for _, instance := range instances {
 		if matched, _ := regexp.MatchString(pattern, instance.Key.DisplayString()); matched {
 			filtered = append(filtered, instance)
@@ -169,12 +170,12 @@ func filterInstancesByPattern(instances [](*Instance), pattern string) [](*Insta
 }
 
 // removeInstance will remove an instance from a list of instances
-func RemoveInstance(instances [](*Instance), instanceKey *InstanceKey) [](*Instance) {
+func RemoveInstance(instances []*Instance, instanceKey *InstanceKey) []*Instance {
 	if instanceKey == nil {
 		return instances
 	}
-	for i := len(instances) - 1; i >= 0; i-- {
-		if instances[i].Key.Equals(instanceKey) {
+	for i, instance := range slices.Backward(instances) {
+		if instance.Key.Equals(instanceKey) {
 			instances = append(instances[:i], instances[i+1:]...)
 		}
 	}
@@ -182,9 +183,9 @@ func RemoveInstance(instances [](*Instance), instanceKey *InstanceKey) [](*Insta
 }
 
 // removeBinlogServerInstances will remove all binlog servers from given list
-func RemoveBinlogServerInstances(instances [](*Instance)) [](*Instance) {
-	for i := len(instances) - 1; i >= 0; i-- {
-		if instances[i].IsBinlogServer() {
+func RemoveBinlogServerInstances(instances []*Instance) []*Instance {
+	for i, instance := range slices.Backward(instances) {
+		if instance.IsBinlogServer() {
 			instances = append(instances[:i], instances[i+1:]...)
 		}
 	}
@@ -192,9 +193,9 @@ func RemoveBinlogServerInstances(instances [](*Instance)) [](*Instance) {
 }
 
 // removeNilInstances
-func RemoveNilInstances(instances [](*Instance)) [](*Instance) {
-	for i := len(instances) - 1; i >= 0; i-- {
-		if instances[i] == nil {
+func RemoveNilInstances(instances []*Instance) []*Instance {
+	for i, instance := range slices.Backward(instances) {
+		if instance == nil {
 			instances = append(instances[:i], instances[i+1:]...)
 		}
 	}
@@ -225,7 +226,7 @@ func MajorVersion(version string) []string {
 func IsSmallerMajorVersion(version string, otherVersion string) bool {
 	thisMajorVersion := MajorVersion(version)
 	otherMajorVersion := MajorVersion(otherVersion)
-	for i := 0; i < len(thisMajorVersion); i++ {
+	for i := range thisMajorVersion {
 		thisToken, _ := strconv.Atoi(thisMajorVersion[i])
 		otherToken, _ := strconv.Atoi(otherMajorVersion[i])
 		if thisToken < otherToken {

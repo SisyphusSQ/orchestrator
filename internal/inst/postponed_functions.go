@@ -35,35 +35,33 @@ func NewPostponedFunctionsContainer() *PostponedFunctionsContainer {
 	return postponedFunctionsContainer
 }
 
-func (this *PostponedFunctionsContainer) AddPostponedFunction(postponedFunction func() error, description string) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+func (container *PostponedFunctionsContainer) AddPostponedFunction(postponedFunction func() error, description string) {
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
 
-	this.descriptions = append(this.descriptions, description)
+	container.descriptions = append(container.descriptions, description)
 
-	this.waitGroup.Add(1)
-	go func() {
-		defer this.waitGroup.Done()
+	container.waitGroup.Go(func() {
 		postponedFunction()
-	}()
+	})
 }
 
-func (this *PostponedFunctionsContainer) Wait() {
-	log.Debugf("PostponedFunctionsContainer: waiting on %+v postponed functions", this.Len())
-	this.waitGroup.Wait()
+func (container *PostponedFunctionsContainer) Wait() {
+	log.Debugf("PostponedFunctionsContainer: waiting on %+v postponed functions", container.Len())
+	container.waitGroup.Wait()
 	log.Debugf("PostponedFunctionsContainer: done waiting")
 }
 
-func (this *PostponedFunctionsContainer) Len() int {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+func (container *PostponedFunctionsContainer) Len() int {
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
 
-	return len(this.descriptions)
+	return len(container.descriptions)
 }
 
-func (this *PostponedFunctionsContainer) Descriptions() []string {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+func (container *PostponedFunctionsContainer) Descriptions() []string {
+	container.mutex.Lock()
+	defer container.mutex.Unlock()
 
-	return this.descriptions
+	return container.descriptions
 }

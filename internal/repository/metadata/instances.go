@@ -446,7 +446,7 @@ func ReadOutdatedInstanceKeys(ctx context.Context, pollSeconds uint) ([]modeldom
 
 func buildInsertOnDuplicateKeyUpdate(table string, columns, values []string, rowCount int, insertIgnore bool) (string, error) {
 	if len(columns) == 0 {
-		return "", errors.New("Column list cannot be empty")
+		return "", errors.New("column list cannot be empty")
 	}
 	if rowCount < 1 {
 		return "", errors.New("nrRows must be a positive number")

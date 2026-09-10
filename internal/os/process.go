@@ -19,8 +19,8 @@ package os
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"syscall"
@@ -28,8 +28,6 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 )
-
-var EmptyEnv = []string{}
 
 // CommandRun executes some text as a command. This is assumed to be
 // text that will be run by a shell so we need to write out the
@@ -85,45 +83,34 @@ func commandRunContext(ctx context.Context, commandText string, env []string, ou
 		return "", log.Errore(err)
 	}
 
-	var waitStatus syscall.WaitStatus
-
 	output := &limitedBuffer{limit: outputLimit}
 	cmd.Stdout, cmd.Stderr = output, output
 	err = cmd.Run()
 	cmdOutput := output.String()
 	if err != nil {
 		// Did the command fail because of an unsuccessful exit code
-		if exitError, ok := err.(*exec.ExitError); ok {
-			waitStatus = exitError.Sys().(syscall.WaitStatus)
-			log.Errorf("hook command failed with exit status %d", waitStatus.ExitStatus())
+		if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
+			if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				log.Errorf("hook command failed with exit status %d", waitStatus.ExitStatus())
+			}
 		}
 
 		return cmdOutput, fmt.Errorf("%s", err.Error())
 	}
 
-	// Command was successful
-	waitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus)
 	return cmdOutput, nil
-}
-
-// generateShellScript generates a temporary shell script based on
-// the given command to be executed, writes the command to a temporary
-// file and returns the exec.Command which can be executed together
-// with the script name that was created.
-func generateShellScript(commandText string, env []string, arguments ...string) (*exec.Cmd, string, error) {
-	return generateShellScriptContext(context.Background(), commandText, env, arguments...)
 }
 
 func generateShellScriptContext(ctx context.Context, commandText string, env []string, arguments ...string) (*exec.Cmd, string, error) {
 	shell := config.Config.Hooks.ShellCommand
 
 	commandBytes := []byte(commandText)
-	tmpFile, err := ioutil.TempFile("", "orchestrator-process-cmd-")
+	tmpFile, err := os.CreateTemp("", "orchestrator-process-cmd-")
 	if err != nil {
 		return nil, "", log.Errorf("generateShellScript() failed to create TempFile: %v", err.Error())
 	}
 	// write commandText to temporary file
-	ioutil.WriteFile(tmpFile.Name(), commandBytes, 0640)
+	os.WriteFile(tmpFile.Name(), commandBytes, 0640)
 	shellArguments := append([]string{}, tmpFile.Name())
 	shellArguments = append(shellArguments, arguments...)
 

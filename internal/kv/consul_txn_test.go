@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -109,8 +110,8 @@ func TestGroupKVPairsByKeyPrefixStableOrder(t *testing.T) {
 			forward = append(forward, pair)
 		}
 	}
-	for i := len(forward) - 1; i >= 0; i-- {
-		reverse = append(reverse, forward[i])
+	for _, f := range slices.Backward(forward) {
+		reverse = append(reverse, f)
 	}
 
 	gotForward := groupClusterNames(groupKVPairsByKeyPrefix(forward))
@@ -633,15 +634,13 @@ func TestConsulTxnStoreDistributePairsRace(t *testing.T) {
 	configureConsulTest(t, server.URL, true)
 	store := newTestConsulTxnStore(t)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			_ = store.DistributePairs([]*KVPair{
 				{Key: "mysql/master/cluster", Value: "mysql.example.com:3306"},
 				{Key: "mysql/master/cluster/hostname", Value: "mysql.example.com"},
 			})
-		}()
+		})
 	}
 	wg.Wait()
 }

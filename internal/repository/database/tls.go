@@ -39,10 +39,10 @@ const Error3159 = "Error 3159:"
 const Error1045 = "Access denied for user"
 
 // Track if a TLS has already been configured for topology
-var topologyTLSConfigured bool = false
+var topologyTLSConfigured bool
 
 // Track if a TLS has already been configured for Orchestrator
-var orchestratorTLSConfigured bool = false
+var orchestratorTLSConfigured bool
 var mysqlTLSConfigMutex sync.Mutex
 
 const (
@@ -50,15 +50,11 @@ const (
 	orchestratorTLSConfigName = "orchestrator"
 )
 
-var requireTLSCache *cache.Cache = cache.New(time.Duration(config.Config.Topology.MySQL.TLSCacheTTLFactor*config.Config.Topology.Discovery.PollSeconds)*time.Second, time.Second)
+var requireTLSCache = cache.New(time.Duration(config.Config.Topology.MySQL.TLSCacheTTLFactor*config.Config.Topology.Discovery.PollSeconds)*time.Second, time.Second)
 
-var readInstanceTLSCounter = observability.NewCounter("orchestrator_instance_tls_read_total", "instance_tls.read events")
 var writeInstanceTLSCounter = observability.NewCounter("orchestrator_instance_tls_write_total", "instance_tls.write events")
 var readInstanceTLSCacheCounter = observability.NewCounter("orchestrator_instance_tls_read_cache_total", "instance_tls.read_cache events")
 var writeInstanceTLSCacheCounter = observability.NewCounter("orchestrator_instance_tls_write_cache_total", "instance_tls.write_cache events")
-
-func init() {
-}
 
 func requiresTLSContext(ctx context.Context, host string, port int, cfg *mysql.Config) (bool, error) {
 	poolKey := newTopologyPoolKey(topologyConnectionDiscovery, cfg)

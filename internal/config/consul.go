@@ -13,32 +13,32 @@ type ConsulEndpoint struct {
 	Scheme  string // http or https
 }
 
-func (this *Configuration) normalizeAndValidateConsul() error {
-	provider, err := NormalizeConsulKVStoreProvider(this.Consul.KV.Provider)
+func (cfg *Configuration) normalizeAndValidateConsul() error {
+	provider, err := NormalizeConsulKVStoreProvider(cfg.Consul.KV.Provider)
 	if err != nil {
 		return err
 	}
-	this.Consul.KV.Provider = provider
+	cfg.Consul.KV.Provider = provider
 
-	if this.Consul.HTTPTimeoutSeconds < 0 {
+	if cfg.Consul.HTTPTimeoutSeconds < 0 {
 		return fmt.Errorf("consul.httpTimeoutSeconds must be >= 0")
 	}
 
-	certSet := strings.TrimSpace(this.Consul.TLS.CertFile) != ""
-	keySet := strings.TrimSpace(this.Consul.TLS.PrivateKeyFile) != ""
+	certSet := strings.TrimSpace(cfg.Consul.TLS.CertFile) != ""
+	keySet := strings.TrimSpace(cfg.Consul.TLS.PrivateKeyFile) != ""
 	if certSet != keySet {
 		return fmt.Errorf("consul.tls.certFile and consul.tls.privateKeyFile must both be set")
 	}
 
-	address := strings.TrimSpace(this.Consul.Address)
+	address := strings.TrimSpace(cfg.Consul.Address)
 	if address == "" {
-		if this.Consul.KV.CrossDataCenterDistribution {
+		if cfg.Consul.KV.CrossDataCenterDistribution {
 			return fmt.Errorf("consul.kv.crossDataCenterDistribution requires consul.address")
 		}
-		if consulTLSOptionsConfigured(this) {
+		if consulTLSOptionsConfigured(cfg) {
 			return fmt.Errorf("consul.tls options require an https consul.address")
 		}
-		if scheme := strings.TrimSpace(this.Consul.Scheme); scheme != "" {
+		if scheme := strings.TrimSpace(cfg.Consul.Scheme); scheme != "" {
 			if _, err := normalizeConsulScheme(scheme); err != nil {
 				return err
 			}
@@ -46,18 +46,18 @@ func (this *Configuration) normalizeAndValidateConsul() error {
 		return nil
 	}
 
-	endpoint, err := NormalizeConsulEndpoint(address, this.Consul.Scheme)
+	endpoint, err := NormalizeConsulEndpoint(address, cfg.Consul.Scheme)
 	if err != nil {
 		return err
 	}
 	// Keep an address-embedded scheme intact. Read and Reload apply multiple
 	// configuration files in sequence; stripping it here would let a later
 	// ConsulScheme value override the address on the next adjustment pass.
-	this.Consul.Address = address
-	this.Consul.Scheme = endpoint.Scheme
+	cfg.Consul.Address = address
+	cfg.Consul.Scheme = endpoint.Scheme
 
-	if consulTLSOptionsConfigured(this) && endpoint.Scheme != "https" {
-		return fmt.Errorf("Consul TLS options require https")
+	if consulTLSOptionsConfigured(cfg) && endpoint.Scheme != "https" {
+		return fmt.Errorf("consul TLS options require https")
 	}
 	return nil
 }

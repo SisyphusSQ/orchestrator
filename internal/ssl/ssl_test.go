@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	nethttp "net/http"
+	"os"
 	"reflect"
 	"strings"
 	"syscall"
@@ -140,6 +140,24 @@ func TestReadPEMData(t *testing.T) {
 	}
 }
 
+func TestReadPEMDataRejectsInvalidPEM(t *testing.T) {
+	pemFile := writeFakeFile("not PEM data")
+	defer syscall.Unlink(pemFile)
+
+	if _, err := ssl.ReadPEMData(pemFile, nil); err == nil {
+		t.Fatal("ReadPEMData accepted invalid PEM data")
+	}
+}
+
+func TestReadPEMDataRejectsWrongLegacyPassword(t *testing.T) {
+	pemFile := writeFakeFile(pemPrivateKeyWithPass)
+	defer syscall.Unlink(pemFile)
+
+	if _, err := ssl.ReadPEMData(pemFile, []byte("wrong-password")); err == nil {
+		t.Fatal("ReadPEMData accepted an incorrect legacy PEM password")
+	}
+}
+
 func TestAppendKeyPair(t *testing.T) {
 	c, err := ssl.NewTLSConfig("", false)
 	if err != nil {
@@ -184,11 +202,11 @@ func TestIsEncryptedPEM(t *testing.T) {
 }
 
 func writeFakeFile(content string) string {
-	f, err := ioutil.TempFile("", "ssl_test")
+	f, err := os.CreateTemp("", "ssl_test")
 	if err != nil {
 		return ""
 	}
-	ioutil.WriteFile(f.Name(), []byte(content), 0644)
+	os.WriteFile(f.Name(), []byte(content), 0644)
 	return f.Name()
 }
 

@@ -75,13 +75,12 @@ func GetReplicationAnalysis(clusterName string, hints *dto.ReplicationAnalysisHi
 	}
 	for _, row := range rows {
 		a := ReplicationAnalysis{
-			Analysis:               NoProblem,
-			ProcessingNodeHostname: process.ThisHostname,
-			ProcessingNodeToken:    util.ProcessToken.Hash,
+			Analysis:                 NoProblem,
+			ProcessingNodeHostname:   process.ThisHostname,
+			ProcessingNodeToken:      util.ProcessToken.Hash,
+			IsMaster:                 row.Master,
+			IsReplicationGroupMember: row.ReplicationGroupMember,
 		}
-
-		a.IsMaster = row.Master
-		a.IsReplicationGroupMember = row.ReplicationGroupMember
 		countCoMasterReplicas := modeldomain.NonNegativeUint(row.CountCoMasterReplicas)
 		a.IsCoMaster = row.CoMaster || countCoMasterReplicas > 0
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: row.Hostname, Port: row.Port}
@@ -421,7 +420,7 @@ func ExpireInstanceAnalysisChangelog() error {
 }
 
 // ReadReplicationAnalysisChangelog
-func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), err error) {
+func ReadReplicationAnalysisChangelog() (res []*ReplicationAnalysisChangelog, err error) {
 	analysisChangelog := &ReplicationAnalysisChangelog{}
 	rows, err := metadata.ReadReplicationAnalysisChangelogRows(context.Background())
 	for _, row := range rows {

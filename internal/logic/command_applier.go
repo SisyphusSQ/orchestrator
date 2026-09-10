@@ -40,7 +40,7 @@ func NewCommandApplier() *CommandApplier {
 	return applier
 }
 
-func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{} {
+func (applier *CommandApplier) ApplyCommand(op string, value []byte) any {
 	switch op {
 	case "set-general-attribute":
 		var attribute domain.HostAttributes
@@ -128,16 +128,16 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 	return log.Errorf("Unknown command op: %s", op)
 }
 
-func (applier *CommandApplier) asyncSnapshot(value []byte) interface{} {
+func (applier *CommandApplier) asyncSnapshot(value []byte) any {
 	err := orcraft.AsyncSnapshot()
 	return err
 }
 
-func (applier *CommandApplier) registerNode(value []byte) interface{} {
+func (applier *CommandApplier) registerNode(value []byte) any {
 	return nil
 }
 
-func (applier *CommandApplier) discover(value []byte) interface{} {
+func (applier *CommandApplier) discover(value []byte) any {
 	instanceKey := inst.InstanceKey{}
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
 		return log.Errore(err)
@@ -146,7 +146,7 @@ func (applier *CommandApplier) discover(value []byte) interface{} {
 	return nil
 }
 
-func (applier *CommandApplier) injectedPseudoGTID(value []byte) interface{} {
+func (applier *CommandApplier) injectedPseudoGTID(value []byte) any {
 	var clusterName string
 	if err := json.Unmarshal(value, &clusterName); err != nil {
 		return log.Errore(err)
@@ -155,7 +155,7 @@ func (applier *CommandApplier) injectedPseudoGTID(value []byte) interface{} {
 	return nil
 }
 
-func (applier *CommandApplier) forget(value []byte) interface{} {
+func (applier *CommandApplier) forget(value []byte) any {
 	instanceKey := inst.InstanceKey{}
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
 		return log.Errore(err)
@@ -164,7 +164,7 @@ func (applier *CommandApplier) forget(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) forgetCluster(value []byte) interface{} {
+func (applier *CommandApplier) forgetCluster(value []byte) any {
 	var clusterName string
 	if err := json.Unmarshal(value, &clusterName); err != nil {
 		return log.Errore(err)
@@ -173,7 +173,7 @@ func (applier *CommandApplier) forgetCluster(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) beginDowntime(value []byte) interface{} {
+func (applier *CommandApplier) beginDowntime(value []byte) any {
 	downtime := inst.Downtime{}
 	if err := json.Unmarshal(value, &downtime); err != nil {
 		return log.Errore(err)
@@ -182,7 +182,7 @@ func (applier *CommandApplier) beginDowntime(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) endDowntime(value []byte) interface{} {
+func (applier *CommandApplier) endDowntime(value []byte) any {
 	instanceKey := inst.InstanceKey{}
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
 		return log.Errore(err)
@@ -191,7 +191,7 @@ func (applier *CommandApplier) endDowntime(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) registerCandidate(value []byte) interface{} {
+func (applier *CommandApplier) registerCandidate(value []byte) any {
 	candidate := inst.CandidateDatabaseInstance{}
 	if err := json.Unmarshal(value, &candidate); err != nil {
 		return log.Errore(err)
@@ -200,7 +200,7 @@ func (applier *CommandApplier) registerCandidate(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) ackRecovery(value []byte) interface{} {
+func (applier *CommandApplier) ackRecovery(value []byte) any {
 	ack := RecoveryAcknowledgement{}
 	err := json.Unmarshal(value, &ack)
 	if err != nil {
@@ -224,7 +224,7 @@ func (applier *CommandApplier) ackRecovery(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) registerHostnameUnresolve(value []byte) interface{} {
+func (applier *CommandApplier) registerHostnameUnresolve(value []byte) any {
 	registration := inst.HostnameRegistration{}
 	if err := json.Unmarshal(value, &registration); err != nil {
 		return log.Errore(err)
@@ -233,7 +233,7 @@ func (applier *CommandApplier) registerHostnameUnresolve(value []byte) interface
 	return err
 }
 
-func (applier *CommandApplier) submitPoolInstances(value []byte) interface{} {
+func (applier *CommandApplier) submitPoolInstances(value []byte) any {
 	submission := inst.PoolInstancesSubmission{}
 	if err := json.Unmarshal(value, &submission); err != nil {
 		return log.Errore(err)
@@ -242,7 +242,7 @@ func (applier *CommandApplier) submitPoolInstances(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) registerFailureDetection(value []byte) interface{} {
+func (applier *CommandApplier) registerFailureDetection(value []byte) any {
 	analysisEntry := inst.ReplicationAnalysis{}
 	if err := json.Unmarshal(value, &analysisEntry); err != nil {
 		return log.Errore(err)
@@ -251,7 +251,7 @@ func (applier *CommandApplier) registerFailureDetection(value []byte) interface{
 	return err
 }
 
-func (applier *CommandApplier) writeRecovery(value []byte) interface{} {
+func (applier *CommandApplier) writeRecovery(value []byte) any {
 	topologyRecovery := TopologyRecovery{}
 	if err := json.Unmarshal(value, &topologyRecovery); err != nil {
 		return log.Errore(err)
@@ -262,7 +262,7 @@ func (applier *CommandApplier) writeRecovery(value []byte) interface{} {
 	return nil
 }
 
-func (applier *CommandApplier) writeRecoveryStep(value []byte) interface{} {
+func (applier *CommandApplier) writeRecoveryStep(value []byte) any {
 	topologyRecoveryStep := TopologyRecoveryStep{}
 	if err := json.Unmarshal(value, &topologyRecoveryStep); err != nil {
 		return log.Errore(err)
@@ -271,7 +271,7 @@ func (applier *CommandApplier) writeRecoveryStep(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) resolveRecovery(value []byte) interface{} {
+func (applier *CommandApplier) resolveRecovery(value []byte) any {
 	topologyRecovery := TopologyRecovery{}
 	if err := json.Unmarshal(value, &topologyRecovery); err != nil {
 		return log.Errore(err)
@@ -282,17 +282,17 @@ func (applier *CommandApplier) resolveRecovery(value []byte) interface{} {
 	return nil
 }
 
-func (applier *CommandApplier) disableGlobalRecoveries(value []byte) interface{} {
+func (applier *CommandApplier) disableGlobalRecoveries(value []byte) any {
 	err := DisableRecovery()
 	return err
 }
 
-func (applier *CommandApplier) enableGlobalRecoveries(value []byte) interface{} {
+func (applier *CommandApplier) enableGlobalRecoveries(value []byte) any {
 	err := EnableRecovery()
 	return err
 }
 
-func (applier *CommandApplier) putKeyValue(value []byte) interface{} {
+func (applier *CommandApplier) putKeyValue(value []byte) any {
 	kvPair := &kv.KVPair{}
 	if err := json.Unmarshal(value, kvPair); err != nil {
 		return log.Errore(err)
@@ -301,7 +301,7 @@ func (applier *CommandApplier) putKeyValue(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) putInstanceTag(value []byte) interface{} {
+func (applier *CommandApplier) putInstanceTag(value []byte) any {
 	instanceTag := inst.InstanceTag{}
 	if err := json.Unmarshal(value, &instanceTag); err != nil {
 		return log.Errore(err)
@@ -310,7 +310,7 @@ func (applier *CommandApplier) putInstanceTag(value []byte) interface{} {
 	return err
 }
 
-func (applier *CommandApplier) deleteInstanceTag(value []byte) interface{} {
+func (applier *CommandApplier) deleteInstanceTag(value []byte) any {
 	instanceTag := inst.InstanceTag{}
 	if err := json.Unmarshal(value, &instanceTag); err != nil {
 		return log.Errore(err)
@@ -322,7 +322,7 @@ func (applier *CommandApplier) deleteInstanceTag(value []byte) interface{} {
 	return removed
 }
 
-func (applier *CommandApplier) leaderURI(value []byte) interface{} {
+func (applier *CommandApplier) leaderURI(value []byte) any {
 	var uri string
 	if err := json.Unmarshal(value, &uri); err != nil {
 		return log.Errore(err)
@@ -331,7 +331,7 @@ func (applier *CommandApplier) leaderURI(value []byte) interface{} {
 	return nil
 }
 
-func (applier *CommandApplier) setClusterAliasManualOverride(value []byte) interface{} {
+func (applier *CommandApplier) setClusterAliasManualOverride(value []byte) any {
 	var params [2]string
 	if err := json.Unmarshal(value, &params); err != nil {
 		return log.Errore(err)

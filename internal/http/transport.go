@@ -32,16 +32,15 @@ type Params map[string]string
 type Principal string
 
 // Responder is the transport response surface used by existing API and Web
-// handlers. Its implementation preserves the legacy JSON, HTML and redirect
-// wire format without exposing Gin outside this adapter.
+// handlers. Its implementation preserves the JSON and redirect wire format
+// without exposing Gin outside this adapter.
 type Responder interface {
-	JSON(status int, value interface{})
-	HTML(status int, name string, value interface{})
+	JSON(status int, value any)
 	Redirect(location string, status ...int)
 }
 
 // Handler is one of the supported project HTTP handler signatures.
-type Handler interface{}
+type Handler any
 
 // AuthenticationOptions configures the legacy Basic and multi-user
 // authentication contracts.
@@ -55,7 +54,6 @@ type AuthenticationOptions struct {
 type RouterOptions struct {
 	Authentication AuthenticationOptions
 	EnableGzip     bool
-	Templates      *TemplateOptions
 	VerifyRequest  func(*nethttp.Request) error
 }
 
@@ -67,7 +65,6 @@ type routeContract struct {
 // Router adapts the project's handler contracts to a Gin engine.
 type Router struct {
 	engine        *gin.Engine
-	renderer      *templateRenderer
 	registered    map[string]struct{}
 	logicalRoutes []routeContract
 	staticMounts  []string
@@ -78,11 +75,6 @@ type Router struct {
 // with the previous router rather than inheriting Gin defaults.
 func NewRouter(options RouterOptions) (*Router, error) {
 	if err := validateAuthentication(options.Authentication); err != nil {
-		return nil, err
-	}
-
-	renderer, err := newTemplateRenderer(options.Templates)
-	if err != nil {
 		return nil, err
 	}
 
@@ -119,7 +111,6 @@ func NewRouter(options RouterOptions) (*Router, error) {
 
 	return &Router{
 		engine:        engine,
-		renderer:      renderer,
 		registered:    make(map[string]struct{}),
 		logicalRoutes: make([]routeContract, 0),
 		staticMounts:  make([]string, 0, 4),
@@ -168,8 +159,8 @@ func optionalTrailingSlashPaths(path string) []string {
 	if path == "/" {
 		return []string{path}
 	}
-	if strings.HasSuffix(path, "/") {
-		return []string{path, strings.TrimSuffix(path, "/")}
+	if before, ok := strings.CutSuffix(path, "/"); ok {
+		return []string{path, before}
 	}
 	return []string{path, path + "/"}
 }
@@ -245,9 +236,8 @@ func (router *Router) dispatch(handlers []Handler, parameterNames map[string]str
 		tracker := &commitTrackingWriter{ResponseWriter: ctx.Writer}
 		ctx.Writer = tracker
 		responder := &response{
-			writer:   tracker,
-			request:  ctx.Request,
-			renderer: router.renderer,
+			writer:  tracker,
+			request: ctx.Request,
 		}
 		principal := principalFromRequest(ctx.Request)
 

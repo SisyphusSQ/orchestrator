@@ -32,7 +32,6 @@ import (
 )
 
 const maxEmptyBinlogFiles int = 10
-const maxEventInfoDisplayLength int = 200
 
 var instanceBinlogEntryCache *cache.Cache
 
@@ -661,7 +660,7 @@ const anonymousGTIDNextEvent = "SET @@SESSION.GTID_NEXT= 'ANONYMOUS'"
 
 // check if the event is one we want to skip.
 func specialEventToSkip(event *BinlogEvent) bool {
-	if event != nil && strings.Index(event.Info, anonymousGTIDNextEvent) >= 0 {
+	if event != nil && strings.Contains(event.Info, anonymousGTIDNextEvent) {
 		return true
 	}
 	return false

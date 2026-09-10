@@ -51,25 +51,25 @@ type BinlogEvent struct {
 	Info         string
 }
 
-func (this *BinlogEvent) NextBinlogCoordinates() BinlogCoordinates {
-	return BinlogCoordinates{LogFile: this.Coordinates.LogFile, LogPos: this.NextEventPos, Type: this.Coordinates.Type}
+func (event *BinlogEvent) NextBinlogCoordinates() BinlogCoordinates {
+	return BinlogCoordinates{LogFile: event.Coordinates.LogFile, LogPos: event.NextEventPos, Type: event.Coordinates.Type}
 }
 
-func (this *BinlogEvent) NormalizeInfo() {
+func (event *BinlogEvent) NormalizeInfo() {
 	for reg, replace := range eventInfoTransformations {
-		this.Info = reg.ReplaceAllString(this.Info, replace)
+		event.Info = reg.ReplaceAllString(event.Info, replace)
 	}
 }
 
-func (this *BinlogEvent) Equals(other *BinlogEvent) bool {
-	return this.Coordinates.Equals(&other.Coordinates) &&
-		this.NextEventPos == other.NextEventPos &&
-		this.EventType == other.EventType && this.Info == other.Info
+func (event *BinlogEvent) Equals(other *BinlogEvent) bool {
+	return event.Coordinates.Equals(&other.Coordinates) &&
+		event.NextEventPos == other.NextEventPos &&
+		event.EventType == other.EventType && event.Info == other.Info
 }
 
-func (this *BinlogEvent) EqualsIgnoreCoordinates(other *BinlogEvent) bool {
-	return this.NextEventPos == other.NextEventPos &&
-		this.EventType == other.EventType && this.Info == other.Info
+func (event *BinlogEvent) EqualsIgnoreCoordinates(other *BinlogEvent) bool {
+	return event.NextEventPos == other.NextEventPos &&
+		event.EventType == other.EventType && event.Info == other.Info
 }
 
 const maxEmptyEventsEvents int = 10
@@ -103,56 +103,56 @@ func NewBinlogEventCursor(startCoordinates BinlogCoordinates, fetchNextEventsFun
 // binary log if need be.
 // Internally, it uses the cachedEvents array, so that it does not go to the MySQL server upon each call.
 // Returns nil upon reaching end of binary logs.
-func (this *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent, error) {
+func (cursor *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent, error) {
 	if numEmptyEventsEvents > maxEmptyEventsEvents {
-		log.Debugf("End of logs. currentEventIndex: %d, nextCoordinates: %+v", this.currentEventIndex, this.nextCoordinates)
+		log.Debugf("End of logs. currentEventIndex: %d, nextCoordinates: %+v", cursor.currentEventIndex, cursor.nextCoordinates)
 		// End of logs
 		return nil, nil
 	}
-	if len(this.cachedEvents) == 0 {
+	if len(cursor.cachedEvents) == 0 {
 		// Cache exhausted; get next bulk of entries and return the next entry
-		nextFileCoordinates, err := this.nextCoordinates.NextFileCoordinates()
+		nextFileCoordinates, err := cursor.nextCoordinates.NextFileCoordinates()
 		if err != nil {
 			return nil, err
 		}
 		log.Debugf("zero cached events, next file: %+v", nextFileCoordinates)
-		this.cachedEvents, err = this.fetchNextEvents(nextFileCoordinates)
+		cursor.cachedEvents, err = cursor.fetchNextEvents(nextFileCoordinates)
 		if err != nil {
 			return nil, err
 		}
-		this.currentEventIndex = -1
+		cursor.currentEventIndex = -1
 		// While this seems recursive do note that recursion level is at most 1, since we either have
 		// entries in the next binlog (no further recursion) or we don't (immediate termination)
-		return this.nextEvent(numEmptyEventsEvents + 1)
+		return cursor.nextEvent(numEmptyEventsEvents + 1)
 	}
-	if this.currentEventIndex+1 < len(this.cachedEvents) {
+	if cursor.currentEventIndex+1 < len(cursor.cachedEvents) {
 		// We have enough cache to go by
-		this.currentEventIndex++
-		event := &this.cachedEvents[this.currentEventIndex]
-		this.nextCoordinates = event.NextBinlogCoordinates()
+		cursor.currentEventIndex++
+		event := &cursor.cachedEvents[cursor.currentEventIndex]
+		cursor.nextCoordinates = event.NextBinlogCoordinates()
 		return event, nil
 	} else {
 		// Cache exhausted; get next bulk of entries and return the next entry
 		var err error
-		this.cachedEvents, err = this.fetchNextEvents(this.cachedEvents[len(this.cachedEvents)-1].NextBinlogCoordinates())
+		cursor.cachedEvents, err = cursor.fetchNextEvents(cursor.cachedEvents[len(cursor.cachedEvents)-1].NextBinlogCoordinates())
 		if err != nil {
 			return nil, err
 		}
-		this.currentEventIndex = -1
+		cursor.currentEventIndex = -1
 		// While this seems recursive do note that recursion level is at most 1, since we either have
 		// entries in the next binlog (no further recursion) or we don't (immediate termination)
-		return this.nextEvent(numEmptyEventsEvents + 1)
+		return cursor.nextEvent(numEmptyEventsEvents + 1)
 	}
 }
 
 // NextRealEvent returns the next event from binlog that is not meta/control event (these are start-of-binary-log,
 // rotate-binary-log etc.)
-func (this *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent, error) {
+func (cursor *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent, error) {
 	if recursionLevel > maxEmptyEventsEvents {
 		log.Debugf("End of real events")
 		return nil, nil
 	}
-	event, err := this.nextEvent(0)
+	event, err := cursor.nextEvent(0)
 	if err != nil {
 		return event, err
 	}
@@ -163,12 +163,12 @@ func (this *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent, 
 	if _, found := skippedEventTypes[event.EventType]; found {
 		// Recursion will not be deep here. A few entries (end-of-binlog followed by start-of-bin-log) are possible,
 		// but we really don't expect a huge sequence of those.
-		return this.nextRealEvent(recursionLevel + 1)
+		return cursor.nextRealEvent(recursionLevel + 1)
 	}
 	for _, skipSubstring := range config.Config.PseudoGTID.SkipBinlogContaining {
-		if strings.Index(event.Info, skipSubstring) >= 0 {
+		if strings.Contains(event.Info, skipSubstring) {
 			// Recursion might go deeper here.
-			return this.nextRealEvent(recursionLevel + 1)
+			return cursor.nextRealEvent(recursionLevel + 1)
 		}
 	}
 	event.NormalizeInfo()
@@ -180,9 +180,9 @@ func (this *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent, 
 // coordinates of the next binlog entry.
 // The value of this function is used by match-below to move a replica behind another, after exhausting the shared binlog
 // entries of both.
-func (this *BinlogEventCursor) getNextCoordinates() (BinlogCoordinates, error) {
-	if this.nextCoordinates.LogPos == 0 {
-		return this.nextCoordinates, errors.New("Next coordinates unfound")
+func (cursor *BinlogEventCursor) getNextCoordinates() (BinlogCoordinates, error) {
+	if cursor.nextCoordinates.LogPos == 0 {
+		return cursor.nextCoordinates, errors.New("next coordinates unfound")
 	}
-	return this.nextCoordinates, nil
+	return cursor.nextCoordinates, nil
 }

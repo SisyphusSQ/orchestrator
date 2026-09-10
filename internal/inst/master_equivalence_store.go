@@ -41,7 +41,7 @@ func WriteMasterPositionEquivalence(master1Key *InstanceKey, master1BinlogCoordi
 	return ExecDBWriteFunc(writeFunc)
 }
 
-func GetEquivalentMasterCoordinates(instanceCoordinates *InstanceBinlogCoordinates) (result [](*InstanceBinlogCoordinates), err error) {
+func GetEquivalentMasterCoordinates(instanceCoordinates *InstanceBinlogCoordinates) (result []*InstanceBinlogCoordinates, err error) {
 	rows, err := metadata.ReadEquivalentMasterCoordinates(context.Background(), modeldomain.EquivalentCoordinates{
 		Hostname:   instanceCoordinates.Key.Hostname,
 		Port:       instanceCoordinates.Key.Port,

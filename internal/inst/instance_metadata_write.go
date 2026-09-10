@@ -98,7 +98,7 @@ func instanceWriteRow(instance *Instance) modeldomain.BackendInstanceRecord {
 }
 
 func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) error {
-	writeInstances := [](*Instance){}
+	writeInstances := []*Instance{}
 	for _, instance := range instances {
 		if InstanceIsForgotten(&instance.Key) && !instance.IsSeed() {
 			continue
@@ -115,7 +115,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 	argumentCount, err := metadata.WriteInstanceRows(context.Background(), rows, instanceWasActuallyFound, updateLastSeen)
 	if err != nil {
 		if strings.Contains(err.Error(), tooManyPlaceholders) {
-			return fmt.Errorf("writeManyInstances(?,%v,%v): error: %+v, len(instances): %v, len(args): %v.  Reduce InstanceWriteBufferSize to avoid len(args) being > 64k, a limit in the MySQL source code.",
+			return fmt.Errorf("writeManyInstances(?,%v,%v): error: %+v, len(instances): %v, len(args): %v.  Reduce InstanceWriteBufferSize to avoid len(args) being > 64k, a limit in the MySQL source code",
 				instanceWasActuallyFound,
 				updateLastSeen,
 				err.Error(),
@@ -315,8 +315,8 @@ func SnapshotTopologies() error {
 }
 
 // ReadHistoryClusterInstances reads (thin) instances from history
-func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern string) ([](*Instance), error) {
-	instances := [](*Instance){}
+func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern string) ([]*Instance, error) {
+	instances := []*Instance{}
 
 	rows, err := metadata.ReadHistoryClusterInstanceRows(context.Background(), clusterName, historyTimestampPattern)
 	for _, row := range rows {
@@ -377,10 +377,7 @@ func RecordStaleInstanceBinlogCoordinates(instanceKey *InstanceKey, binlogCoordi
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {
-	expireSeconds := recoverypolicy.Current("").ReasonableReplicationLagSeconds * 2
-	if expireSeconds < config.StaleInstanceCoordinatesExpireSeconds {
-		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
-	}
+	expireSeconds := max(recoverypolicy.Current("").ReasonableReplicationLagSeconds*2, config.StaleInstanceCoordinatesExpireSeconds)
 	writeFunc := func() error {
 		err := metadata.ExpireStaleInstanceBinlogCoordinates(context.Background(), expireSeconds)
 		return log.Errore(err)

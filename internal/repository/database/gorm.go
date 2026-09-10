@@ -51,19 +51,19 @@ func (logger backendGORMLogger) LogMode(level gormlogger.LogLevel) gormlogger.In
 	return logger
 }
 
-func (logger backendGORMLogger) Info(_ context.Context, _ string, _ ...interface{}) {
+func (logger backendGORMLogger) Info(_ context.Context, _ string, _ ...any) {
 	if logger.level >= gormlogger.Info {
 		log.Sugar().Debug("GORM backend info")
 	}
 }
 
-func (logger backendGORMLogger) Warn(_ context.Context, _ string, _ ...interface{}) {
+func (logger backendGORMLogger) Warn(_ context.Context, _ string, _ ...any) {
 	if logger.level >= gormlogger.Warn {
 		log.Sugar().Warn("GORM backend warning")
 	}
 }
 
-func (logger backendGORMLogger) Error(_ context.Context, _ string, _ ...interface{}) {
+func (logger backendGORMLogger) Error(_ context.Context, _ string, _ ...any) {
 	if logger.level >= gormlogger.Error {
 		log.Sugar().Error("GORM backend error")
 	}
@@ -131,7 +131,7 @@ func OpenOrchestratorGORMContext(ctx context.Context) (*gorm.DB, error) {
 
 // QueryOrchestratorRows executes a stable backend query into a query-specific
 // DTO slice. Callers should use explicit gorm column tags for every field.
-func QueryOrchestratorRows[T any](ctx context.Context, query string, args ...interface{}) ([]T, error) {
+func QueryOrchestratorRows[T any](ctx context.Context, query string, args ...any) ([]T, error) {
 	translated, err := translateStatement(query)
 	if err != nil {
 		return nil, fmt.Errorf("translate orchestrator query: %w", err)
@@ -150,7 +150,7 @@ func QueryOrchestratorRows[T any](ctx context.Context, query string, args ...int
 
 // ExecOrchestratorGORM executes backend SQL through an existing GORM session,
 // preserving backend dialect translation inside explicit transactions.
-func ExecOrchestratorGORM(handle *gorm.DB, query string, args ...interface{}) (int64, error) {
+func ExecOrchestratorGORM(handle *gorm.DB, query string, args ...any) (int64, error) {
 	if handle == nil {
 		return 0, errors.New("GORM backend handle is nil")
 	}
@@ -167,7 +167,7 @@ func ExecOrchestratorGORM(handle *gorm.DB, query string, args ...interface{}) (i
 
 // ExecOrchestratorSQLContext is reserved for backend statements whose caller
 // requires a real driver sql.Result (notably LastInsertId).
-func ExecOrchestratorSQLContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func ExecOrchestratorSQLContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	translated, err := translateStatement(query)
 	if err != nil {
 		return nil, err

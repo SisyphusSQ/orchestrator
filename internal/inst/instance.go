@@ -178,224 +178,222 @@ func NewInstance() *Instance {
 	}
 }
 
-func (this *Instance) MarshalJSON() ([]byte, error) {
+func (instance *Instance) MarshalJSON() ([]byte, error) {
 	i := struct {
 		Instance
-	}{}
-	i.Instance = *this
+	}{
+		Instance: *instance,
+	}
 	// change terminology. Users of the orchestrator API can switch to new terminology and avoid using old terminology
 	// flip
 	i.SlaveHosts = i.Replicas
-	i.SlaveLagSeconds = this.ReplicationLagSeconds
-	i.LogSlaveUpdatesEnabled = this.LogReplicationUpdatesEnabled
-	i.Slave_SQL_Running = this.ReplicationSQLThreadRuning
-	i.Slave_IO_Running = this.ReplicationIOThreadRuning
+	i.SlaveLagSeconds = instance.ReplicationLagSeconds
+	i.LogSlaveUpdatesEnabled = instance.LogReplicationUpdatesEnabled
+	i.Slave_SQL_Running = instance.ReplicationSQLThreadRuning
+	i.Slave_IO_Running = instance.ReplicationIOThreadRuning
 
 	return json.Marshal(i)
 }
 
 // Equals tests that this instance is the same instance as other. The function does not test
 // configuration or status.
-func (this *Instance) Equals(other *Instance) bool {
-	return this.Key == other.Key
+func (instance *Instance) Equals(other *Instance) bool {
+	return instance.Key == other.Key
 }
 
 // MajorVersion returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
-func (this *Instance) MajorVersion() []string {
-	return MajorVersion(this.Version)
+func (instance *Instance) MajorVersion() []string {
+	return MajorVersion(instance.Version)
 }
 
 // MajorVersion returns this instance's major version number (e.g. for 5.5.36 it returns "5.5")
-func (this *Instance) MajorVersionString() string {
-	return strings.Join(this.MajorVersion(), ".")
+func (instance *Instance) MajorVersionString() string {
+	return strings.Join(instance.MajorVersion(), ".")
 }
 
-func (this *Instance) IsMySQL51() bool {
-	return this.MajorVersionString() == "5.1"
+func (instance *Instance) IsMySQL51() bool {
+	return instance.MajorVersionString() == "5.1"
 }
 
-func (this *Instance) IsMySQL55() bool {
-	return this.MajorVersionString() == "5.5"
+func (instance *Instance) IsMySQL55() bool {
+	return instance.MajorVersionString() == "5.5"
 }
 
-func (this *Instance) IsMySQL56() bool {
-	return this.MajorVersionString() == "5.6"
+func (instance *Instance) IsMySQL56() bool {
+	return instance.MajorVersionString() == "5.6"
 }
 
-func (this *Instance) IsMySQL57() bool {
-	return this.MajorVersionString() == "5.7"
+func (instance *Instance) IsMySQL57() bool {
+	return instance.MajorVersionString() == "5.7"
 }
 
-func (this *Instance) IsMySQL80() bool {
-	return this.MajorVersionString() == "8.0"
+func (instance *Instance) IsMySQL80() bool {
+	return instance.MajorVersionString() == "8.0"
 }
 
 // IsSmallerBinlogFormat returns true when this instance's binlgo format is
 // "smaller" than the other's, i.e. binary logs cannot flow from the other instance to this one
-func (this *Instance) IsSmallerBinlogFormat(other *Instance) bool {
-	return IsSmallerBinlogFormat(this.Binlog_format, other.Binlog_format)
+func (instance *Instance) IsSmallerBinlogFormat(other *Instance) bool {
+	return IsSmallerBinlogFormat(instance.Binlog_format, other.Binlog_format)
 }
 
 // IsSmallerMajorVersion tests this instance against another and returns true if this instance is of a smaller "major" varsion.
 // e.g. 5.5.36 is NOT a smaller major version as comapred to 5.5.36, but IS as compared to 5.6.9
-func (this *Instance) IsSmallerMajorVersion(other *Instance) bool {
-	return IsSmallerMajorVersion(this.Version, other.Version)
+func (instance *Instance) IsSmallerMajorVersion(other *Instance) bool {
+	return IsSmallerMajorVersion(instance.Version, other.Version)
 }
 
 // IsSmallerMajorVersionByString checks if this instance has a smaller major version number than given one
-func (this *Instance) IsSmallerMajorVersionByString(otherVersion string) bool {
-	return IsSmallerMajorVersion(this.Version, otherVersion)
+func (instance *Instance) IsSmallerMajorVersionByString(otherVersion string) bool {
+	return IsSmallerMajorVersion(instance.Version, otherVersion)
 }
 
 // IsMariaDB checks whether this is any version of MariaDB
-func (this *Instance) IsMariaDB() bool {
-	return strings.Contains(this.Version, "MariaDB")
+func (instance *Instance) IsMariaDB() bool {
+	return strings.Contains(instance.Version, "MariaDB")
 }
 
 // IsPercona checks whether this is any version of Percona Server
-func (this *Instance) IsPercona() bool {
-	return strings.Contains(this.VersionComment, "Percona")
+func (instance *Instance) IsPercona() bool {
+	return strings.Contains(instance.VersionComment, "Percona")
 }
 
 // isMaxScale checks whether this is any version of MaxScale
-func (this *Instance) isMaxScale() bool {
-	return strings.Contains(this.Version, "maxscale")
+func (instance *Instance) isMaxScale() bool {
+	return strings.Contains(instance.Version, "maxscale")
 }
 
 // isNDB check whether this is NDB Cluster (aka MySQL Cluster)
-func (this *Instance) IsNDB() bool {
-	return strings.Contains(this.Version, "-ndb-")
+func (instance *Instance) IsNDB() bool {
+	return strings.Contains(instance.Version, "-ndb-")
 }
 
 // IsReplicationGroup checks whether the host thinks it is part of a known replication group. Notice that this might
 // return True even if the group has decided to expel the member represented by this instance, as the instance might not
 // know that under certain circumstances
-func (this *Instance) IsReplicationGroupMember() bool {
-	return this.ReplicationGroupName != ""
+func (instance *Instance) IsReplicationGroupMember() bool {
+	return instance.ReplicationGroupName != ""
 }
 
-func (this *Instance) IsReplicationGroupPrimary() bool {
-	return this.IsReplicationGroupMember() && this.ReplicationGroupPrimaryInstanceKey.Equals(&this.Key)
+func (instance *Instance) IsReplicationGroupPrimary() bool {
+	return instance.IsReplicationGroupMember() && instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
 }
 
-func (this *Instance) IsReplicationGroupSecondary() bool {
-	return this.IsReplicationGroupMember() && !this.ReplicationGroupPrimaryInstanceKey.Equals(&this.Key)
+func (instance *Instance) IsReplicationGroupSecondary() bool {
+	return instance.IsReplicationGroupMember() && !instance.ReplicationGroupPrimaryInstanceKey.Equals(&instance.Key)
 }
 
 // IsBinlogServer checks whether this is any type of a binlog server (currently only maxscale)
-func (this *Instance) IsBinlogServer() bool {
-	if this.isMaxScale() {
-		return true
-	}
-	return false
+func (instance *Instance) IsBinlogServer() bool {
+	return instance.isMaxScale()
 }
 
 // IsOracleMySQL checks whether this is an Oracle MySQL distribution
-func (this *Instance) IsOracleMySQL() bool {
-	if this.IsMariaDB() {
+func (instance *Instance) IsOracleMySQL() bool {
+	if instance.IsMariaDB() {
 		return false
 	}
-	if this.IsPercona() {
+	if instance.IsPercona() {
 		return false
 	}
-	if this.isMaxScale() {
+	if instance.isMaxScale() {
 		return false
 	}
-	if this.IsBinlogServer() {
+	if instance.IsBinlogServer() {
 		return false
 	}
 	return true
 }
 
-func (this *Instance) SetSeed() {
-	this.seed = true
+func (instance *Instance) SetSeed() {
+	instance.seed = true
 }
-func (this *Instance) IsSeed() bool {
-	return this.seed
+func (instance *Instance) IsSeed() bool {
+	return instance.seed
 }
 
 // applyFlavorName
-func (this *Instance) applyFlavorName() {
-	if this == nil {
+func (instance *Instance) applyFlavorName() {
+	if instance == nil {
 		return
 	}
-	if this.IsOracleMySQL() {
-		this.FlavorName = "MySQL"
-	} else if this.IsMariaDB() {
-		this.FlavorName = "MariaDB"
-	} else if this.IsPercona() {
-		this.FlavorName = "Percona"
-	} else if this.isMaxScale() {
-		this.FlavorName = "MaxScale"
+	if instance.IsOracleMySQL() {
+		instance.FlavorName = "MySQL"
+	} else if instance.IsMariaDB() {
+		instance.FlavorName = "MariaDB"
+	} else if instance.IsPercona() {
+		instance.FlavorName = "Percona"
+	} else if instance.isMaxScale() {
+		instance.FlavorName = "MaxScale"
 	} else {
-		this.FlavorName = "unknown"
+		instance.FlavorName = "unknown"
 	}
 }
 
 // FlavorNameAndMajorVersion returns a string of the combined
 // flavor and major version which is useful in some checks.
-func (this *Instance) FlavorNameAndMajorVersion() string {
-	if this.FlavorName == "" {
-		this.applyFlavorName()
+func (instance *Instance) FlavorNameAndMajorVersion() string {
+	if instance.FlavorName == "" {
+		instance.applyFlavorName()
 	}
 
-	return this.FlavorName + "-" + this.MajorVersionString()
+	return instance.FlavorName + "-" + instance.MajorVersionString()
 }
 
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
-func (this *Instance) IsReplica() bool {
-	return this.MasterKey.Hostname != "" && this.MasterKey.Hostname != "_" && this.MasterKey.Port != 0 && (this.ReadBinlogCoordinates.LogFile != "" || this.UsingGTID())
+func (instance *Instance) IsReplica() bool {
+	return instance.MasterKey.Hostname != "" && instance.MasterKey.Hostname != "_" && instance.MasterKey.Port != 0 && (instance.ReadBinlogCoordinates.LogFile != "" || instance.UsingGTID())
 }
 
 // IsMaster makes simple heuristics to decide whether this instance is a master (not replicating from any other server),
 // either via traditional async/semisync replication or group replication
-func (this *Instance) IsMaster() bool {
+func (instance *Instance) IsMaster() bool {
 	// If traditional replication is configured, it is for sure not a master
-	if this.IsReplica() {
+	if instance.IsReplica() {
 		return false
 	}
 	// If traditional replication is not configured, and it is also not part of a replication group, this host is
 	// a master
-	if !this.IsReplicationGroupMember() {
+	if !instance.IsReplicationGroupMember() {
 		return true
 	}
 	// If traditional replication is not configured, and this host is part of a group, it is only considered a
 	// master if it has the role of group Primary. Otherwise it is not a master.
-	if this.ReplicationGroupMemberRole == GroupReplicationMemberRolePrimary {
+	if instance.ReplicationGroupMemberRole == GroupReplicationMemberRolePrimary {
 		return true
 	}
 	return false
 }
 
 // ReplicaRunning returns true when this instance's status is of a replicating replica.
-func (this *Instance) ReplicaRunning() bool {
-	return this.IsReplica() && this.ReplicationSQLThreadState.IsRunning() && this.ReplicationIOThreadState.IsRunning()
+func (instance *Instance) ReplicaRunning() bool {
+	return instance.IsReplica() && instance.ReplicationSQLThreadState.IsRunning() && instance.ReplicationIOThreadState.IsRunning()
 }
 
 // NoReplicationThreadRunning returns true when neither SQL nor IO threads are running (including the case where isn't even a replica)
-func (this *Instance) ReplicationThreadsStopped() bool {
-	return this.ReplicationSQLThreadState.IsStopped() && this.ReplicationIOThreadState.IsStopped()
+func (instance *Instance) ReplicationThreadsStopped() bool {
+	return instance.ReplicationSQLThreadState.IsStopped() && instance.ReplicationIOThreadState.IsStopped()
 }
 
 // NoReplicationThreadRunning returns true when neither SQL nor IO threads are running (including the case where isn't even a replica)
-func (this *Instance) ReplicationThreadsExist() bool {
-	return this.ReplicationSQLThreadState.Exists() && this.ReplicationIOThreadState.Exists()
+func (instance *Instance) ReplicationThreadsExist() bool {
+	return instance.ReplicationSQLThreadState.Exists() && instance.ReplicationIOThreadState.Exists()
 }
 
 // SQLThreadUpToDate returns true when the instance had consumed all relay logs.
-func (this *Instance) SQLThreadUpToDate() bool {
-	return this.ReadBinlogCoordinates.Equals(&this.ExecBinlogCoordinates)
+func (instance *Instance) SQLThreadUpToDate() bool {
+	return instance.ReadBinlogCoordinates.Equals(&instance.ExecBinlogCoordinates)
 }
 
 // UsingGTID returns true when this replica is currently replicating via GTID (either Oracle or MariaDB)
-func (this *Instance) UsingGTID() bool {
-	return this.UsingOracleGTID || this.UsingMariaDBGTID
+func (instance *Instance) UsingGTID() bool {
+	return instance.UsingOracleGTID || instance.UsingMariaDBGTID
 }
 
 // NextGTID returns the next (Oracle) GTID to be executed. Useful for skipping queries
-func (this *Instance) NextGTID() (string, error) {
-	if this.ExecutedGtidSet == "" {
-		return "", fmt.Errorf("No value found in Executed_Gtid_Set; cannot compute NextGTID")
+func (instance *Instance) NextGTID() (string, error) {
+	if instance.ExecutedGtidSet == "" {
+		return "", fmt.Errorf("no value found in Executed_Gtid_Set; cannot compute NextGTID")
 	}
 
 	firstToken := func(s string, delimiter string) string {
@@ -407,7 +405,7 @@ func (this *Instance) NextGTID() (string, error) {
 		return tokens[len(tokens)-1]
 	}
 	// executed GTID set: 4f6d62ed-df65-11e3-b395-60672090eb04:1,b9b4712a-df64-11e3-b391-60672090eb04:1-6
-	executedGTIDsFromMaster := lastToken(this.ExecutedGtidSet, ",")
+	executedGTIDsFromMaster := lastToken(instance.ExecutedGtidSet, ",")
 	// executedGTIDsFromMaster: b9b4712a-df64-11e3-b391-60672090eb04:1-6
 	executedRange := lastToken(executedGTIDsFromMaster, ":")
 	// executedRange: 1-6
@@ -423,36 +421,36 @@ func (this *Instance) NextGTID() (string, error) {
 }
 
 // AddReplicaKey adds a replica to the list of this instance's replicas.
-func (this *Instance) AddReplicaKey(replicaKey *InstanceKey) {
-	this.Replicas.AddKey(*replicaKey)
+func (instance *Instance) AddReplicaKey(replicaKey *InstanceKey) {
+	instance.Replicas.AddKey(*replicaKey)
 }
 
 // AddGroupMemberKey adds a group member to the list of this instance's group members.
-func (this *Instance) AddGroupMemberKey(groupMemberKey *InstanceKey) {
-	this.ReplicationGroupMembers.AddKey(*groupMemberKey)
+func (instance *Instance) AddGroupMemberKey(groupMemberKey *InstanceKey) {
+	instance.ReplicationGroupMembers.AddKey(*groupMemberKey)
 }
 
 // GetNextBinaryLog returns the successive, if any, binary log file to the one given
-func (this *Instance) GetNextBinaryLog(binlogCoordinates BinlogCoordinates) (BinlogCoordinates, error) {
-	if binlogCoordinates.LogFile == this.SelfBinlogCoordinates.LogFile {
-		return binlogCoordinates, fmt.Errorf("Cannot find next binary log for %+v", binlogCoordinates)
+func (instance *Instance) GetNextBinaryLog(binlogCoordinates BinlogCoordinates) (BinlogCoordinates, error) {
+	if binlogCoordinates.LogFile == instance.SelfBinlogCoordinates.LogFile {
+		return binlogCoordinates, fmt.Errorf("cannot find next binary log for %+v", binlogCoordinates)
 	}
 	return binlogCoordinates.NextFileCoordinates()
 }
 
 // IsReplicaOf returns true if this instance claims to replicate from given master
-func (this *Instance) IsReplicaOf(master *Instance) bool {
-	return this.MasterKey.Equals(&master.Key)
+func (instance *Instance) IsReplicaOf(master *Instance) bool {
+	return instance.MasterKey.Equals(&master.Key)
 }
 
 // IsReplicaOf returns true if this i supposed master of given replica
-func (this *Instance) IsMasterOf(replica *Instance) bool {
-	return replica.IsReplicaOf(this)
+func (instance *Instance) IsMasterOf(replica *Instance) bool {
+	return replica.IsReplicaOf(instance)
 }
 
 // IsDescendantOf returns true if this is replication directly or indirectly from other
-func (this *Instance) IsDescendantOf(other *Instance) bool {
-	for _, uuid := range strings.Split(this.AncestryUUID, ",") {
+func (instance *Instance) IsDescendantOf(other *Instance) bool {
+	for uuid := range strings.SplitSeq(instance.AncestryUUID, ",") {
 		if uuid == other.ServerUUID && uuid != "" {
 			return true
 		}
@@ -462,11 +460,11 @@ func (this *Instance) IsDescendantOf(other *Instance) bool {
 
 // CanReplicateFrom uses heuristics to decide whether this instacne can practically replicate from other instance.
 // Checks are made to binlog format, version number, binary logs etc.
-func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
+func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 	var warningMsg error = nil
 
-	if this.Key.Equals(&other.Key) {
-		return false, fmt.Errorf("instance cannot replicate from itself: %+v", this.Key)
+	if instance.Key.Equals(&other.Key) {
+		return false, fmt.Errorf("instance cannot replicate from itself: %+v", instance.Key)
 	}
 	if !other.LogBinEnabled {
 		return false, fmt.Errorf("instance does not have binary logs enabled: %+v", other.Key)
@@ -478,31 +476,31 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 		// OK for a master to not have log_slave_updates
 		// Not OK for a replica, for it has to relay the logs.
 	}
-	if this.IsSmallerMajorVersion(other) && !this.IsBinlogServer() {
-		warningMsg = fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", this.Key, this.Version, other.Version, other.Key)
+	if instance.IsSmallerMajorVersion(other) && !instance.IsBinlogServer() {
+		warningMsg = fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", instance.Key, instance.Version, other.Version, other.Key)
 		if !config.Config.Topology.Compatibility.LowerReplicaVersionAllowed {
 			return false, warningMsg
 		}
 	}
-	if this.LogBinEnabled && this.LogReplicationUpdatesEnabled {
-		if this.IsSmallerBinlogFormat(other) {
-			return false, fmt.Errorf("Cannot replicate from %+v binlog format on %+v to %+v on %+v", other.Binlog_format, other.Key, this.Binlog_format, this.Key)
+	if instance.LogBinEnabled && instance.LogReplicationUpdatesEnabled {
+		if instance.IsSmallerBinlogFormat(other) {
+			return false, fmt.Errorf("cannot replicate from %+v binlog format on %+v to %+v on %+v", other.Binlog_format, other.Key, instance.Binlog_format, instance.Key)
 		}
 	}
-	policy := recoverypolicy.Current(this.ClusterName)
+	policy := recoverypolicy.Current(instance.ClusterName)
 	if policy.VerifyReplicationFilters {
-		if other.HasReplicationFilters && !this.HasReplicationFilters {
+		if other.HasReplicationFilters && !instance.HasReplicationFilters {
 			return false, fmt.Errorf("%+v has replication filters", other.Key)
 		}
 	}
-	if this.ServerID == other.ServerID && !this.IsBinlogServer() {
-		return false, fmt.Errorf("Identical server id: %+v, %+v both have %d", other.Key, this.Key, this.ServerID)
+	if instance.ServerID == other.ServerID && !instance.IsBinlogServer() {
+		return false, fmt.Errorf("identical server id: %+v, %+v both have %d", other.Key, instance.Key, instance.ServerID)
 	}
-	if this.ServerUUID == other.ServerUUID && this.ServerUUID != "" && !this.IsBinlogServer() {
-		return false, fmt.Errorf("Identical server UUID: %+v, %+v both have %s", other.Key, this.Key, this.ServerUUID)
+	if instance.ServerUUID == other.ServerUUID && instance.ServerUUID != "" && !instance.IsBinlogServer() {
+		return false, fmt.Errorf("identical server UUID: %+v, %+v both have %s", other.Key, instance.Key, instance.ServerUUID)
 	}
-	if this.SQLDelay < other.SQLDelay && int64(other.SQLDelay) > int64(policy.ReasonableMaintenanceReplicationLagSeconds) {
-		return false, fmt.Errorf("%+v has higher SQL_Delay (%+v seconds) than %+v does (%+v seconds)", other.Key, other.SQLDelay, this.Key, this.SQLDelay)
+	if instance.SQLDelay < other.SQLDelay && int64(other.SQLDelay) > int64(policy.ReasonableMaintenanceReplicationLagSeconds) {
+		return false, fmt.Errorf("%+v has higher SQL_Delay (%+v seconds) than %+v does (%+v seconds)", other.Key, other.SQLDelay, instance.Key, instance.SQLDelay)
 	}
 	return true, warningMsg
 }
@@ -510,8 +508,8 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 const logPrefix = "Replicating from higher version source is enabled by LowerReplicaVersionAllowed config parameter. " +
 	"Note that such a configuration is not officially supported by MySQL."
 
-func (this *Instance) CanReplicateFromEx(other *Instance, logContext string) (bool, error) {
-	canReplicate, err := this.CanReplicateFrom(other)
+func (instance *Instance) CanReplicateFromEx(other *Instance, logContext string) (bool, error) {
+	canReplicate, err := instance.CanReplicateFrom(other)
 
 	if config.Config.Topology.Compatibility.LowerReplicaVersionAllowed && canReplicate && err != nil {
 		log.Warningf("%v: %v Details: %v", logContext, logPrefix, err)
@@ -521,137 +519,137 @@ func (this *Instance) CanReplicateFromEx(other *Instance, logContext string) (bo
 }
 
 // HasReasonableMaintenanceReplicationLag returns true when the replica lag is reasonable, and maintenance operations should have a green light to go.
-func (this *Instance) HasReasonableMaintenanceReplicationLag() bool {
-	threshold := recoverypolicy.Current(this.ClusterName).ReasonableMaintenanceReplicationLagSeconds
+func (instance *Instance) HasReasonableMaintenanceReplicationLag() bool {
+	threshold := recoverypolicy.Current(instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds
 	// replicas with SQLDelay are a special case
-	if this.SQLDelay > 0 {
-		return math.AbsInt64(this.SecondsBehindMaster.Int64-int64(this.SQLDelay)) <= int64(threshold)
+	if instance.SQLDelay > 0 {
+		return math.AbsInt64(instance.SecondsBehindMaster.Int64-int64(instance.SQLDelay)) <= int64(threshold)
 	}
-	return this.SecondsBehindMaster.Int64 <= int64(threshold)
+	return instance.SecondsBehindMaster.Int64 <= int64(threshold)
 }
 
 // CanMove returns true if this instance's state allows it to be repositioned. For example,
 // if this instance lags too much, it will not be moveable.
-func (this *Instance) CanMove() (bool, error) {
-	if !this.IsLastCheckValid {
-		return false, fmt.Errorf("%+v: last check invalid", this.Key)
+func (instance *Instance) CanMove() (bool, error) {
+	if !instance.IsLastCheckValid {
+		return false, fmt.Errorf("%+v: last check invalid", instance.Key)
 	}
-	if !this.IsRecentlyChecked {
-		return false, fmt.Errorf("%+v: not recently checked", this.Key)
+	if !instance.IsRecentlyChecked {
+		return false, fmt.Errorf("%+v: not recently checked", instance.Key)
 	}
-	if !this.ReplicationSQLThreadState.IsRunning() {
-		return false, fmt.Errorf("%+v: instance is not replicating", this.Key)
+	if !instance.ReplicationSQLThreadState.IsRunning() {
+		return false, fmt.Errorf("%+v: instance is not replicating", instance.Key)
 	}
-	if !this.ReplicationIOThreadState.IsRunning() {
-		return false, fmt.Errorf("%+v: instance is not replicating", this.Key)
+	if !instance.ReplicationIOThreadState.IsRunning() {
+		return false, fmt.Errorf("%+v: instance is not replicating", instance.Key)
 	}
-	if !this.SecondsBehindMaster.Valid {
-		return false, fmt.Errorf("%+v: cannot determine replication lag", this.Key)
+	if !instance.SecondsBehindMaster.Valid {
+		return false, fmt.Errorf("%+v: cannot determine replication lag", instance.Key)
 	}
-	if !this.HasReasonableMaintenanceReplicationLag() {
-		return false, fmt.Errorf("%+v: lags too much", this.Key)
+	if !instance.HasReasonableMaintenanceReplicationLag() {
+		return false, fmt.Errorf("%+v: lags too much", instance.Key)
 	}
 	return true, nil
 }
 
 // CanMoveAsCoMaster returns true if this instance's state allows it to be repositioned.
-func (this *Instance) CanMoveAsCoMaster() (bool, error) {
-	if !this.IsLastCheckValid {
-		return false, fmt.Errorf("%+v: last check invalid", this.Key)
+func (instance *Instance) CanMoveAsCoMaster() (bool, error) {
+	if !instance.IsLastCheckValid {
+		return false, fmt.Errorf("%+v: last check invalid", instance.Key)
 	}
-	if !this.IsRecentlyChecked {
-		return false, fmt.Errorf("%+v: not recently checked", this.Key)
+	if !instance.IsRecentlyChecked {
+		return false, fmt.Errorf("%+v: not recently checked", instance.Key)
 	}
 	return true, nil
 }
 
 // CanMoveViaMatch returns true if this instance's state allows it to be repositioned via pseudo-GTID matching
-func (this *Instance) CanMoveViaMatch() (bool, error) {
-	if !this.IsLastCheckValid {
-		return false, fmt.Errorf("%+v: last check invalid", this.Key)
+func (instance *Instance) CanMoveViaMatch() (bool, error) {
+	if !instance.IsLastCheckValid {
+		return false, fmt.Errorf("%+v: last check invalid", instance.Key)
 	}
-	if !this.IsRecentlyChecked {
-		return false, fmt.Errorf("%+v: not recently checked", this.Key)
+	if !instance.IsRecentlyChecked {
+		return false, fmt.Errorf("%+v: not recently checked", instance.Key)
 	}
 	return true, nil
 }
 
 // StatusString returns a human readable description of this instance's status
-func (this *Instance) StatusString() string {
-	if !this.IsLastCheckValid {
+func (instance *Instance) StatusString() string {
+	if !instance.IsLastCheckValid {
 		return "invalid"
 	}
-	if !this.IsRecentlyChecked {
+	if !instance.IsRecentlyChecked {
 		return "unchecked"
 	}
-	if this.IsReplica() && !this.ReplicaRunning() {
+	if instance.IsReplica() && !instance.ReplicaRunning() {
 		return "nonreplicating"
 	}
-	if this.IsReplica() && !this.HasReasonableMaintenanceReplicationLag() {
+	if instance.IsReplica() && !instance.HasReasonableMaintenanceReplicationLag() {
 		return "lag"
 	}
 	return "ok"
 }
 
 // LagStatusString returns a human readable representation of current lag
-func (this *Instance) LagStatusString() string {
-	if this.IsDetached {
+func (instance *Instance) LagStatusString() string {
+	if instance.IsDetached {
 		return "detached"
 	}
-	if !this.IsLastCheckValid {
+	if !instance.IsLastCheckValid {
 		return "unknown"
 	}
-	if !this.IsRecentlyChecked {
+	if !instance.IsRecentlyChecked {
 		return "unknown"
 	}
-	if this.IsReplica() && !this.ReplicaRunning() {
+	if instance.IsReplica() && !instance.ReplicaRunning() {
 		return "null"
 	}
-	if this.IsReplica() && !this.SecondsBehindMaster.Valid {
+	if instance.IsReplica() && !instance.SecondsBehindMaster.Valid {
 		return "null"
 	}
-	if this.IsReplica() && this.ReplicationLagSeconds.Int64 > int64(recoverypolicy.Current(this.ClusterName).ReasonableMaintenanceReplicationLagSeconds) {
-		return fmt.Sprintf("%+vs", this.ReplicationLagSeconds.Int64)
+	if instance.IsReplica() && instance.ReplicationLagSeconds.Int64 > int64(recoverypolicy.Current(instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds) {
+		return fmt.Sprintf("%+vs", instance.ReplicationLagSeconds.Int64)
 	}
-	return fmt.Sprintf("%+vs", this.ReplicationLagSeconds.Int64)
+	return fmt.Sprintf("%+vs", instance.ReplicationLagSeconds.Int64)
 }
 
-func (this *Instance) descriptionTokens() (tokens []string) {
-	tokens = append(tokens, this.LagStatusString())
-	tokens = append(tokens, this.StatusString())
-	tokens = append(tokens, this.Version)
-	if this.ReadOnly {
+func (instance *Instance) descriptionTokens() (tokens []string) {
+	tokens = append(tokens, instance.LagStatusString())
+	tokens = append(tokens, instance.StatusString())
+	tokens = append(tokens, instance.Version)
+	if instance.ReadOnly {
 		tokens = append(tokens, "ro")
 	} else {
 		tokens = append(tokens, "rw")
 	}
-	if this.LogBinEnabled {
-		tokens = append(tokens, this.Binlog_format)
+	if instance.LogBinEnabled {
+		tokens = append(tokens, instance.Binlog_format)
 	} else {
 		tokens = append(tokens, "nobinlog")
 	}
 	{
 		extraTokens := []string{}
-		if this.LogBinEnabled && this.LogReplicationUpdatesEnabled {
+		if instance.LogBinEnabled && instance.LogReplicationUpdatesEnabled {
 			extraTokens = append(extraTokens, ">>")
 		}
-		if this.UsingGTID() || this.SupportsOracleGTID {
+		if instance.UsingGTID() || instance.SupportsOracleGTID {
 			token := "GTID"
-			if this.GtidErrant != "" {
+			if instance.GtidErrant != "" {
 				token = fmt.Sprintf("%s:errant", token)
 			}
 			extraTokens = append(extraTokens, token)
 		}
-		if this.UsingPseudoGTID {
+		if instance.UsingPseudoGTID {
 			extraTokens = append(extraTokens, "P-GTID")
 		}
-		if this.SemiSyncMasterStatus {
+		if instance.SemiSyncMasterStatus {
 			extraTokens = append(extraTokens, "semi:master")
 		}
-		if this.SemiSyncReplicaStatus {
+		if instance.SemiSyncReplicaStatus {
 			extraTokens = append(extraTokens, "semi:replica")
 		}
-		if this.IsDowntimed {
+		if instance.IsDowntimed {
 			extraTokens = append(extraTokens, "downtimed")
 		}
 		tokens = append(tokens, strings.Join(extraTokens, ","))
@@ -661,8 +659,8 @@ func (this *Instance) descriptionTokens() (tokens []string) {
 
 // HumanReadableDescription returns a simple readable string describing the status, version,
 // etc. properties of this instance
-func (this *Instance) HumanReadableDescription() string {
-	tokens := this.descriptionTokens()
+func (instance *Instance) HumanReadableDescription() string {
+	tokens := instance.descriptionTokens()
 	nonEmptyTokens := []string{}
 	for _, token := range tokens {
 		if token != "" {
@@ -674,8 +672,8 @@ func (this *Instance) HumanReadableDescription() string {
 }
 
 // TabulatedDescription returns a simple tabulated string of various properties
-func (this *Instance) TabulatedDescription(separator string) string {
-	tokens := this.descriptionTokens()
-	description := fmt.Sprintf("%s", strings.Join(tokens, separator))
+func (instance *Instance) TabulatedDescription(separator string) string {
+	tokens := instance.descriptionTokens()
+	description := strings.Join(tokens, separator)
 	return description
 }

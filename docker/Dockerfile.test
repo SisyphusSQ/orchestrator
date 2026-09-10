@@ -6,7 +6,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM golang:1.26.8-bookworm
+FROM golang:1.27.0-bookworm
 LABEL maintainer="openark@github.com"
 
 RUN apt-get update

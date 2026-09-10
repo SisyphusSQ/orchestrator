@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func S(t *testing.T) *Spec {
 }
 
 // ExpectNil expects given value to be nil, or errors
-func (spec *Spec) ExpectNil(actual interface{}) {
+func (spec *Spec) ExpectNil(actual any) {
 	if actual == nil {
 		return
 	}
@@ -23,7 +24,7 @@ func (spec *Spec) ExpectNil(actual interface{}) {
 }
 
 // ExpectNotNil expects given value to be not nil, or errors
-func (spec *Spec) ExpectNotNil(actual interface{}) {
+func (spec *Spec) ExpectNotNil(actual any) {
 	if actual != nil {
 		return
 	}
@@ -31,7 +32,7 @@ func (spec *Spec) ExpectNotNil(actual interface{}) {
 }
 
 // ExpectEquals expects given values to be equal (comparison via `==`), or errors
-func (spec *Spec) ExpectEquals(actual, value interface{}) {
+func (spec *Spec) ExpectEquals(actual, value any) {
 	if actual == value {
 		return
 	}
@@ -39,7 +40,7 @@ func (spec *Spec) ExpectEquals(actual, value interface{}) {
 }
 
 // ExpectNotEquals expects given values to be nonequal (comparison via `==`), or errors
-func (spec *Spec) ExpectNotEquals(actual, value interface{}) {
+func (spec *Spec) ExpectNotEquals(actual, value any) {
 	if !(actual == value) {
 		return
 	}
@@ -47,17 +48,15 @@ func (spec *Spec) ExpectNotEquals(actual, value interface{}) {
 }
 
 // ExpectEqualsAny expects given actual to equal (comparison via `==`) at least one of given values, or errors
-func (spec *Spec) ExpectEqualsAny(actual interface{}, values ...interface{}) {
-	for _, value := range values {
-		if actual == value {
-			return
-		}
+func (spec *Spec) ExpectEqualsAny(actual any, values ...any) {
+	if slices.Contains(values, actual) {
+		return
 	}
 	spec.t.Errorf("Expected %+v to equal any of given values", actual)
 }
 
 // ExpectNotEqualsAny expects given actual to be nonequal (comparison via `==`)tp any of given values, or errors
-func (spec *Spec) ExpectNotEqualsAny(actual interface{}, values ...interface{}) {
+func (spec *Spec) ExpectNotEqualsAny(actual any, values ...any) {
 	for _, value := range values {
 		if actual == value {
 			spec.t.Errorf("Expected not %+v", value)
@@ -66,11 +65,11 @@ func (spec *Spec) ExpectNotEqualsAny(actual interface{}, values ...interface{}) 
 }
 
 // ExpectFalse expects given values to be false, or errors
-func (spec *Spec) ExpectFalse(actual interface{}) {
+func (spec *Spec) ExpectFalse(actual any) {
 	spec.ExpectEquals(actual, false)
 }
 
 // ExpectTrue expects given values to be true, or errors
-func (spec *Spec) ExpectTrue(actual interface{}) {
+func (spec *Spec) ExpectTrue(actual any) {
 	spec.ExpectEquals(actual, true)
 }

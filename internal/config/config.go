@@ -73,8 +73,8 @@ const (
 )
 
 // ToJSONString will marshal this configuration as JSON
-func (this *Configuration) ToJSONString() string {
-	b, _ := json.Marshal(this)
+func (cfg *Configuration) ToJSONString() string {
+	b, _ := json.Marshal(cfg)
 	return string(b)
 }
 
@@ -172,92 +172,92 @@ func newConfiguration() *Configuration {
 	}
 }
 
-func (this *Configuration) postReadAdjustments() error {
-	if err := this.validateTelemetry(); err != nil {
+func (cfg *Configuration) postReadAdjustments() error {
+	if err := cfg.validateTelemetry(); err != nil {
 		return err
 	}
-	switch strings.ToLower(this.Authentication.Method) {
+	switch strings.ToLower(cfg.Authentication.Method) {
 	case "", "basic", "multi", "proxy", "token":
 	default:
-		return fmt.Errorf("unsupported authentication.method %q", this.Authentication.Method)
+		return fmt.Errorf("unsupported authentication.method %q", cfg.Authentication.Method)
 	}
-	if this.Metadata.MySQL.CredentialsConfigFile != "" {
+	if cfg.Metadata.MySQL.CredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, this.Metadata.MySQL.CredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, cfg.Metadata.MySQL.CredentialsConfigFile)
 		if err != nil {
-			return fmt.Errorf("parse orchestrator credentials file %s: %w", this.Metadata.MySQL.CredentialsConfigFile, err)
+			return fmt.Errorf("parse orchestrator credentials file %s: %w", cfg.Metadata.MySQL.CredentialsConfigFile, err)
 		}
-		log.Debugf("Parsed orchestrator credentials from %s", this.Metadata.MySQL.CredentialsConfigFile)
-		this.Metadata.MySQL.User = mySQLConfig.Client.User
-		this.Metadata.MySQL.Password = mySQLConfig.Client.Password
+		log.Debugf("Parsed orchestrator credentials from %s", cfg.Metadata.MySQL.CredentialsConfigFile)
+		cfg.Metadata.MySQL.User = mySQLConfig.Client.User
+		cfg.Metadata.MySQL.Password = mySQLConfig.Client.Password
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(this.Metadata.MySQL.Password)
+		submatch := envVariableRegexp.FindStringSubmatch(cfg.Metadata.MySQL.Password)
 		if len(submatch) > 1 {
-			this.Metadata.MySQL.Password = os.Getenv(submatch[1])
+			cfg.Metadata.MySQL.Password = os.Getenv(submatch[1])
 		}
 	}
-	if this.Topology.MySQL.CredentialsConfigFile != "" {
+	if cfg.Topology.MySQL.CredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, this.Topology.MySQL.CredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, cfg.Topology.MySQL.CredentialsConfigFile)
 		if err != nil {
-			return fmt.Errorf("parse topology credentials file %s: %w", this.Topology.MySQL.CredentialsConfigFile, err)
+			return fmt.Errorf("parse topology credentials file %s: %w", cfg.Topology.MySQL.CredentialsConfigFile, err)
 		}
-		log.Debugf("Parsed topology credentials from %s", this.Topology.MySQL.CredentialsConfigFile)
-		this.Topology.MySQL.User = mySQLConfig.Client.User
-		this.Topology.MySQL.Password = mySQLConfig.Client.Password
+		log.Debugf("Parsed topology credentials from %s", cfg.Topology.MySQL.CredentialsConfigFile)
+		cfg.Topology.MySQL.User = mySQLConfig.Client.User
+		cfg.Topology.MySQL.Password = mySQLConfig.Client.Password
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(this.Topology.MySQL.Password)
+		submatch := envVariableRegexp.FindStringSubmatch(cfg.Topology.MySQL.Password)
 		if len(submatch) > 1 {
-			this.Topology.MySQL.Password = os.Getenv(submatch[1])
+			cfg.Topology.MySQL.Password = os.Getenv(submatch[1])
 		}
 	}
 
-	if this.Server.URLPrefix != "" {
+	if cfg.Server.URLPrefix != "" {
 		// Ensure the prefix starts with "/" and has no trailing one.
-		this.Server.URLPrefix = strings.TrimLeft(this.Server.URLPrefix, "/")
-		this.Server.URLPrefix = strings.TrimRight(this.Server.URLPrefix, "/")
-		this.Server.URLPrefix = "/" + this.Server.URLPrefix
+		cfg.Server.URLPrefix = strings.TrimLeft(cfg.Server.URLPrefix, "/")
+		cfg.Server.URLPrefix = strings.TrimRight(cfg.Server.URLPrefix, "/")
+		cfg.Server.URLPrefix = "/" + cfg.Server.URLPrefix
 	}
 
-	if this.IsSQLite() && this.Metadata.SQLite.DataFile == "" {
+	if cfg.IsSQLite() && cfg.Metadata.SQLite.DataFile == "" {
 		return fmt.Errorf("metadata.sqlite.dataFile must be set when metadata.type is sqlite3")
 	}
-	if this.IsSQLite() {
+	if cfg.IsSQLite() {
 		//		this.Topology.Hostname.ResolveMethod = "none"
 	}
-	if this.Consul.KV.ClusterMasterPrefix != "/" {
+	if cfg.Consul.KV.ClusterMasterPrefix != "/" {
 		// "/" remains "/"
 		// "prefix" turns to "prefix/"
 		// "some/prefix///" turns to "some/prefix/"
-		this.Consul.KV.ClusterMasterPrefix = strings.TrimRight(this.Consul.KV.ClusterMasterPrefix, "/")
-		this.Consul.KV.ClusterMasterPrefix = fmt.Sprintf("%s/", this.Consul.KV.ClusterMasterPrefix)
+		cfg.Consul.KV.ClusterMasterPrefix = strings.TrimRight(cfg.Consul.KV.ClusterMasterPrefix, "/")
+		cfg.Consul.KV.ClusterMasterPrefix = fmt.Sprintf("%s/", cfg.Consul.KV.ClusterMasterPrefix)
 	}
-	if this.PseudoGTID.Auto {
-		this.PseudoGTID.Pattern = "drop view if exists `_pseudo_gtid_`"
-		this.PseudoGTID.PatternIsFixedSubstring = true
-		this.PseudoGTID.MonotonicHint = "asc:"
-		this.PseudoGTID.DetectQuery = SelectTrueQuery
+	if cfg.PseudoGTID.Auto {
+		cfg.PseudoGTID.Pattern = "drop view if exists `_pseudo_gtid_`"
+		cfg.PseudoGTID.PatternIsFixedSubstring = true
+		cfg.PseudoGTID.MonotonicHint = "asc:"
+		cfg.PseudoGTID.DetectQuery = SelectTrueQuery
 	}
-	if this.Server.HTTPAdvertise != "" {
-		u, err := url.Parse(this.Server.HTTPAdvertise)
+	if cfg.Server.HTTPAdvertise != "" {
+		u, err := url.Parse(cfg.Server.HTTPAdvertise)
 		if err != nil {
-			return fmt.Errorf("failed parsing server.httpAdvertise %s: %s", this.Server.HTTPAdvertise, err.Error())
+			return fmt.Errorf("failed parsing server.httpAdvertise %s: %s", cfg.Server.HTTPAdvertise, err.Error())
 		}
 		if u.Scheme == "" {
 			return fmt.Errorf("server.httpAdvertise must include scheme (http:// or https://)")
@@ -271,64 +271,64 @@ func (this *Configuration) postReadAdjustments() error {
 		if u.Path != "" {
 			return fmt.Errorf("server.httpAdvertise must not specify a path")
 		}
-		if this.Topology.WriteBuffer.Size <= 0 {
-			this.Topology.WriteBuffer.Enabled = false
+		if cfg.Topology.WriteBuffer.Size <= 0 {
+			cfg.Topology.WriteBuffer.Enabled = false
 		}
 	}
-	if this.Consul.KV.MaxKVsPerTransaction < ConsulKVsPerCluster {
-		this.Consul.KV.MaxKVsPerTransaction = ConsulKVsPerCluster
-	} else if this.Consul.KV.MaxKVsPerTransaction > ConsulMaxTransactionOps {
-		this.Consul.KV.MaxKVsPerTransaction = ConsulMaxTransactionOps
+	if cfg.Consul.KV.MaxKVsPerTransaction < ConsulKVsPerCluster {
+		cfg.Consul.KV.MaxKVsPerTransaction = ConsulKVsPerCluster
+	} else if cfg.Consul.KV.MaxKVsPerTransaction > ConsulMaxTransactionOps {
+		cfg.Consul.KV.MaxKVsPerTransaction = ConsulMaxTransactionOps
 	}
-	if err := this.normalizeAndValidateConsul(); err != nil {
+	if err := cfg.normalizeAndValidateConsul(); err != nil {
 		return err
 	}
-	if this.Topology.Discovery.DeadPollSecondsFactor < 1 {
+	if cfg.Topology.Discovery.DeadPollSecondsFactor < 1 {
 		return fmt.Errorf("topology.discovery.deadPollSecondsFactor cannot be smaller than 1")
 	}
 
-	if this.Topology.Discovery.DeadPollMaxSeconds < this.Topology.Discovery.PollSeconds {
+	if cfg.Topology.Discovery.DeadPollMaxSeconds < cfg.Topology.Discovery.PollSeconds {
 		return fmt.Errorf("topology.discovery.deadPollMaxSeconds cannot be smaller than topology.discovery.pollSeconds")
 	}
 	return nil
 }
 
-func (this *Configuration) IsSQLite() bool {
-	return strings.Contains(this.Metadata.Type, "sqlite")
+func (cfg *Configuration) IsSQLite() bool {
+	return strings.Contains(cfg.Metadata.Type, "sqlite")
 }
 
-func (this *Configuration) IsMySQL() bool {
-	return this.Metadata.Type == "mysql" || this.Metadata.Type == ""
+func (cfg *Configuration) IsMySQL() bool {
+	return cfg.Metadata.Type == "mysql" || cfg.Metadata.Type == ""
 }
 
 // ValidateRaft validates the mandatory server runtime; offline admin commands do not start Raft.
-func (this *Configuration) ValidateRaft() error {
-	if this.Raft.DataDir == "" {
+func (cfg *Configuration) ValidateRaft() error {
+	if cfg.Raft.DataDir == "" {
 		return fmt.Errorf("raft.dataDir must be defined for server startup")
 	}
-	this.Raft.NodeID = strings.TrimSpace(this.Raft.NodeID)
-	if this.Raft.NodeID == "" {
+	cfg.Raft.NodeID = strings.TrimSpace(cfg.Raft.NodeID)
+	if cfg.Raft.NodeID == "" {
 		return fmt.Errorf("raft.nodeID must be defined for server startup")
 	}
-	if strings.ContainsAny(this.Raft.NodeID, " \t\r\n") {
+	if strings.ContainsAny(cfg.Raft.NodeID, " \t\r\n") {
 		return fmt.Errorf("raft.nodeID must not contain whitespace")
 	}
-	if this.Raft.Bind == "" {
+	if cfg.Raft.Bind == "" {
 		return fmt.Errorf("raft.bind must be defined for server startup")
 	}
-	normalizedBind, err := NormalizeRaftAddress(this.Raft.Bind, this.Raft.DefaultPort)
+	normalizedBind, err := NormalizeRaftAddress(cfg.Raft.Bind, cfg.Raft.DefaultPort)
 	if err != nil {
 		return fmt.Errorf("raft.bind is invalid: %w", err)
 	}
-	this.Raft.Bind = normalizedBind
-	if this.Raft.Advertise == "" {
-		this.Raft.Advertise = this.Raft.Bind
+	cfg.Raft.Bind = normalizedBind
+	if cfg.Raft.Advertise == "" {
+		cfg.Raft.Advertise = cfg.Raft.Bind
 	} else {
-		normalizedAdvertise, err := NormalizeRaftAddress(this.Raft.Advertise, this.Raft.DefaultPort)
+		normalizedAdvertise, err := NormalizeRaftAddress(cfg.Raft.Advertise, cfg.Raft.DefaultPort)
 		if err != nil {
 			return fmt.Errorf("raft.advertise is invalid: %w", err)
 		}
-		this.Raft.Advertise = normalizedAdvertise
+		cfg.Raft.Advertise = normalizedAdvertise
 	}
 	return nil
 }
@@ -382,9 +382,8 @@ func validateConfigurationKeys(document []byte, configurationType reflect.Type) 
 	}
 
 	fields := make(map[string]reflect.StructField, configurationType.NumField())
-	for index := 0; index < configurationType.NumField(); index++ {
-		field := configurationType.Field(index)
-		name := strings.Split(field.Tag.Get("json"), ",")[0]
+	for field := range configurationType.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name == "" {
 			name = field.Name
 		}

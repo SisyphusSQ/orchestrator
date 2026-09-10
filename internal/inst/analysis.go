@@ -27,51 +27,51 @@ import (
 type AnalysisCode string
 
 const (
-	NoProblem                                               AnalysisCode = "NoProblem"
-	DeadMasterWithoutReplicas                                            = "DeadMasterWithoutReplicas"
-	DeadMaster                                                           = "DeadMaster"
-	DeadMasterAndReplicas                                                = "DeadMasterAndReplicas"
-	DeadMasterAndSomeReplicas                                            = "DeadMasterAndSomeReplicas"
-	UnreachableMasterWithLaggingReplicas                                 = "UnreachableMasterWithLaggingReplicas"
-	UnreachableMaster                                                    = "UnreachableMaster"
-	MasterSingleReplicaNotReplicating                                    = "MasterSingleReplicaNotReplicating"
-	MasterSingleReplicaDead                                              = "MasterSingleReplicaDead"
-	AllMasterReplicasNotReplicating                                      = "AllMasterReplicasNotReplicating"
-	AllMasterReplicasNotReplicatingOrDead                                = "AllMasterReplicasNotReplicatingOrDead"
-	LockedSemiSyncMasterHypothesis                                       = "LockedSemiSyncMasterHypothesis"
-	LockedSemiSyncMaster                                                 = "LockedSemiSyncMaster"
-	MasterWithTooManySemiSyncReplicas                                    = "MasterWithTooManySemiSyncReplicas"
-	MasterWithoutReplicas                                                = "MasterWithoutReplicas"
-	DeadCoMaster                                                         = "DeadCoMaster"
-	DeadCoMasterAndSomeReplicas                                          = "DeadCoMasterAndSomeReplicas"
-	UnreachableCoMaster                                                  = "UnreachableCoMaster"
-	AllCoMasterReplicasNotReplicating                                    = "AllCoMasterReplicasNotReplicating"
-	DeadIntermediateMaster                                               = "DeadIntermediateMaster"
-	DeadIntermediateMasterWithSingleReplica                              = "DeadIntermediateMasterWithSingleReplica"
-	DeadIntermediateMasterWithSingleReplicaFailingToConnect              = "DeadIntermediateMasterWithSingleReplicaFailingToConnect"
-	DeadIntermediateMasterAndSomeReplicas                                = "DeadIntermediateMasterAndSomeReplicas"
-	DeadIntermediateMasterAndReplicas                                    = "DeadIntermediateMasterAndReplicas"
-	UnreachableIntermediateMasterWithLaggingReplicas                     = "UnreachableIntermediateMasterWithLaggingReplicas"
-	UnreachableIntermediateMaster                                        = "UnreachableIntermediateMaster"
-	AllIntermediateMasterReplicasFailingToConnectOrDead                  = "AllIntermediateMasterReplicasFailingToConnectOrDead"
-	AllIntermediateMasterReplicasNotReplicating                          = "AllIntermediateMasterReplicasNotReplicating"
-	FirstTierReplicaFailingToConnectToMaster                             = "FirstTierReplicaFailingToConnectToMaster"
-	BinlogServerFailingToConnectToMaster                                 = "BinlogServerFailingToConnectToMaster"
+	NoProblem                                               = "NoProblem"
+	DeadMasterWithoutReplicas                               = "DeadMasterWithoutReplicas"
+	DeadMaster                                              = "DeadMaster"
+	DeadMasterAndReplicas                                   = "DeadMasterAndReplicas"
+	DeadMasterAndSomeReplicas                               = "DeadMasterAndSomeReplicas"
+	UnreachableMasterWithLaggingReplicas                    = "UnreachableMasterWithLaggingReplicas"
+	UnreachableMaster                                       = "UnreachableMaster"
+	MasterSingleReplicaNotReplicating                       = "MasterSingleReplicaNotReplicating"
+	MasterSingleReplicaDead                                 = "MasterSingleReplicaDead"
+	AllMasterReplicasNotReplicating                         = "AllMasterReplicasNotReplicating"
+	AllMasterReplicasNotReplicatingOrDead                   = "AllMasterReplicasNotReplicatingOrDead"
+	LockedSemiSyncMasterHypothesis                          = "LockedSemiSyncMasterHypothesis"
+	LockedSemiSyncMaster                                    = "LockedSemiSyncMaster"
+	MasterWithTooManySemiSyncReplicas                       = "MasterWithTooManySemiSyncReplicas"
+	MasterWithoutReplicas                                   = "MasterWithoutReplicas"
+	DeadCoMaster                                            = "DeadCoMaster"
+	DeadCoMasterAndSomeReplicas                             = "DeadCoMasterAndSomeReplicas"
+	UnreachableCoMaster                                     = "UnreachableCoMaster"
+	AllCoMasterReplicasNotReplicating                       = "AllCoMasterReplicasNotReplicating"
+	DeadIntermediateMaster                                  = "DeadIntermediateMaster"
+	DeadIntermediateMasterWithSingleReplica                 = "DeadIntermediateMasterWithSingleReplica"
+	DeadIntermediateMasterWithSingleReplicaFailingToConnect = "DeadIntermediateMasterWithSingleReplicaFailingToConnect"
+	DeadIntermediateMasterAndSomeReplicas                   = "DeadIntermediateMasterAndSomeReplicas"
+	DeadIntermediateMasterAndReplicas                       = "DeadIntermediateMasterAndReplicas"
+	UnreachableIntermediateMasterWithLaggingReplicas        = "UnreachableIntermediateMasterWithLaggingReplicas"
+	UnreachableIntermediateMaster                           = "UnreachableIntermediateMaster"
+	AllIntermediateMasterReplicasFailingToConnectOrDead     = "AllIntermediateMasterReplicasFailingToConnectOrDead"
+	AllIntermediateMasterReplicasNotReplicating             = "AllIntermediateMasterReplicasNotReplicating"
+	FirstTierReplicaFailingToConnectToMaster                = "FirstTierReplicaFailingToConnectToMaster"
+	BinlogServerFailingToConnectToMaster                    = "BinlogServerFailingToConnectToMaster"
 	// Group replication problems
 	DeadReplicationGroupMemberWithReplicas = "DeadReplicationGroupMemberWithReplicas"
 )
 
 const (
-	StatementAndMixedLoggingReplicasStructureWarning     AnalysisCode = "StatementAndMixedLoggingReplicasStructureWarning"
-	StatementAndRowLoggingReplicasStructureWarning                    = "StatementAndRowLoggingReplicasStructureWarning"
-	MixedAndRowLoggingReplicasStructureWarning                        = "MixedAndRowLoggingReplicasStructureWarning"
-	MultipleMajorVersionsLoggingReplicasStructureWarning              = "MultipleMajorVersionsLoggingReplicasStructureWarning"
-	NoLoggingReplicasStructureWarning                                 = "NoLoggingReplicasStructureWarning"
-	DifferentGTIDModesStructureWarning                                = "DifferentGTIDModesStructureWarning"
-	ErrantGTIDStructureWarning                                        = "ErrantGTIDStructureWarning"
-	NoFailoverSupportStructureWarning                                 = "NoFailoverSupportStructureWarning"
-	NoWriteableMasterStructureWarning                                 = "NoWriteableMasterStructureWarning"
-	NotEnoughValidSemiSyncReplicasStructureWarning                    = "NotEnoughValidSemiSyncReplicasStructureWarning"
+	StatementAndMixedLoggingReplicasStructureWarning     = "StatementAndMixedLoggingReplicasStructureWarning"
+	StatementAndRowLoggingReplicasStructureWarning       = "StatementAndRowLoggingReplicasStructureWarning"
+	MixedAndRowLoggingReplicasStructureWarning           = "MixedAndRowLoggingReplicasStructureWarning"
+	MultipleMajorVersionsLoggingReplicasStructureWarning = "MultipleMajorVersionsLoggingReplicasStructureWarning"
+	NoLoggingReplicasStructureWarning                    = "NoLoggingReplicasStructureWarning"
+	DifferentGTIDModesStructureWarning                   = "DifferentGTIDModesStructureWarning"
+	ErrantGTIDStructureWarning                           = "ErrantGTIDStructureWarning"
+	NoFailoverSupportStructureWarning                    = "NoFailoverSupportStructureWarning"
+	NoWriteableMasterStructureWarning                    = "NoWriteableMasterStructureWarning"
+	NotEnoughValidSemiSyncReplicasStructureWarning       = "NotEnoughValidSemiSyncReplicasStructureWarning"
 )
 
 type InstanceAnalysis struct {
@@ -170,18 +170,19 @@ type ReplicationAnalysis struct {
 	IsReadOnly                                bool
 }
 
-type AnalysisMap map[string](*ReplicationAnalysis)
+type AnalysisMap map[string]*ReplicationAnalysis
 
 type ReplicationAnalysisChangelog struct {
 	AnalyzedInstanceKey InstanceKey
 	Changelog           []string
 }
 
-func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+func (analysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
 		ReplicationAnalysis
-	}{}
-	i.ReplicationAnalysis = *this
+	}{
+		ReplicationAnalysis: *analysis,
+	}
 	// backwards compatibility
 	i.SlaveHosts = i.Replicas
 
@@ -189,32 +190,32 @@ func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 }
 
 // ReadReplicaHostsFromString parses and reads replica keys from comma delimited string
-func (this *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
-	this.Replicas = *NewInstanceKeyMap()
-	return this.Replicas.ReadCommaDelimitedList(replicaHostsString)
+func (analysis *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
+	analysis.Replicas = *NewInstanceKeyMap()
+	return analysis.Replicas.ReadCommaDelimitedList(replicaHostsString)
 }
 
 // AnalysisString returns a human friendly description of all analysis issues
-func (this *ReplicationAnalysis) AnalysisString() string {
+func (analysis *ReplicationAnalysis) AnalysisString() string {
 	result := []string{}
-	if this.Analysis != NoProblem {
-		result = append(result, string(this.Analysis))
+	if analysis.Analysis != NoProblem {
+		result = append(result, string(analysis.Analysis))
 	}
-	for _, structureAnalysis := range this.StructureAnalysis {
+	for _, structureAnalysis := range analysis.StructureAnalysis {
 		result = append(result, string(structureAnalysis))
 	}
 	return strings.Join(result, ", ")
 }
 
 // Get a string description of the analyzed instance type (master? co-master? intermediate-master?)
-func (this *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
-	if this.IsCoMaster {
+func (analysis *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
+	if analysis.IsCoMaster {
 		return AnalysisInstanceTypeCoMaster
 	}
-	if this.IsReplicationGroupMember {
+	if analysis.IsReplicationGroupMember {
 		return AnalysisInstanceTypeGroupMember
 	}
-	if this.IsMaster {
+	if analysis.IsMaster {
 		return AnalysisInstanceTypeMaster
 	}
 	return AnalysisInstanceTypeIntermediateMaster

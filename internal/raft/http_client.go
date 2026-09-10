@@ -19,7 +19,7 @@ package orcraft
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -42,9 +42,7 @@ func GetRaftHttpTransport() (*http.Transport, error) {
 		return httpTransport, nil
 	}
 	httpTimeout := 5 * time.Second
-	dialTimeout := func(network, addr string) (net.Conn, error) {
-		return net.DialTimeout(network, addr, httpTimeout)
-	}
+	dialer := &net.Dialer{Timeout: httpTimeout}
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: config.Config.Server.TLS.SkipVerify,
@@ -71,7 +69,7 @@ func GetRaftHttpTransport() (*http.Transport, error) {
 		// API GET requests can mutate topology; never replay on a stale pooled connection.
 		DisableKeepAlives:     true,
 		TLSClientConfig:       tlsConfig,
-		Dial:                  dialTimeout,
+		DialContext:           dialer.DialContext,
 		ResponseHeaderTimeout: httpTimeout,
 	}
 	return transport, nil
@@ -91,7 +89,7 @@ func setupHttpClient() error {
 func HttpGetLeader(path string) (response []byte, err error) {
 	leaderURI := LeaderURI.Get()
 	if leaderURI == "" {
-		return nil, fmt.Errorf("Raft leader URI unknown")
+		return nil, fmt.Errorf("raft leader URI unknown")
 	}
 	leaderAPI := leaderURI
 	if config.Config.Server.URLPrefix != "" {
@@ -114,7 +112,7 @@ func HttpGetLeader(path string) (response []byte, err error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}

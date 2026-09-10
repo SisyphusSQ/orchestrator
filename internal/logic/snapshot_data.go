@@ -165,7 +165,7 @@ func NewSnapshotDataCreatorApplier() *SnapshotDataCreatorApplier {
 	return generator
 }
 
-func (this *SnapshotDataCreatorApplier) GetData() (data []byte, err error) {
+func (snapshot *SnapshotDataCreatorApplier) GetData() (data []byte, err error) {
 	snapshotData, err := CreateSnapshotData()
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func (this *SnapshotDataCreatorApplier) GetData() (data []byte, err error) {
 	return buf.Bytes(), nil
 }
 
-func (this *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
+func (snapshot *SnapshotDataCreatorApplier) Restore(rc io.ReadCloser) error {
 	snapshotData := NewSnapshotData()
 	zr, err := gzip.NewReader(rc)
 	if err != nil {

@@ -88,10 +88,10 @@ func (web *HttpWeb) Page(resp http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (this *HttpWeb) registerWebRequest(m *Router, path string, handler Handler) {
-	fullPath := fmt.Sprintf("%s/web/%s", this.URLPrefix, path)
+func (web *HttpWeb) registerWebRequest(m *Router, path string, handler Handler) {
+	fullPath := fmt.Sprintf("%s/web/%s", web.URLPrefix, path)
 	if path == "/" {
-		fullPath = fmt.Sprintf("%s/", this.URLPrefix)
+		fullPath = fmt.Sprintf("%s/", web.URLPrefix)
 	}
 
 	m.Get(fullPath, raftReverseProxy, handler)
@@ -99,60 +99,56 @@ func (this *HttpWeb) registerWebRequest(m *Router, path string, handler Handler)
 }
 
 // RegisterRequests makes for the de-facto list of known Web calls
-func (this *HttpWeb) RegisterRequests(m *Router) {
-	this.registerWebRequest(m, "access-token", this.AccessToken)
-	this.registerWebRequest(m, "", this.Index)
-	this.registerWebRequest(m, "/", this.Index)
-	this.registerWebRequest(m, "home", this.Page)
-	this.registerWebRequest(m, "about", this.Page)
-	this.registerWebRequest(m, "keep-calm", this.Page)
-	this.registerWebRequest(m, "faq", this.Page)
-	this.registerWebRequest(m, "status", this.Page)
-	this.registerWebRequest(m, "recovery-settings", this.Page)
-	this.registerWebRequest(m, "clusters", this.Page)
-	this.registerWebRequest(m, "clusters-analysis", this.Page)
-	this.registerWebRequest(m, "cluster/:clusterName", this.Page)
-	this.registerWebRequest(m, "cluster/alias/:clusterAlias", this.Page)
-	this.registerWebRequest(m, "cluster/instance/:host/:port", this.Page)
-	this.registerWebRequest(m, "cluster-pools/:clusterName", this.Page)
-	this.registerWebRequest(m, "search/:searchString", this.Page)
-	this.registerWebRequest(m, "search", this.Page)
-	this.registerWebRequest(m, "discover", this.Page)
-	this.registerWebRequest(m, "audit", this.Page)
-	this.registerWebRequest(m, "audit/:page", this.Page)
-	this.registerWebRequest(m, "audit/instance/:host/:port", this.Page)
-	this.registerWebRequest(m, "audit/instance/:host/:port/:page", this.Page)
-	this.registerWebRequest(m, "audit-recovery", this.Page)
-	this.registerWebRequest(m, "audit-recovery/:page", this.Page)
-	this.registerWebRequest(m, "audit-recovery/id/:id", this.Page)
-	this.registerWebRequest(m, "audit-recovery/uid/:uid", this.Page)
-	this.registerWebRequest(m, "audit-recovery/cluster/:clusterName", this.Page)
-	this.registerWebRequest(m, "audit-recovery/cluster/:clusterName/:page", this.Page)
-	this.registerWebRequest(m, "audit-recovery/alias/:clusterAlias", this.Page)
-	this.registerWebRequest(m, "audit-recovery/alias/:clusterAlias/:page", this.Page)
-	this.registerWebRequest(m, "audit-failure-detection", this.Page)
-	this.registerWebRequest(m, "audit-failure-detection/:page", this.Page)
-	this.registerWebRequest(m, "audit-failure-detection/id/:id", this.Page)
-	this.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias", this.Page)
-	this.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias/:page", this.Page)
-	this.registerWebRequest(m, "audit-recovery-steps/:uid", this.Page)
-	this.registerWebRequest(m, "agents", this.Page)
-	this.registerWebRequest(m, "agent/:host", this.Page)
-	this.registerWebRequest(m, "seed-details/:seedId", this.Page)
-	this.registerWebRequest(m, "seeds", this.Page)
+func (web *HttpWeb) RegisterRequests(m *Router) {
+	web.registerWebRequest(m, "access-token", web.AccessToken)
+	web.registerWebRequest(m, "", web.Index)
+	web.registerWebRequest(m, "/", web.Index)
+	web.registerWebRequest(m, "home", web.Page)
+	web.registerWebRequest(m, "about", web.Page)
+	web.registerWebRequest(m, "keep-calm", web.Page)
+	web.registerWebRequest(m, "faq", web.Page)
+	web.registerWebRequest(m, "status", web.Page)
+	web.registerWebRequest(m, "recovery-settings", web.Page)
+	web.registerWebRequest(m, "clusters", web.Page)
+	web.registerWebRequest(m, "clusters-analysis", web.Page)
+	web.registerWebRequest(m, "cluster/:clusterName", web.Page)
+	web.registerWebRequest(m, "cluster/alias/:clusterAlias", web.Page)
+	web.registerWebRequest(m, "cluster/instance/:host/:port", web.Page)
+	web.registerWebRequest(m, "cluster-pools/:clusterName", web.Page)
+	web.registerWebRequest(m, "search/:searchString", web.Page)
+	web.registerWebRequest(m, "search", web.Page)
+	web.registerWebRequest(m, "discover", web.Page)
+	web.registerWebRequest(m, "audit", web.Page)
+	web.registerWebRequest(m, "audit/:page", web.Page)
+	web.registerWebRequest(m, "audit/instance/:host/:port", web.Page)
+	web.registerWebRequest(m, "audit/instance/:host/:port/:page", web.Page)
+	web.registerWebRequest(m, "audit-recovery", web.Page)
+	web.registerWebRequest(m, "audit-recovery/:page", web.Page)
+	web.registerWebRequest(m, "audit-recovery/id/:id", web.Page)
+	web.registerWebRequest(m, "audit-recovery/uid/:uid", web.Page)
+	web.registerWebRequest(m, "audit-recovery/cluster/:clusterName", web.Page)
+	web.registerWebRequest(m, "audit-recovery/cluster/:clusterName/:page", web.Page)
+	web.registerWebRequest(m, "audit-recovery/alias/:clusterAlias", web.Page)
+	web.registerWebRequest(m, "audit-recovery/alias/:clusterAlias/:page", web.Page)
+	web.registerWebRequest(m, "audit-failure-detection", web.Page)
+	web.registerWebRequest(m, "audit-failure-detection/:page", web.Page)
+	web.registerWebRequest(m, "audit-failure-detection/id/:id", web.Page)
+	web.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias", web.Page)
+	web.registerWebRequest(m, "audit-failure-detection/alias/:clusterAlias/:page", web.Page)
+	web.registerWebRequest(m, "audit-recovery-steps/:uid", web.Page)
+	web.registerWebRequest(m, "agents", web.Page)
+	web.registerWebRequest(m, "agent/:host", web.Page)
+	web.registerWebRequest(m, "seed-details/:seedId", web.Page)
+	web.registerWebRequest(m, "seeds", web.Page)
 
-	handlers := []Handler{this.Bootstrap}
+	m.Get(web.URLPrefix+"/api/web-config", raftReverseProxy, web.Bootstrap)
 
-	handlers = []Handler{raftReverseProxy, this.Bootstrap}
-
-	m.Get(this.URLPrefix+"/api/web-config", handlers...)
-
-	this.RegisterDebug(m)
+	web.RegisterDebug(m)
 }
 
 // RegisterDebug adds handlers for /debug/vars (expvar) and /debug/pprof (net/http/pprof) support
-func (this *HttpWeb) RegisterDebug(m *Router) {
-	m.Get(this.URLPrefix+"/debug/vars", func(w http.ResponseWriter, r *http.Request) {
+func (web *HttpWeb) RegisterDebug(m *Router) {
+	m.Get(web.URLPrefix+"/debug/vars", func(w http.ResponseWriter, r *http.Request) {
 		// from expvar.go, since the expvarHandler isn't exported :(
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprintf(w, "{\n")
@@ -168,14 +164,14 @@ func (this *HttpWeb) RegisterDebug(m *Router) {
 	})
 
 	// list all the /debug/ endpoints we want
-	m.Get(this.URLPrefix+"/debug/pprof", pprof.Index)
-	m.Get(this.URLPrefix+"/debug/pprof/cmdline", pprof.Cmdline)
-	m.Get(this.URLPrefix+"/debug/pprof/profile", pprof.Profile)
-	m.Get(this.URLPrefix+"/debug/pprof/symbol", pprof.Symbol)
-	m.Post(this.URLPrefix+"/debug/pprof/symbol", pprof.Symbol)
-	m.Get(this.URLPrefix+"/debug/pprof/block", pprof.Handler("block").ServeHTTP)
-	m.Get(this.URLPrefix+"/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
-	m.Get(this.URLPrefix+"/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
-	m.Get(this.URLPrefix+"/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
+	m.Get(web.URLPrefix+"/debug/pprof", pprof.Index)
+	m.Get(web.URLPrefix+"/debug/pprof/cmdline", pprof.Cmdline)
+	m.Get(web.URLPrefix+"/debug/pprof/profile", pprof.Profile)
+	m.Get(web.URLPrefix+"/debug/pprof/symbol", pprof.Symbol)
+	m.Post(web.URLPrefix+"/debug/pprof/symbol", pprof.Symbol)
+	m.Get(web.URLPrefix+"/debug/pprof/block", pprof.Handler("block").ServeHTTP)
+	m.Get(web.URLPrefix+"/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
+	m.Get(web.URLPrefix+"/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+	m.Get(web.URLPrefix+"/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
 
 }

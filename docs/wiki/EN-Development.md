@@ -2,7 +2,7 @@
 
 **English** · [中文](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Development) · [Wiki home](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-The repository uses one root Go module for the server and a nested module under `tools/orch-cli` for the client. The current baseline is Go 1.26.8, Node.js 22.22.2 or newer, and pnpm 10.33.2; always re-read `go.mod` and `web/package.json` when preparing a build.
+The repository uses one root Go module for the server and a nested module under `tools/orch-cli` for the client. The current baseline is Go 1.27.0, Node.js 22.22.2 or newer, and pnpm 10.33.2; always re-read `go.mod` and `web/package.json` when preparing a build.
 
 ## Source layout
 

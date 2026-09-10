@@ -314,10 +314,7 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 				config.Config.Metadata.MySQL.Host,
 				config.Config.Metadata.MySQL.Port,
 				config.Config.Metadata.MySQL.Database)
-			maxIdleConns := config.Config.Metadata.MySQL.MaxPoolConnections * 25 / 100
-			if maxIdleConns < 10 {
-				maxIdleConns = 10
-			}
+			maxIdleConns := max(config.Config.Metadata.MySQL.MaxPoolConnections*25/100, 10)
 			log.Infof("Connecting to backend %s:%d: maxConnections: %d, maxIdleConns: %d",
 				config.Config.Metadata.MySQL.Host,
 				config.Config.Metadata.MySQL.Port,
@@ -389,10 +386,7 @@ func configureBackendPool(database *sql.DB) {
 	if config.Config.MySQL.ConnectionLifetimeSeconds > 0 {
 		database.SetConnMaxLifetime(time.Duration(config.Config.MySQL.ConnectionLifetimeSeconds) * time.Second)
 	}
-	maxIdleConns := config.Config.Metadata.MySQL.MaxPoolConnections * 25 / 100
-	if maxIdleConns < 10 {
-		maxIdleConns = 10
-	}
+	maxIdleConns := max(config.Config.Metadata.MySQL.MaxPoolConnections*25/100, 10)
 	database.SetMaxIdleConns(maxIdleConns)
 }
 

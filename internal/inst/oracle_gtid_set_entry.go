@@ -63,15 +63,15 @@ func ParseOracleGtidSetEntry(gtidRangeString string) (*OracleGtidSetEntry, error
 
 	// Sanity check
 	if len(gtid_str) != 2 {
-		return nil, fmt.Errorf("Cannot parse OracleGtidSetEntry from %s", gtidRangeString)
+		return nil, fmt.Errorf("cannot parse OracleGtidSetEntry from %s", gtidRangeString)
 	}
 
 	if gtid_str[0] == "" {
-		return nil, fmt.Errorf("Unexpected UUID: %s", gtid_str[0])
+		return nil, fmt.Errorf("unexpected UUID: %s", gtid_str[0])
 	}
 
 	if gtid_str[1] == "" {
-		return nil, fmt.Errorf("Unexpected GTID range: %s", gtid_str[1])
+		return nil, fmt.Errorf("unexpected GTID range: %s", gtid_str[1])
 	}
 
 	// UUID is the first part
@@ -91,10 +91,10 @@ func ParseOracleGtidSetEntry(gtidRangeString string) (*OracleGtidSetEntry, error
 		if tagRegex.MatchString(s[i]) {
 			if tip != nil && (tip.Tag != "") && (len(tip.Interval) == 0) {
 				// If the tag is already set and we got another tag
-				return nil, fmt.Errorf("Invalid format: Found a tag without any intervals")
+				return nil, fmt.Errorf("invalid format: Found a tag without any intervals")
 			} else if tip != nil && (tip.Tag == "") && (len(tip.Interval) != 0) {
 				// Should never happen - just in case
-				return nil, fmt.Errorf("Invalid format")
+				return nil, fmt.Errorf("invalid format")
 			} else {
 				// Now process the new tag
 				ti := tagInterval{
@@ -116,14 +116,14 @@ func ParseOracleGtidSetEntry(gtidRangeString string) (*OracleGtidSetEntry, error
 				}
 			} else {
 				// Regex failed, invalid format
-				return nil, fmt.Errorf("Invalid format")
+				return nil, fmt.Errorf("invalid format")
 			}
 		}
 	}
 	// If the interval of the last tag is empty, then it is an invalid format
 	// eg: "UUID:1-5139::tag1:"
 	if tip != nil && (tip.Tag != "") && (len(tip.Interval) == 0) {
-		return nil, fmt.Errorf("Invalid format: Found a tag without any intervals")
+		return nil, fmt.Errorf("invalid format: Found a tag without any intervals")
 	}
 	// Don't append ':' for the first interval in the default set
 	default_iv, _ = strings.CutPrefix(default_iv, ":")
@@ -144,26 +144,26 @@ func NewOracleGtidSetEntry(gtidRangeString string) (*OracleGtidSetEntry, error) 
 }
 
 // String() returns a user-friendly string representation of this entry
-func (this *OracleGtidSetEntry) String() string {
+func (setEntry *OracleGtidSetEntry) String() string {
 
-	var res string
+	var res strings.Builder
 
 	// UUID is always added in the beginning of the Gtid_set
-	res += this.UUID
+	res.WriteString(setEntry.UUID)
 
 	// Default ranges are always added immediately after the UUID
-	if len(this.DefaultIv) != 0 {
-		res += ":" + this.DefaultIv
+	if len(setEntry.DefaultIv) != 0 {
+		res.WriteString(":" + setEntry.DefaultIv)
 	}
 
 	// Tagged ranges are added in the end
-	for _, v := range this.TaggedIv {
-		res += ":" + v.Tag
+	for _, v := range setEntry.TaggedIv {
+		res.WriteString(":" + v.Tag)
 		if len(v.Interval) != 0 {
-			res += ":" + strings.Join(v.Interval, ":")
+			res.WriteString(":" + strings.Join(v.Interval, ":"))
 		}
 	}
-	return res
+	return res.String()
 }
 
 /*
@@ -187,30 +187,30 @@ shall return the following
 48ebed33-0d12-11ef-a3ec-ac198e4551c8:tag2:78
 48ebed33-0d12-11ef-a3ec-ac198e4551c8:tag2:81
 */
-func (this *OracleGtidSetEntry) Explode() (result [](*OracleGtidSetEntry)) {
+func (setEntry *OracleGtidSetEntry) Explode() (result []*OracleGtidSetEntry) {
 
 	// Appends the default interval to the result
-	var AppendDefaultInterval = func(this *OracleGtidSetEntry) {
-		intervals := strings.Split(this.DefaultIv, ":")
-		for _, interval := range intervals {
+	var AppendDefaultInterval = func(setEntry *OracleGtidSetEntry) {
+		intervals := strings.SplitSeq(setEntry.DefaultIv, ":")
+		for interval := range intervals {
 			// Multi-value interval
 			if submatch := multiValueInterval.FindStringSubmatch(interval); submatch != nil {
 				intervalStart, _ := strconv.Atoi(submatch[1])
 				intervalEnd, _ := strconv.Atoi(submatch[2])
 				for i := intervalStart; i <= intervalEnd; i++ {
-					result = append(result, &OracleGtidSetEntry{UUID: this.UUID, DefaultIv: fmt.Sprintf("%d", i)})
+					result = append(result, &OracleGtidSetEntry{UUID: setEntry.UUID, DefaultIv: fmt.Sprintf("%d", i)})
 				}
 			} else if submatch := singleValueInterval.FindStringSubmatch(interval); submatch != nil {
 				// Single-value interval
-				result = append(result, &OracleGtidSetEntry{UUID: this.UUID, DefaultIv: interval})
+				result = append(result, &OracleGtidSetEntry{UUID: setEntry.UUID, DefaultIv: interval})
 			}
 		}
 	}
 
 	// Appends tagged intervals to the result
 	var AppendTaggedInterval = func(tag string, interval string) {
-		intervals := strings.Split(interval, ":")
-		for _, interval := range intervals {
+		intervals := strings.SplitSeq(interval, ":")
+		for interval := range intervals {
 			// Multi-value interval
 			if submatch := multiValueInterval.FindStringSubmatch(interval); submatch != nil {
 				intervalStart, _ := strconv.Atoi(submatch[1])
@@ -222,7 +222,7 @@ func (this *OracleGtidSetEntry) Explode() (result [](*OracleGtidSetEntry)) {
 						Interval: []string{fmt.Sprintf("%d", i)}}
 					taggedIv := []tagInterval{ti}
 
-					entry := OracleGtidSetEntry{UUID: this.UUID, TaggedIv: taggedIv}
+					entry := OracleGtidSetEntry{UUID: setEntry.UUID, TaggedIv: taggedIv}
 					result = append(result, &entry)
 				}
 			} else if submatch := singleValueInterval.FindStringSubmatch(interval); submatch != nil {
@@ -233,17 +233,17 @@ func (this *OracleGtidSetEntry) Explode() (result [](*OracleGtidSetEntry)) {
 					Interval: []string{interval}}
 				taggedIv := []tagInterval{ti}
 
-				entry := OracleGtidSetEntry{UUID: this.UUID, TaggedIv: taggedIv}
+				entry := OracleGtidSetEntry{UUID: setEntry.UUID, TaggedIv: taggedIv}
 				result = append(result, &entry)
 			}
 		}
 	}
 
 	// Process default interval first
-	AppendDefaultInterval(this)
+	AppendDefaultInterval(setEntry)
 
 	// Process tagged intervals next
-	for _, v := range this.TaggedIv {
+	for _, v := range setEntry.TaggedIv {
 		for _, iv := range v.Interval {
 			AppendTaggedInterval(v.Tag, iv)
 		}

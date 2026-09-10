@@ -220,6 +220,9 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	latency.Start("backend")
 	instance, found, err := inst.ReadInstanceContext(ctx, &instanceKey)
 	latency.Stop("backend")
+	if err != nil {
+		log.Errorf("discoverInstance: cannot read cached state for %+v; continuing topology discovery: %v", instanceKey, err)
+	}
 	if found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
 		return
@@ -269,7 +272,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 
 	// Investigate replicas and members of the same replication group:
 	for _, replicaKey := range append(instance.ReplicationGroupMembers.GetInstanceKeys(), instance.Replicas.GetInstanceKeys()...) {
-		replicaKey := replicaKey // not needed? no concurrency here?
 
 		// Avoid noticing some hosts we would otherwise discover
 		if inst.FiltersMatchInstanceKey(&replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
@@ -332,7 +334,7 @@ func onHealthTick() {
 		defer snapshotDiscoveryKeysMutex.Unlock()
 
 		countSnapshotKeys := len(snapshotDiscoveryKeys)
-		for i := 0; i < countSnapshotKeys; i++ {
+		for range countSnapshotKeys {
 			instanceKeys = append(instanceKeys, <-snapshotDiscoveryKeys)
 		}
 	}()
@@ -401,14 +403,14 @@ func InjectPseudoGTIDOnWriters() error {
 // Write a cluster's master (or all clusters masters) to kv stores.
 // This should generally only happen once in a lifetime of a cluster. Otherwise KV
 // stores are updated via failovers.
-func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {
+func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs []*kv.KVPair, submittedCount int, err error) {
 	kvPairs, err = inst.GetMastersKVPairs(clusterName)
 	log.Debugf("kv.SubmitMastersToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
 	if err != nil {
 		return kvPairs, submittedCount, log.Errore(err)
 	}
 	var selectedError error
-	var submitKvPairs [](*kv.KVPair)
+	var submitKvPairs []*kv.KVPair
 	for _, kvPair := range kvPairs {
 		if !force {
 			// !force: Called periodically to auto-populate KV
@@ -486,7 +488,7 @@ func ContinuousDiscovery(ctx context.Context) error {
 	defer raftCaretakingTicker.Stop()
 	defer recoveryTicker.Stop()
 	defer autoPseudoGTIDTicker.Stop()
-	var recoveryEntrance int64
+	var recoveryEntrance atomic.Int64
 	var snapshotTopologiesTick <-chan time.Time
 	var snapshotTopologiesTicker *time.Ticker
 	if config.Config.Topology.Snapshot.IntervalHours > 0 {
@@ -583,8 +585,8 @@ func ContinuousDiscovery(ctx context.Context) error {
 
 					go func() {
 						// This function is non re-entrant (it can only be running once at any point in time)
-						if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
-							defer atomic.StoreInt64(&recoveryEntrance, 0)
+						if recoveryEntrance.CompareAndSwap(0, 1) {
+							defer recoveryEntrance.Store(0)
 						} else {
 							return
 						}

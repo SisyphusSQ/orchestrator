@@ -24,8 +24,8 @@ const consulTestDefaultDatacenter = "dc1"
 type consulTestServerOp struct {
 	Method       string
 	URL          string
-	Request      interface{}
-	Response     interface{}
+	Request      any
+	Response     any
 	ResponseCode int
 	Matches      *atomic.Int64
 }
@@ -448,15 +448,13 @@ func TestConsulStoreDistributePairsRace(t *testing.T) {
 
 	store := newTestConsulStore(t)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			_ = store.DistributePairs([]*KVPair{
 				{Key: "mysql/master/cluster", Value: "mysql.example.com:3306"},
 				{Key: "mysql/master/cluster/hostname", Value: "mysql.example.com"},
 			})
-		}()
+		})
 	}
 	wg.Wait()
 	mu.Lock()

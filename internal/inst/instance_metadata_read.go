@@ -126,18 +126,18 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	return nil
 }
 
-type byNamePort [](*InstanceKey)
+type byNamePort []*InstanceKey
 
-func (this byNamePort) Len() int      { return len(this) }
-func (this byNamePort) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this byNamePort) Less(i, j int) bool {
-	return (this[i].Hostname < this[j].Hostname) ||
-		(this[i].Hostname == this[j].Hostname && this[i].Port < this[j].Port)
+func (entries byNamePort) Len() int      { return len(entries) }
+func (entries byNamePort) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
+func (entries byNamePort) Less(i, j int) bool {
+	return (entries[i].Hostname < entries[j].Hostname) ||
+		(entries[i].Hostname == entries[j].Hostname && entries[i].Port < entries[j].Port)
 }
 
 // BulkReadInstance returns a list of all instances from the database.
-func BulkReadInstance() ([](*InstanceKey), error) {
-	var instanceKeys [](*InstanceKey)
+func BulkReadInstance() ([]*InstanceKey, error) {
+	var instanceKeys []*InstanceKey
 
 	instances, err := readInstances(metadata.ReadAllInstanceRows)
 	if err != nil {
@@ -297,8 +297,8 @@ func readInstances(readRows instanceRowsReader) ([]*Instance, error) {
 }
 
 func readInstancesContext(ctx context.Context, readRows instanceRowsReader) ([]*Instance, error) {
-	readFunc := func() ([](*Instance), error) {
-		instances := [](*Instance){}
+	readFunc := func() ([]*Instance, error) {
+		instances := []*Instance{}
 
 		rows, err := readRows(ctx)
 		for _, row := range rows {
@@ -324,9 +324,6 @@ func readInstancesContext(ctx context.Context, readRows instanceRowsReader) ([]*
 	return instances, err
 }
 
-func readInstancesByExactKey(instanceKey *InstanceKey) ([]*Instance, error) {
-	return readInstancesByExactKeyContext(context.Background(), instanceKey)
-}
 func readInstancesByExactKeyContext(ctx context.Context, instanceKey *InstanceKey) ([]*Instance, error) {
 	return readInstancesContext(ctx, func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadInstanceRowsByKey(ctx, instanceKey.Hostname, instanceKey.Port)
@@ -352,9 +349,9 @@ func ReadInstanceContext(ctx context.Context, instanceKey *InstanceKey) (*Instan
 }
 
 // ReadClusterInstances reads all instances of a given cluster
-func ReadClusterInstances(clusterName string) ([](*Instance), error) {
-	if strings.Index(clusterName, "'") >= 0 {
-		return [](*Instance){}, log.Errorf("Invalid cluster name: %s", clusterName)
+func ReadClusterInstances(clusterName string) ([]*Instance, error) {
+	if strings.Contains(clusterName, "'") {
+		return []*Instance{}, log.Errorf("Invalid cluster name: %s", clusterName)
 	}
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadClusterInstanceRows(ctx, clusterName)
@@ -365,7 +362,7 @@ func ReadClusterInstances(clusterName string) ([](*Instance), error) {
 // Typically, the cluster name indicates the master of the cluster. However, in circular
 // master-master replication one master can assume the name of the cluster, and it is
 // not guaranteed that it is the writeable one.
-func ReadClusterWriteableMaster(clusterName string) ([](*Instance), error) {
+func ReadClusterWriteableMaster(clusterName string) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadWritableClusterMasterRows(ctx, clusterName)
 	})
@@ -374,7 +371,7 @@ func ReadClusterWriteableMaster(clusterName string) ([](*Instance), error) {
 // ReadClusterMaster returns the master of this cluster.
 // - if the cluster has co-masters, the/a writable one is returned
 // - if the cluster has a single master, that master is retuened whether it is read-only or writable.
-func ReadClusterMaster(clusterName string) ([](*Instance), error) {
+func ReadClusterMaster(clusterName string) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadClusterMasterRows(ctx, clusterName)
 	})
@@ -382,7 +379,7 @@ func ReadClusterMaster(clusterName string) ([](*Instance), error) {
 
 // ReadWriteableClustersMasters returns writeable masters of all clusters, but only one
 // per cluster, in similar logic to ReadClusterWriteableMaster
-func ReadWriteableClustersMasters() (instances [](*Instance), err error) {
+func ReadWriteableClustersMasters() (instances []*Instance, err error) {
 	allMasters, err := readInstances(metadata.ReadWritableClusterMastersRows)
 	if err != nil {
 		return instances, err
@@ -398,7 +395,7 @@ func ReadWriteableClustersMasters() (instances [](*Instance), err error) {
 }
 
 // ReadReplicaInstances reads replicas of a given master
-func ReadReplicaInstances(masterKey *InstanceKey) ([](*Instance), error) {
+func ReadReplicaInstances(masterKey *InstanceKey) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadReplicaInstanceRows(ctx, masterKey.Hostname, masterKey.Port)
 	})
@@ -406,13 +403,12 @@ func ReadReplicaInstances(masterKey *InstanceKey) ([](*Instance), error) {
 
 // ReadReplicaInstancesIncludingBinlogServerSubReplicas returns a list of direct slves including any replicas
 // of a binlog server replica
-func ReadReplicaInstancesIncludingBinlogServerSubReplicas(masterKey *InstanceKey) ([](*Instance), error) {
+func ReadReplicaInstancesIncludingBinlogServerSubReplicas(masterKey *InstanceKey) ([]*Instance, error) {
 	replicas, err := ReadReplicaInstances(masterKey)
 	if err != nil {
 		return replicas, err
 	}
 	for _, replica := range replicas {
-		replica := replica
 		if replica.IsBinlogServer() {
 			binlogServerReplicas, err := ReadReplicaInstancesIncludingBinlogServerSubReplicas(&replica.Key)
 			if err != nil {
@@ -425,19 +421,19 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(masterKey *InstanceKey
 }
 
 // ReadBinlogServerReplicaInstances reads direct replicas of a given master that are binlog servers
-func ReadBinlogServerReplicaInstances(masterKey *InstanceKey) ([](*Instance), error) {
+func ReadBinlogServerReplicaInstances(masterKey *InstanceKey) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadBinlogServerReplicaRows(ctx, masterKey.Hostname, masterKey.Port)
 	})
 }
 
 // ReadUnseenInstances reads all instances which were not recently seen
-func ReadUnseenInstances() ([](*Instance), error) {
+func ReadUnseenInstances() ([]*Instance, error) {
 	return readInstances(metadata.ReadUnseenInstanceRows)
 }
 
 // ReadProblemInstances reads all instances with problems
-func ReadProblemInstances(clusterName string) ([](*Instance), error) {
+func ReadProblemInstances(clusterName string) ([]*Instance, error) {
 	policy := recoverypolicy.Current(clusterName)
 	instances, err := readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadProblemInstanceRows(
@@ -450,7 +446,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 	if err != nil {
 		return instances, err
 	}
-	var reportedInstances [](*Instance)
+	var reportedInstances []*Instance
 	for _, instance := range instances {
 		skip := false
 		if instance.IsDowntimed {
@@ -467,7 +463,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 }
 
 // SearchInstances reads all instances qualifying for some searchString
-func SearchInstances(searchString string) ([](*Instance), error) {
+func SearchInstances(searchString string) ([]*Instance, error) {
 	searchString = strings.TrimSpace(searchString)
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.SearchInstanceRows(ctx, searchString)
@@ -475,8 +471,8 @@ func SearchInstances(searchString string) ([](*Instance), error) {
 }
 
 // FindInstances reads all instances whose name matches given pattern
-func FindInstances(regexpPattern string) (result [](*Instance), err error) {
-	result = [](*Instance){}
+func FindInstances(regexpPattern string) (result []*Instance, err error) {
+	result = []*Instance{}
 	r, err := regexp.Compile(regexpPattern)
 	if err != nil {
 		return result, err
@@ -495,7 +491,7 @@ func FindInstances(regexpPattern string) (result [](*Instance), err error) {
 
 // findFuzzyInstances return instances whose names are like the one given (host & port substrings)
 // For example, the given `mydb-3:3306` might find `myhosts-mydb301-production.mycompany.com:3306`
-func findFuzzyInstances(fuzzyInstanceKey *InstanceKey) ([](*Instance), error) {
+func findFuzzyInstances(fuzzyInstanceKey *InstanceKey) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadFuzzyInstanceRows(ctx, fuzzyInstanceKey.Hostname, fuzzyInstanceKey.Port)
 	})
@@ -551,28 +547,28 @@ func ReadFuzzyInstance(fuzzyInstanceKey *InstanceKey) (*Instance, error) {
 
 // ReadLostInRecoveryInstances returns all instances (potentially filtered by cluster)
 // which are currently indicated as downtimed due to being lost during a topology recovery.
-func ReadLostInRecoveryInstances(clusterName string) ([](*Instance), error) {
+func ReadLostInRecoveryInstances(clusterName string) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadLostInRecoveryInstanceRows(ctx, DowntimeLostInRecoveryMessage, clusterName)
 	})
 }
 
 // ReadDowntimedInstances returns all instances currently downtimed, potentially filtered by cluster
-func ReadDowntimedInstances(clusterName string) ([](*Instance), error) {
+func ReadDowntimedInstances(clusterName string) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadDowntimedInstanceRows(ctx, clusterName)
 	})
 }
 
 // ReadClusterCandidateInstances reads cluster instances which are also marked as candidates
-func ReadClusterCandidateInstances(clusterName string) ([](*Instance), error) {
+func ReadClusterCandidateInstances(clusterName string) ([]*Instance, error) {
 	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadClusterCandidateInstanceRows(ctx, clusterName)
 	})
 }
 
 // ReadClusterNeutralPromotionRuleInstances reads cluster instances whose promotion-rule is marked as 'neutral'
-func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstances [](*Instance), err error) {
+func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstances []*Instance, err error) {
 	instances, err := ReadClusterInstances(clusterName)
 	if err != nil {
 		return neutralInstances, err
@@ -586,8 +582,8 @@ func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstan
 }
 
 // filterOSCInstances will filter the given list such that only replicas fit for OSC control remain.
-func filterOSCInstances(instances [](*Instance)) [](*Instance) {
-	result := [](*Instance){}
+func filterOSCInstances(instances []*Instance) []*Instance {
+	result := []*Instance{}
 	for _, instance := range instances {
 		if FiltersMatchInstanceKey(&instance.Key, config.Config.OSC.IgnoreHostnames) {
 			continue
@@ -604,8 +600,8 @@ func filterOSCInstances(instances [](*Instance)) [](*Instance) {
 }
 
 // Get two busiest instances per DC
-func getTwoBusiestPerDC(all [](*Instance)) [](*Instance) {
-	result := [](*Instance){}
+func getTwoBusiestPerDC(all []*Instance) []*Instance {
+	result := []*Instance{}
 
 	// sort by DC and replicas count
 	sort.Sort(sort.Reverse(InstancesByDc(all)))
@@ -629,12 +625,12 @@ func getTwoBusiestPerDC(all [](*Instance)) [](*Instance) {
 
 // GetClusterOSCReplicas returns a heuristic list of replicas which are fit as control replicas for an OSC operation.
 // These would be intermediate masters
-func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
+func GetClusterOSCReplicas(clusterName string) ([]*Instance, error) {
 	if strings.Contains(clusterName, "'") {
-		return [](*Instance){}, log.Errorf("Invalid cluster name: %s", clusterName)
+		return []*Instance{}, log.Errorf("Invalid cluster name: %s", clusterName)
 	}
 
-	result := [](*Instance){}
+	result := []*Instance{}
 	// Stage 1: 1st tier servers.
 	// We get up to two 1st tier servers from each DC in the following order:
 	// 1. Most busiest IMs
@@ -678,7 +674,7 @@ func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
 			}
 			sort.Sort(sort.Reverse(InstancesByCountReplicas(replicas)))
 			replicas = filterOSCInstances(replicas)
-			replicas = replicas[0:math.MinInt(2, len(replicas))]
+			replicas = replicas[0:min(2, len(replicas))]
 			result = append(result, replicas...)
 		}
 	}
@@ -702,7 +698,7 @@ func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
 // GetClusterGhostReplicas returns a list of replicas that can serve as the connected servers
 // for a [gh-ost](https://github.com/github/gh-ost) operation. A gh-ost operation prefers to talk
 // to a RBR replica that has no children.
-func GetClusterGhostReplicas(clusterName string) (result [](*Instance), err error) {
+func GetClusterGhostReplicas(clusterName string) (result []*Instance, err error) {
 	instances, err := readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadClusterGhostInstanceRows(ctx, clusterName)
 	})
@@ -733,7 +729,7 @@ func GetClusterGhostReplicas(clusterName string) (result [](*Instance), err erro
 }
 
 // GetInstancesMaxLag returns the maximum lag in a set of instances
-func GetInstancesMaxLag(instances [](*Instance)) (maxLag int64, err error) {
+func GetInstancesMaxLag(instances []*Instance) (maxLag int64, err error) {
 	if len(instances) == 0 {
 		return 0, log.Errorf("No instances found in GetInstancesMaxLag")
 	}
@@ -756,8 +752,8 @@ func GetClusterHeuristicLag(clusterName string) (int64, error) {
 
 // GetHeuristicClusterPoolInstances returns instances of a cluster which are also pooled. If `pool` argument
 // is empty, all pools are considered, otherwise, only instances of given pool are considered.
-func GetHeuristicClusterPoolInstances(clusterName string, pool string) (result [](*Instance), err error) {
-	result = [](*Instance){}
+func GetHeuristicClusterPoolInstances(clusterName string, pool string) (result []*Instance, err error) {
+	result = []*Instance{}
 	instances, err := ReadClusterInstances(clusterName)
 	if err != nil {
 		return result, err
@@ -844,7 +840,6 @@ func ReviewUnseenInstances() error {
 	}
 	operations := 0
 	for _, instance := range instances {
-		instance := instance
 
 		masterHostname, err := ResolveHostname(instance.MasterKey.Hostname)
 		if err != nil {
@@ -912,7 +907,6 @@ func InjectUnseenMasters() error {
 
 	operations := 0
 	for _, masterKey := range unseenMasterKeys {
-		masterKey := masterKey
 
 		if FiltersMatchInstanceKey(&masterKey, config.Config.Topology.Discovery.IgnoreMasterHostnames) {
 			log.Debugf("InjectUnseenMasters: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", masterKey)
@@ -1024,7 +1018,7 @@ func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 // This isn't too pretty; it's a push-into-instance-data-that-belongs-to-agent thing.
 // Originally the need was to visually present the number of snapshots per host on the web/cluster page, which
 // indeed proves to be useful in our experience.
-func PopulateInstancesAgents(instances [](*Instance)) error {
+func PopulateInstancesAgents(instances []*Instance) error {
 	if len(instances) == 0 {
 		return nil
 	}
@@ -1077,7 +1071,7 @@ func ReadClusterInfo(clusterName string) (*ClusterInfo, error) {
 		return &ClusterInfo{}, err
 	}
 	if len(clusters) != 1 {
-		return &ClusterInfo{}, fmt.Errorf("No cluster info found for %s", clusterName)
+		return &ClusterInfo{}, fmt.Errorf("no cluster info found for %s", clusterName)
 	}
 	return &(clusters[0]), nil
 }
@@ -1104,7 +1098,7 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 }
 
 // Get a listing of KVPair for clusters masters, for all clusters or for a specific cluster.
-func GetMastersKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error) {
+func GetMastersKVPairs(clusterName string) (kvPairs []*kv.KVPair, err error) {
 
 	clusterAliasMap := make(map[string]string)
 	if clustersInfo, err := ReadClustersInfo(clusterName); err != nil {
@@ -1136,7 +1130,7 @@ func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (insta
 	}
 
 	if clusterInfo.ClusterDomain == "" {
-		return nil, fmt.Errorf("Cannot find domain name for cluster %+v", clusterName)
+		return nil, fmt.Errorf("cannot find domain name for cluster %+v", clusterName)
 	}
 
 	masters, err := ReadClusterWriteableMaster(clusterName)
@@ -1144,7 +1138,7 @@ func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (insta
 		return nil, err
 	}
 	if len(masters) != 1 {
-		return nil, fmt.Errorf("Found %+v potential master for cluster %+v", len(masters), clusterName)
+		return nil, fmt.Errorf("found %+v potential master for cluster %+v", len(masters), clusterName)
 	}
 	instanceKey = &masters[0].Key
 	return instanceKey, attributes.SetGeneralAttribute(clusterInfo.ClusterDomain, instanceKey.StringCode())
@@ -1159,7 +1153,7 @@ func GetHeuristicClusterDomainInstanceAttribute(clusterName string) (instanceKey
 	}
 
 	if clusterInfo.ClusterDomain == "" {
-		return nil, fmt.Errorf("Cannot find domain name for cluster %+v", clusterName)
+		return nil, fmt.Errorf("cannot find domain name for cluster %+v", clusterName)
 	}
 
 	writerInstanceName, err := attributes.GetGeneralAttribute(clusterInfo.ClusterDomain)
@@ -1190,16 +1184,17 @@ func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 	res := []MinimalInstance{}
 	rows, err := metadata.ReadAllMinimalInstances(context.Background())
 	for _, row := range rows {
-		minimalInstance := MinimalInstance{}
-		minimalInstance.Key = InstanceKey{
-			Hostname: row.Hostname,
-			Port:     row.Port,
+		minimalInstance := MinimalInstance{
+			Key: InstanceKey{
+				Hostname: row.Hostname,
+				Port:     row.Port,
+			},
+			MasterKey: InstanceKey{
+				Hostname: row.MasterHost,
+				Port:     row.MasterPort,
+			},
+			ClusterName: row.ClusterName,
 		}
-		minimalInstance.MasterKey = InstanceKey{
-			Hostname: row.MasterHost,
-			Port:     row.MasterPort,
-		}
-		minimalInstance.ClusterName = row.ClusterName
 
 		if !InstanceIsForgotten(&minimalInstance.Key) {
 			// only if not in "forget" cache

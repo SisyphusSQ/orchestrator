@@ -138,8 +138,8 @@ func TestEnabledSyslogInitializationFailureExitsProcess(t *testing.T) {
 	command.Stderr = &stderr
 
 	err := command.Run()
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
+	exitErr, ok := errors.AsType[*exec.ExitError](err)
+	if !ok {
 		t.Fatalf("startup helper error = %v; want process exit error", err)
 	}
 	if exitErr.ExitCode() != 1 {

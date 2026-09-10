@@ -268,7 +268,9 @@ func AcknowledgeRecoveryByUID(recoveryUID string, owner string, comment string) 
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
 func AcknowledgeClusterRecoveries(clusterName string, owner string, comment string) (countAcknowledgedEntries int64, err error) {
 	{
-		_ = metadata.ClearFailureDetectionsByClusterName(context.Background(), clusterName)
+		if err := metadata.ClearFailureDetectionsByClusterName(context.Background(), clusterName); err != nil {
+			return countAcknowledgedEntries, log.Errore(err)
+		}
 		count, err := acknowledgeRecoveries(owner, comment, metadata.RecoveryAcknowledgementFilter{
 			Kind: metadata.AcknowledgeByClusterName, ClusterName: clusterName,
 		})
@@ -279,7 +281,12 @@ func AcknowledgeClusterRecoveries(clusterName string, owner string, comment stri
 	}
 	{
 		clusterInfo, err := inst.ReadClusterInfo(clusterName)
-		_ = metadata.ClearFailureDetectionsByClusterAlias(context.Background(), clusterInfo.ClusterAlias)
+		if err != nil {
+			return countAcknowledgedEntries, err
+		}
+		if err := metadata.ClearFailureDetectionsByClusterAlias(context.Background(), clusterInfo.ClusterAlias); err != nil {
+			return countAcknowledgedEntries, log.Errore(err)
+		}
 		count, err := acknowledgeRecoveries(owner, comment, metadata.RecoveryAcknowledgementFilter{
 			Kind: metadata.AcknowledgeByClusterAlias, ClusterAlias: clusterInfo.ClusterAlias,
 		})
@@ -295,7 +302,9 @@ func AcknowledgeClusterRecoveries(clusterName string, owner string, comment stri
 // AcknowledgeInstanceRecoveries marks active recoveries for given instance as acknowledged.
 // This also implied clearing their active period, which in turn enables further recoveries on those topologies
 func AcknowledgeInstanceRecoveries(instanceKey *inst.InstanceKey, owner string, comment string) (countAcknowledgedEntries int64, err error) {
-	_ = metadata.ClearFailureDetectionsByInstance(context.Background(), instanceKey.Hostname, instanceKey.Port)
+	if err := metadata.ClearFailureDetectionsByInstance(context.Background(), instanceKey.Hostname, instanceKey.Port); err != nil {
+		return 0, log.Errore(err)
+	}
 	return acknowledgeRecoveries(owner, comment, metadata.RecoveryAcknowledgementFilter{
 		Kind: metadata.AcknowledgeByInstance, Hostname: instanceKey.Hostname, Port: instanceKey.Port,
 	})
