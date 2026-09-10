@@ -39,17 +39,17 @@ func guardWebAction(_ Params, r Responder, req *http.Request, resp http.Response
 	// Check user permissions at ingress; leader readiness is checked by the
 	// business handler after follower requests have been proxied to the leader.
 	if !isAuthorizedForWrite(req, user) {
-		r.JSON(http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Unauthorized"})
+		writeHTTPJSON(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
 	if req.Header.Get("Sec-Fetch-Site") == "cross-site" {
-		r.JSON(http.StatusForbidden, &APIResponse{Code: ERROR, Message: "cross-site action rejected"})
+		writeHTTPJSON(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "cross-site action rejected"})
 		return
 	}
 	if origin := req.Header.Get("Origin"); origin != "" {
 		parsed, err := url.Parse(origin)
 		if err != nil || parsed.Host != req.Host || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			r.JSON(http.StatusForbidden, &APIResponse{Code: ERROR, Message: "cross-origin action rejected"})
+			writeHTTPJSON(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "cross-origin action rejected"})
 		}
 	}
 }

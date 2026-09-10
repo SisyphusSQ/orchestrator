@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/openark/orchestrator/internal/models/dto"
 )
 
 func TestPartitionedMinorityDoesNotStayReady(t *testing.T) {
@@ -25,10 +26,10 @@ func TestPartitionedMinorityDoesNotStayReady(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	waitForLeader(t, n1)
-	if _, err := n1.AddMember(MemberRequest{ID: "node-2", Address: string(addr2), Suffrage: suffrageVoter}); err != nil {
+	if _, err := n1.AddMember(dto.RaftMember{ID: "node-2", Address: string(addr2), Suffrage: suffrageVoter}); err != nil {
 		t.Fatalf("add node-2: %v", err)
 	}
-	if _, err := n1.AddMember(MemberRequest{ID: "node-3", Address: string(addr3), Suffrage: suffrageVoter}); err != nil {
+	if _, err := n1.AddMember(dto.RaftMember{ID: "node-3", Address: string(addr3), Suffrage: suffrageVoter}); err != nil {
 		t.Fatalf("add node-3: %v", err)
 	}
 	waitForConfiguration(t, n2, 3)

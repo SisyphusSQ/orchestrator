@@ -8,44 +8,14 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/openark/orchestrator/internal/models/dto"
+	"github.com/openark/orchestrator/internal/models/vo"
 )
 
 const (
 	suffrageVoter    = "voter"
 	suffrageNonvoter = "nonvoter"
 )
-
-// ServerView is the ID-aware public representation of a raft server.
-type ServerView struct {
-	ID       string `json:"id"`
-	Address  string `json:"address"`
-	Suffrage string `json:"suffrage"`
-}
-
-// ConfigurationView is the ID-aware public representation of raft configuration.
-type ConfigurationView struct {
-	Index     uint64       `json:"index"`
-	Committed bool         `json:"committed"`
-	Servers   []ServerView `json:"servers"`
-}
-
-// ClusterView is configuration plus leader and local identity.
-type ClusterView struct {
-	ConfigurationView
-	LeaderID      string `json:"leaderId"`
-	LeaderAddress string `json:"leaderAddress"`
-	LocalID       string `json:"localId"`
-	LocalAddress  string `json:"localAddress"`
-	LocalState    string `json:"localState"`
-}
-
-// MemberRequest is an ID-aware membership mutation.
-type MemberRequest struct {
-	ID            string
-	Address       string
-	Suffrage      string
-	ExpectedIndex *uint64
-}
 
 func (store *Store) configuration() (raft.Configuration, uint64, error) {
 	if store == nil || store.raft == nil || store.configLog == nil {
@@ -91,10 +61,10 @@ func configurationsEqual(left, right raft.Configuration) bool {
 	return true
 }
 
-func mapConfiguration(cfg raft.Configuration, index uint64) ConfigurationView {
-	view := ConfigurationView{Index: index, Servers: make([]ServerView, 0, len(cfg.Servers))}
+func mapConfiguration(cfg raft.Configuration, index uint64) vo.RaftConfiguration {
+	view := vo.RaftConfiguration{Index: index, Servers: make([]vo.RaftServer, 0, len(cfg.Servers))}
 	for _, server := range cfg.Servers {
-		view.Servers = append(view.Servers, ServerView{
+		view.Servers = append(view.Servers, vo.RaftServer{
 			ID:       string(server.ID),
 			Address:  string(server.Address),
 			Suffrage: suffrageName(server.Suffrage),
@@ -107,21 +77,21 @@ func configurationCommitted(hasServers bool, configurationIndex, commitIndex uin
 	return hasServers && configurationIndex > 0 && configurationIndex <= commitIndex
 }
 
-func (store *Store) configurationView(cfg raft.Configuration, index uint64) ConfigurationView {
+func (store *Store) configurationView(cfg raft.Configuration, index uint64) vo.RaftConfiguration {
 	view := mapConfiguration(cfg, index)
 	view.Committed = store != nil && store.raft != nil && configurationCommitted(len(cfg.Servers) > 0, index, store.raft.CommitIndex())
 	return view
 }
 
-func (store *Store) membershipConfiguration() (raft.Configuration, uint64, ConfigurationView, error) {
+func (store *Store) membershipConfiguration() (raft.Configuration, uint64, vo.RaftConfiguration, error) {
 	deadline := time.Now().Add(raftTimeout)
 	for {
 		cfg, index, err := store.configuration()
 		if err != nil {
-			return raft.Configuration{}, 0, ConfigurationView{}, err
+			return raft.Configuration{}, 0, vo.RaftConfiguration{}, err
 		}
 		if len(cfg.Servers) == 0 {
-			return raft.Configuration{}, 0, ConfigurationView{}, ErrNotBootstrapped
+			return raft.Configuration{}, 0, vo.RaftConfiguration{}, ErrNotBootstrapped
 		}
 		view := store.configurationView(cfg, index)
 		if store.raft.State() != raft.Leader {
@@ -159,14 +129,14 @@ func parseSuffrage(value string) (raft.ServerSuffrage, error) {
 	}
 }
 
-func (store *Store) GetClusterView() (ClusterView, error) {
+func (store *Store) GetClusterView() (vo.RaftCluster, error) {
 	cfg, index, err := store.configuration()
 	if err != nil {
-		return ClusterView{}, err
+		return vo.RaftCluster{}, err
 	}
 	leaderAddr, leaderID := store.raft.LeaderWithID()
-	return ClusterView{
-		ConfigurationView: store.configurationView(cfg, index),
+	return vo.RaftCluster{
+		RaftConfiguration: store.configurationView(cfg, index),
 		LeaderID:          string(leaderID),
 		LeaderAddress:     string(leaderAddr),
 		LocalID:           store.nodeID,
@@ -182,23 +152,23 @@ func (store *Store) hasExistingState() (bool, error) {
 	return raft.HasExistingState(store.logStore, store.stableStore, store.snapshots)
 }
 
-func (store *Store) Bootstrap() (ConfigurationView, error) {
+func (store *Store) Bootstrap() (vo.RaftConfiguration, error) {
 	if store == nil || store.raft == nil {
-		return ConfigurationView{}, ErrNotRunning
+		return vo.RaftConfiguration{}, ErrNotRunning
 	}
 	existing, err := store.hasExistingState()
 	if err != nil {
-		return ConfigurationView{}, classifyRaftError(err)
+		return vo.RaftConfiguration{}, classifyRaftError(err)
 	}
 	if existing {
-		return ConfigurationView{}, ErrAlreadyBootstrapped
+		return vo.RaftConfiguration{}, ErrAlreadyBootstrapped
 	}
 	cfg, _, err := store.configuration()
 	if err != nil {
-		return ConfigurationView{}, err
+		return vo.RaftConfiguration{}, err
 	}
 	if len(cfg.Servers) > 0 {
-		return ConfigurationView{}, ErrAlreadyBootstrapped
+		return vo.RaftConfiguration{}, ErrAlreadyBootstrapped
 	}
 
 	bootstrap := raft.Configuration{
@@ -210,14 +180,14 @@ func (store *Store) Bootstrap() (ConfigurationView, error) {
 	}
 	futureErr := waitFuture(store.raft.BootstrapCluster(bootstrap), raftTimeout)
 	if futureErr != nil && !isIndeterminate(futureErr) {
-		return ConfigurationView{}, classifyRaftError(futureErr)
+		return vo.RaftConfiguration{}, classifyRaftError(futureErr)
 	}
 
 	deadline := time.Now().Add(raftTimeout)
 	for {
 		view, readErr := store.currentConfigurationView()
 		if readErr != nil {
-			return ConfigurationView{}, wrapError(ClassIndeterminate, "raft bootstrap result is indeterminate", readErr)
+			return vo.RaftConfiguration{}, wrapError(ClassIndeterminate, "raft bootstrap result is indeterminate", readErr)
 		}
 		if bootstrapConfigurationMatches(view, store.nodeID, store.raftAdvertise) {
 			if view.Committed {
@@ -236,36 +206,36 @@ func (store *Store) Bootstrap() (ConfigurationView, error) {
 	}
 }
 
-func bootstrapConfigurationMatches(view ConfigurationView, id, address string) bool {
+func bootstrapConfigurationMatches(view vo.RaftConfiguration, id, address string) bool {
 	return len(view.Servers) == 1 &&
 		view.Servers[0].ID == id &&
 		view.Servers[0].Address == address &&
 		view.Servers[0].Suffrage == suffrageVoter
 }
 
-func (store *Store) currentConfigurationView() (ConfigurationView, error) {
+func (store *Store) currentConfigurationView() (vo.RaftConfiguration, error) {
 	cfg, index, err := store.configuration()
 	if err != nil {
-		return ConfigurationView{}, err
+		return vo.RaftConfiguration{}, err
 	}
 	return store.configurationView(cfg, index), nil
 }
 
-func (store *Store) AddMember(req MemberRequest) (ConfigurationView, error) {
+func (store *Store) AddMember(req dto.RaftMember) (vo.RaftConfiguration, error) {
 	if store == nil || store.raft == nil {
-		return ConfigurationView{}, ErrNotRunning
+		return vo.RaftConfiguration{}, ErrNotRunning
 	}
 	id := strings.TrimSpace(req.ID)
 	address := strings.TrimSpace(req.Address)
 	if id == "" {
-		return ConfigurationView{}, invalidArgument("member id is required")
+		return vo.RaftConfiguration{}, invalidArgument("member id is required")
 	}
 	if address == "" {
-		return ConfigurationView{}, invalidArgument("member address is required")
+		return vo.RaftConfiguration{}, invalidArgument("member address is required")
 	}
 	wantSuffrage, err := parseSuffrage(req.Suffrage)
 	if err != nil {
-		return ConfigurationView{}, err
+		return vo.RaftConfiguration{}, err
 	}
 
 	store.membershipMu.Lock()
@@ -299,19 +269,19 @@ func (store *Store) AddMember(req MemberRequest) (ConfigurationView, error) {
 			future = store.raft.AddNonvoter(raft.ServerID(id), raft.ServerAddress(address), prevIndex, raftTimeout)
 		}
 	}
-	return store.finishMembership(future, func(view ConfigurationView) bool {
+	return store.finishMembership(future, func(view vo.RaftConfiguration) bool {
 		server, ok := findServerView(view, id)
 		return ok && server.Address == address && server.Suffrage == suffrageName(wantSuffrage)
 	})
 }
 
-func (store *Store) RemoveMember(id string, expectedIndex *uint64) (ConfigurationView, error) {
+func (store *Store) RemoveMember(id string, expectedIndex *uint64) (vo.RaftConfiguration, error) {
 	if store == nil || store.raft == nil {
-		return ConfigurationView{}, ErrNotRunning
+		return vo.RaftConfiguration{}, ErrNotRunning
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return ConfigurationView{}, invalidArgument("member id is required")
+		return vo.RaftConfiguration{}, invalidArgument("member id is required")
 	}
 	store.membershipMu.Lock()
 	defer store.membershipMu.Unlock()
@@ -326,7 +296,7 @@ func (store *Store) RemoveMember(id string, expectedIndex *uint64) (Configuratio
 		return view, ErrNotFound
 	}
 	future := store.raft.RemoveServer(raft.ServerID(id), index, raftTimeout)
-	return store.finishMembership(future, func(view ConfigurationView) bool {
+	return store.finishMembership(future, func(view vo.RaftConfiguration) bool {
 		_, ok := findServerView(view, id)
 		return !ok
 	})
@@ -383,17 +353,17 @@ func (store *Store) Snapshot() error {
 	return nil
 }
 
-func (store *Store) finishMembership(future raft.IndexFuture, succeeded func(ConfigurationView) bool) (ConfigurationView, error) {
+func (store *Store) finishMembership(future raft.IndexFuture, succeeded func(vo.RaftConfiguration) bool) (vo.RaftConfiguration, error) {
 	err := waitFuture(future, raftTimeout)
 	if err == nil {
 		return store.currentConfigurationView()
 	}
 	if !isIndeterminate(err) {
-		return ConfigurationView{}, classifyRaftError(err)
+		return vo.RaftConfiguration{}, classifyRaftError(err)
 	}
 	view, readErr := store.currentConfigurationView()
 	if readErr != nil {
-		return ConfigurationView{}, wrapError(ClassIndeterminate, "raft mutation result is indeterminate", readErr)
+		return vo.RaftConfiguration{}, wrapError(ClassIndeterminate, "raft mutation result is indeterminate", readErr)
 	}
 	if view.Committed && succeeded(view) {
 		return view, nil
@@ -441,13 +411,13 @@ func findServerByAddress(cfg raft.Configuration, address raft.ServerAddress) (ra
 	return raft.Server{}, false
 }
 
-func findServerView(view ConfigurationView, id string) (ServerView, bool) {
+func findServerView(view vo.RaftConfiguration, id string) (vo.RaftServer, bool) {
 	for _, server := range view.Servers {
 		if server.ID == id {
 			return server, true
 		}
 	}
-	return ServerView{}, false
+	return vo.RaftServer{}, false
 }
 
 func waitFuture(future raft.Future, timeout time.Duration) error {

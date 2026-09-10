@@ -4,10 +4,12 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/openark/orchestrator/internal/models/domain"
 )
 
 func TestDefaults(t *testing.T) {
-	want := Policy{
+	want := domain.RecoveryPolicy{
 		RecoveryIgnoreHostnameFilters:              []string{},
 		PromotionIgnoreHostnameFilters:             []string{},
 		ProblemIgnoreHostnameFilters:               []string{},
@@ -30,7 +32,7 @@ func TestApplyOnlyOverridesPresentFields(t *testing.T) {
 	enabled := true
 	zero := 0
 	filters := []string{"db-test-*"}
-	policy := Apply(base, PolicyPatch{
+	policy := Apply(base, domain.RecoveryPolicyPatch{
 		AutoMasterRecovery:           &enabled,
 		RecoveryPeriodBlockSeconds:   &zero,
 		ProblemIgnoreHostnameFilters: &filters,
@@ -72,12 +74,12 @@ func TestValidatePolicy(t *testing.T) {
 
 func TestValidateHookAssignment(t *testing.T) {
 	for _, mode := range []string{"inherit", "disable"} {
-		assignment := HookAssignment{ScopeType: ScopeGlobal, ScopeKey: GlobalKey, Phase: HookPhases[0], Mode: mode}
+		assignment := domain.RecoveryHookAssignment{ScopeType: domain.ScopeGlobal, ScopeKey: domain.GlobalKey, Phase: domain.RecoveryHookPhases[0], Mode: mode}
 		if err := ValidateHookAssignment(assignment); err != nil {
 			t.Fatalf("valid %s assignment rejected: %v", mode, err)
 		}
 	}
-	replace := HookAssignment{ScopeType: ScopeCluster, ScopeKey: "orders", Phase: HookPhases[1], Mode: "replace", ProfileIDs: []string{"notify"}}
+	replace := domain.RecoveryHookAssignment{ScopeType: domain.ScopeCluster, ScopeKey: "orders", Phase: domain.RecoveryHookPhases[1], Mode: "replace", ProfileIDs: []string{"notify"}}
 	if err := ValidateHookAssignment(replace); err != nil {
 		t.Fatalf("valid replace assignment rejected: %v", err)
 	}
@@ -88,7 +90,7 @@ func TestValidateHookAssignment(t *testing.T) {
 }
 
 func TestValidateHookProfileRejectsEmptyCommands(t *testing.T) {
-	profile := HookProfile{ID: "notify", Name: "Notify", TimeoutSeconds: 30, FailurePolicy: "abort", OutputLimitBytes: 1024, Enabled: true}
+	profile := domain.RecoveryHookProfile{ID: "notify", Name: "Notify", TimeoutSeconds: 30, FailurePolicy: "abort", OutputLimitBytes: 1024, Enabled: true}
 	if err := ValidateHookProfile(profile); err == nil {
 		t.Fatal("hook profile without commands accepted")
 	}

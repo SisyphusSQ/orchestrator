@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openark/orchestrator/internal/models/vo"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
@@ -155,7 +156,7 @@ func TestRuntimeContract(t *testing.T) {
 		if got := scrape(t, r)["orchestrator_fixture_gauge"].Metric[0].Gauge.GetValue(); got != 1 {
 			t.Fatal(got)
 		}
-		SetHealth(Health{CheckedAt: time.Now().Add(-time.Minute), Ready: true, LeaderReady: true, Backend: true, RaftReady: true})
+		SetHealth(vo.Health{CheckedAt: time.Now().Add(-time.Minute), Ready: true, LeaderReady: true, Backend: true, RaftReady: true})
 		h := CurrentHealth()
 		if h.Ready || h.LeaderReady || h.Backend || h.RaftReady {
 			t.Fatalf("stale healthy: %+v", h)
@@ -209,7 +210,7 @@ func TestRuntimeContract(t *testing.T) {
 	})
 	t.Run("export failure is observable without failing readiness", func(t *testing.T) {
 		failExports.Store(true)
-		SetHealth(Health{CheckedAt: time.Now(), Backend: true, Ready: true})
+		SetHealth(vo.Health{CheckedAt: time.Now(), Backend: true, Ready: true})
 		_, span := StartSpan(t.Context(), "fixture.export_failure")
 		span.End()
 		if err := r.Traces.ForceFlush(t.Context()); err == nil {

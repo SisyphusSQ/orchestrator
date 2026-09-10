@@ -6,16 +6,16 @@ import (
 	"time"
 
 	"github.com/openark/orchestrator/internal/config"
-	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/logic"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
+	"github.com/openark/orchestrator/internal/repository"
 )
 
 // startRaftRuntime prepares the backend before Raft can restore snapshots or apply logs.
 func startRaftRuntime() error {
-	if _, err := db.OpenOrchestrator(); err != nil {
+	if err := repository.InitializeMetadata(context.Background()); err != nil {
 		return fmt.Errorf("open raft backend: %w", err)
 	}
 	if err := orcraft.Setup(logic.NewCommandApplier(), logic.NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {

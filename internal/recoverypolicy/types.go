@@ -4,132 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/openark/orchestrator/internal/models/domain"
 )
-
-const (
-	ScopeGlobal  = "global"
-	ScopeCluster = "cluster"
-	GlobalKey    = "*"
-)
-
-// Policy contains the effective recovery behavior used by orchestration code.
-// Defaults are deliberately code-owned; persisted rows only contain overrides.
-type Policy struct {
-	AutoMasterRecovery                         bool     `json:"autoMasterRecovery"`
-	AutoIntermediateMasterRecovery             bool     `json:"autoIntermediateMasterRecovery"`
-	RecoveryIgnoreHostnameFilters              []string `json:"recoveryIgnoreHostnameFilters"`
-	PromotionIgnoreHostnameFilters             []string `json:"promotionIgnoreHostnameFilters"`
-	ProblemIgnoreHostnameFilters               []string `json:"problemIgnoreHostnameFilters"`
-	FailureDetectionPeriodBlockMinutes         int      `json:"failureDetectionPeriodBlockMinutes"`
-	RecoveryPeriodBlockSeconds                 int      `json:"recoveryPeriodBlockSeconds"`
-	ReasonableReplicationLagSeconds            int      `json:"reasonableReplicationLagSeconds"`
-	ReasonableMaintenanceReplicationLagSeconds int      `json:"reasonableMaintenanceReplicationLagSeconds"`
-	VerifyReplicationFilters                   bool     `json:"verifyReplicationFilters"`
-	FailMasterPromotionOnLagMinutes            int      `json:"failMasterPromotionOnLagMinutes"`
-	SQLThreadPromotionPolicy                   string   `json:"sqlThreadPromotionPolicy"`
-	RecoverNonWriteableMaster                  bool     `json:"recoverNonWriteableMaster"`
-	CoMasterRecoveryMustPromoteOtherCoMaster   bool     `json:"coMasterRecoveryMustPromoteOtherCoMaster"`
-	DetachLostReplicasAfterMasterFailover      bool     `json:"detachLostReplicasAfterMasterFailover"`
-	ApplyMySQLPromotionAfterMasterFailover     bool     `json:"applyMySQLPromotionAfterMasterFailover"`
-	PreventCrossDataCenterMasterFailover       bool     `json:"preventCrossDataCenterMasterFailover"`
-	PreventCrossRegionMasterFailover           bool     `json:"preventCrossRegionMasterFailover"`
-	MasterFailoverDetachReplicaMasterHost      bool     `json:"masterFailoverDetachReplicaMasterHost"`
-	PostponeReplicaRecoveryOnLagMinutes        int      `json:"postponeReplicaRecoveryOnLagMinutes"`
-	EnforceExactSemiSyncReplicas               bool     `json:"enforceExactSemiSyncReplicas"`
-	RecoverLockedSemiSyncMaster                bool     `json:"recoverLockedSemiSyncMaster"`
-	ReasonableLockedSemiSyncMasterSeconds      int      `json:"reasonableLockedSemiSyncMasterSeconds"`
-}
-
-// PolicyPatch is sparse so a cluster can inherit any individual global value.
-type PolicyPatch struct {
-	AutoMasterRecovery                         *bool     `json:"autoMasterRecovery,omitempty"`
-	AutoIntermediateMasterRecovery             *bool     `json:"autoIntermediateMasterRecovery,omitempty"`
-	RecoveryIgnoreHostnameFilters              *[]string `json:"recoveryIgnoreHostnameFilters,omitempty"`
-	PromotionIgnoreHostnameFilters             *[]string `json:"promotionIgnoreHostnameFilters,omitempty"`
-	ProblemIgnoreHostnameFilters               *[]string `json:"problemIgnoreHostnameFilters,omitempty"`
-	FailureDetectionPeriodBlockMinutes         *int      `json:"failureDetectionPeriodBlockMinutes,omitempty"`
-	RecoveryPeriodBlockSeconds                 *int      `json:"recoveryPeriodBlockSeconds,omitempty"`
-	ReasonableReplicationLagSeconds            *int      `json:"reasonableReplicationLagSeconds,omitempty"`
-	ReasonableMaintenanceReplicationLagSeconds *int      `json:"reasonableMaintenanceReplicationLagSeconds,omitempty"`
-	VerifyReplicationFilters                   *bool     `json:"verifyReplicationFilters,omitempty"`
-	FailMasterPromotionOnLagMinutes            *int      `json:"failMasterPromotionOnLagMinutes,omitempty"`
-	SQLThreadPromotionPolicy                   *string   `json:"sqlThreadPromotionPolicy,omitempty"`
-	RecoverNonWriteableMaster                  *bool     `json:"recoverNonWriteableMaster,omitempty"`
-	CoMasterRecoveryMustPromoteOtherCoMaster   *bool     `json:"coMasterRecoveryMustPromoteOtherCoMaster,omitempty"`
-	DetachLostReplicasAfterMasterFailover      *bool     `json:"detachLostReplicasAfterMasterFailover,omitempty"`
-	ApplyMySQLPromotionAfterMasterFailover     *bool     `json:"applyMySQLPromotionAfterMasterFailover,omitempty"`
-	PreventCrossDataCenterMasterFailover       *bool     `json:"preventCrossDataCenterMasterFailover,omitempty"`
-	PreventCrossRegionMasterFailover           *bool     `json:"preventCrossRegionMasterFailover,omitempty"`
-	MasterFailoverDetachReplicaMasterHost      *bool     `json:"masterFailoverDetachReplicaMasterHost,omitempty"`
-	PostponeReplicaRecoveryOnLagMinutes        *int      `json:"postponeReplicaRecoveryOnLagMinutes,omitempty"`
-	EnforceExactSemiSyncReplicas               *bool     `json:"enforceExactSemiSyncReplicas,omitempty"`
-	RecoverLockedSemiSyncMaster                *bool     `json:"recoverLockedSemiSyncMaster,omitempty"`
-	ReasonableLockedSemiSyncMasterSeconds      *int      `json:"reasonableLockedSemiSyncMasterSeconds,omitempty"`
-}
-
-type PolicyDocument struct {
-	ScopeType    string      `json:"scopeType"`
-	ScopeKey     string      `json:"scopeKey"`
-	Revision     int64       `json:"revision"`
-	Overrides    PolicyPatch `json:"overrides"`
-	Inherited    Policy      `json:"inherited"`
-	Effective    Policy      `json:"effective"`
-	UpdatedBy    string      `json:"updatedBy,omitempty"`
-	ChangeReason string      `json:"changeReason,omitempty"`
-	UpdatedAt    string      `json:"updatedAt,omitempty"`
-}
-
-type SavePolicyCommand struct {
-	ScopeType        string      `json:"scopeType"`
-	ScopeKey         string      `json:"scopeKey"`
-	ExpectedRevision int64       `json:"expectedRevision"`
-	Overrides        PolicyPatch `json:"overrides"`
-	UpdatedBy        string      `json:"updatedBy"`
-	ChangeReason     string      `json:"changeReason"`
-}
-
-type HookProfile struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	Commands         []string `json:"commands"`
-	TimeoutSeconds   int      `json:"timeoutSeconds"`
-	FailurePolicy    string   `json:"failurePolicy"`
-	OutputLimitBytes int      `json:"outputLimitBytes"`
-	Enabled          bool     `json:"enabled"`
-	Revision         int64    `json:"revision"`
-	UpdatedBy        string   `json:"updatedBy,omitempty"`
-	ChangeReason     string   `json:"changeReason,omitempty"`
-	UpdatedAt        string   `json:"updatedAt,omitempty"`
-}
-
-type HookAssignment struct {
-	ScopeType    string   `json:"scopeType"`
-	ScopeKey     string   `json:"scopeKey"`
-	Phase        string   `json:"phase"`
-	Mode         string   `json:"mode"`
-	ProfileIDs   []string `json:"profileIds"`
-	Revision     int64    `json:"revision"`
-	UpdatedBy    string   `json:"updatedBy,omitempty"`
-	ChangeReason string   `json:"changeReason,omitempty"`
-	UpdatedAt    string   `json:"updatedAt,omitempty"`
-}
-
-type SaveHookProfileCommand struct {
-	Profile          HookProfile `json:"profile"`
-	ExpectedRevision int64       `json:"expectedRevision"`
-}
-
-type SaveHookAssignmentCommand struct {
-	Assignment       HookAssignment `json:"assignment"`
-	ExpectedRevision int64          `json:"expectedRevision"`
-}
-
-var HookPhases = []string{
-	"failure_detection", "pre_failover", "post_master_failover",
-	"post_intermediate_master_failover", "post_failover",
-	"post_unsuccessful_failover", "pre_graceful_takeover",
-	"post_graceful_takeover", "post_take_master",
-}
 
 var secretOutputPattern = regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?key)(\s*[:=]\s*)[^\s,;]+`)
 
@@ -139,8 +16,8 @@ func RedactOutput(output string) string {
 	return secretOutputPattern.ReplaceAllString(output, `$1$2[REDACTED]`)
 }
 
-func Defaults() Policy {
-	return Policy{
+func Defaults() domain.RecoveryPolicy {
+	return domain.RecoveryPolicy{
 		RecoveryIgnoreHostnameFilters:              []string{},
 		PromotionIgnoreHostnameFilters:             []string{},
 		ProblemIgnoreHostnameFilters:               []string{},
@@ -155,7 +32,7 @@ func Defaults() Policy {
 	}
 }
 
-func Apply(base Policy, patch PolicyPatch) Policy {
+func Apply(base domain.RecoveryPolicy, patch domain.RecoveryPolicyPatch) domain.RecoveryPolicy {
 	setBool := func(value *bool, target *bool) {
 		if value != nil {
 			*target = *value
@@ -200,19 +77,19 @@ func Apply(base Policy, patch PolicyPatch) Policy {
 }
 
 func ValidateScope(scopeType, scopeKey string) error {
-	if scopeType != ScopeGlobal && scopeType != ScopeCluster {
+	if scopeType != domain.ScopeGlobal && scopeType != domain.ScopeCluster {
 		return fmt.Errorf("invalid scope type %q", scopeType)
 	}
-	if scopeType == ScopeGlobal && scopeKey != GlobalKey {
-		return fmt.Errorf("global scope key must be %q", GlobalKey)
+	if scopeType == domain.ScopeGlobal && scopeKey != domain.GlobalKey {
+		return fmt.Errorf("global scope key must be %q", domain.GlobalKey)
 	}
-	if scopeType == ScopeCluster && strings.TrimSpace(scopeKey) == "" {
+	if scopeType == domain.ScopeCluster && strings.TrimSpace(scopeKey) == "" {
 		return fmt.Errorf("cluster scope requires an explicit alias")
 	}
 	return nil
 }
 
-func ValidatePolicy(policy Policy) error {
+func ValidatePolicy(policy domain.RecoveryPolicy) error {
 	if policy.FailureDetectionPeriodBlockMinutes < 0 || policy.RecoveryPeriodBlockSeconds < 0 ||
 		policy.ReasonableReplicationLagSeconds < 0 || policy.ReasonableMaintenanceReplicationLagSeconds < 0 ||
 		policy.FailMasterPromotionOnLagMinutes < 0 || policy.PostponeReplicaRecoveryOnLagMinutes < 0 ||
@@ -227,7 +104,7 @@ func ValidatePolicy(policy Policy) error {
 	return nil
 }
 
-func ValidateHookProfile(profile HookProfile) error {
+func ValidateHookProfile(profile domain.RecoveryHookProfile) error {
 	if strings.TrimSpace(profile.ID) == "" || strings.TrimSpace(profile.Name) == "" {
 		return fmt.Errorf("hook profile id and name are required")
 	}
@@ -251,12 +128,12 @@ func ValidateHookProfile(profile HookProfile) error {
 	return nil
 }
 
-func ValidateHookAssignment(assignment HookAssignment) error {
+func ValidateHookAssignment(assignment domain.RecoveryHookAssignment) error {
 	if err := ValidateScope(assignment.ScopeType, assignment.ScopeKey); err != nil {
 		return err
 	}
 	validPhase := false
-	for _, phase := range HookPhases {
+	for _, phase := range domain.RecoveryHookPhases {
 		if assignment.Phase == phase {
 			validPhase = true
 			break

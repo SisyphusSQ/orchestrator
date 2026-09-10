@@ -22,6 +22,7 @@ import (
 
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/inst"
+	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 )
 
 func SyncReplicaRelayLogs(instance, otherInstance *inst.Instance) (*inst.Instance, error) {
@@ -62,7 +63,7 @@ func SyncReplicaRelayLogs(instance, otherInstance *inst.Instance) (*inst.Instanc
 	}
 	log.Debugf("SyncReplicaRelayLogs: applied content (%d bytes)", len(content))
 
-	instance, err = inst.ChangeMasterTo(&instance.Key, &otherInstance.MasterKey, &otherInstance.ExecBinlogCoordinates, false, inst.GTIDHintNeutral)
+	instance, err = inst.ChangeMasterTo(&instance.Key, &otherInstance.MasterKey, &otherInstance.ExecBinlogCoordinates, false, modeldomain.GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}

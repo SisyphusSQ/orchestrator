@@ -50,10 +50,10 @@ MySQL 目标为每表 `id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY`�
 
 ```bash
 ORCHESTRATOR_METADATA_SCHEMA_TEST_DSN='<isolated-empty-dsn>' \
-  go test ./internal/db -run '^TestCanonicalMetadataSchemaExternalMySQL$' -count=1 -v
+  go test ./internal/repository/database -run '^TestCanonicalMetadataSchemaExternalMySQL$' -count=1 -v
 
 ORCHESTRATOR_METADATA_ID_MIGRATION_TEST_DSN='<another-isolated-empty-dsn>' \
-  go test ./internal/db -run '^TestMetadataIDMigrationExternalMySQL$' -count=1 -v
+  go test ./internal/repository/database -run '^TestMetadataIDMigrationExternalMySQL$' -count=1 -v
 ```
 
 迁移测试覆盖全部表的旧数据保留、重复迁移及自增编号延续。SQLite 还覆盖 legacy/canonical 两条来源、中断续跑、未知结构拒绝和快照本地 id 冲突。MySQL 5.7、TiDB 与 OceanBase 的 v2 真实执行结果必须独立记录；不能引用旧 v1 验证冒充 v2 已通过。

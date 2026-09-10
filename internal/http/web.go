@@ -37,7 +37,7 @@ type webConfig struct {
 
 func (web *HttpWeb) AccessToken(_ Params, r Responder, req *http.Request, resp http.ResponseWriter, _ Principal) {
 	if err := authenticateToken(req.URL.Query().Get("publicToken"), resp); err != nil {
-		r.JSON(http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
+		writeHTTPJSON(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 	r.Redirect(web.URLPrefix + "/")
@@ -51,7 +51,7 @@ func (web *HttpWeb) Index(_ Params, r Responder) {
 // remain frozen at the time the page was opened. API handlers remain authoritative.
 func (web *HttpWeb) Bootstrap(_ Params, r Responder, req *http.Request, resp http.ResponseWriter, user Principal) {
 	resp.Header().Set("Cache-Control", "no-store")
-	r.JSON(http.StatusOK, webConfig{
+	writeHTTPJSON(r, http.StatusOK, webConfig{
 		URLPrefix:                     web.URLPrefix,
 		UserID:                        getUserId(req, user),
 		AuthorizedForAction:           isAuthorizedForAction(req, user),

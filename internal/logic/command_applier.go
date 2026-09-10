@@ -23,6 +23,8 @@ import (
 	"github.com/openark/orchestrator/internal/attributes"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/kv"
+	"github.com/openark/orchestrator/internal/models/domain"
+	"github.com/openark/orchestrator/internal/models/dto"
 	"github.com/openark/orchestrator/internal/raft"
 	"github.com/openark/orchestrator/internal/recoverypolicy"
 
@@ -41,7 +43,7 @@ func NewCommandApplier() *CommandApplier {
 func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{} {
 	switch op {
 	case "set-general-attribute":
-		var attribute attributes.HostAttributes
+		var attribute domain.HostAttributes
 		if err := json.Unmarshal(value, &attribute); err != nil {
 			return err
 		}
@@ -105,19 +107,19 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) interface{}
 	case "set-cluster-alias-manual-override":
 		return applier.setClusterAliasManualOverride(value)
 	case "save-recovery-policy":
-		var command recoverypolicy.SavePolicyCommand
+		var command dto.SaveRecoveryPolicyCommand
 		if err := json.Unmarshal(value, &command); err != nil {
 			return err
 		}
 		return recoverypolicy.SavePolicy(context.Background(), command)
 	case "save-recovery-hook-profile":
-		var command recoverypolicy.SaveHookProfileCommand
+		var command dto.SaveRecoveryHookProfileCommand
 		if err := json.Unmarshal(value, &command); err != nil {
 			return err
 		}
 		return recoverypolicy.SaveHookProfile(context.Background(), command)
 	case "save-recovery-hook-assignment":
-		var command recoverypolicy.SaveHookAssignmentCommand
+		var command dto.SaveRecoveryHookAssignmentCommand
 		if err := json.Unmarshal(value, &command); err != nil {
 			return err
 		}

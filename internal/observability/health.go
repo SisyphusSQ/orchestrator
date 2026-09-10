@@ -3,30 +3,18 @@ package observability
 import (
 	"sync/atomic"
 	"time"
+
+	"github.com/openark/orchestrator/internal/models/vo"
 )
 
-// Health is a cached local health snapshot. It never represents a remote leader's health.
-type Health struct {
-	LastIndex    uint64    `json:"lastIndex"`
-	CommitIndex  uint64    `json:"commitIndex"`
-	AppliedIndex uint64    `json:"appliedIndex"`
-	CheckedAt    time.Time `json:"checkedAt"`
-	Backend      bool      `json:"backend"`
-	RaftReady    bool      `json:"raftReady"`
-	Leader       bool      `json:"leader"`
-	LeaderReady  bool      `json:"leaderReady"`
-	Active       bool      `json:"active"`
-	Ready        bool      `json:"ready"`
-}
-
-var health atomic.Pointer[Health]
+var health atomic.Pointer[vo.Health]
 
 // SetHealth publishes a complete snapshot without exposing partially updated fields.
-func SetHealth(h Health) { health.Store(&h) }
-func CurrentHealth() Health {
+func SetHealth(h vo.Health) { health.Store(&h) }
+func CurrentHealth() vo.Health {
 	h := health.Load()
 	if h == nil {
-		return Health{}
+		return vo.Health{}
 	}
 	result := *h
 	if time.Since(result.CheckedAt) > 15*time.Second {

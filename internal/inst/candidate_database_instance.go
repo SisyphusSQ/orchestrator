@@ -19,7 +19,7 @@ package inst
 import (
 	"fmt"
 
-	"github.com/openark/orchestrator/internal/db"
+	"github.com/openark/orchestrator/internal/repository/metadata"
 )
 
 // CandidateDatabaseInstance contains information about explicit promotion rules for an instance
@@ -40,7 +40,7 @@ func NewCandidateDatabaseInstance(instanceKey *InstanceKey, promotionRule Candid
 }
 
 func (cdi *CandidateDatabaseInstance) WithCurrentTime() *CandidateDatabaseInstance {
-	cdi.LastSuggestedString, _ = db.ReadTimeNow()
+	cdi.LastSuggestedString, _ = metadata.ReadTimeNow()
 	return cdi
 }
 

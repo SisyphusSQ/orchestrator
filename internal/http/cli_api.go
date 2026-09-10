@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openark/orchestrator/internal/attributes"
 	"github.com/openark/orchestrator/internal/inst"
+	"github.com/openark/orchestrator/internal/models/domain"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
 )
@@ -120,7 +120,7 @@ func (api *HttpAPI) cliDiagnostic(name string, params Params, req *http.Request)
 		if len(masters) != 1 {
 			return nil, fmt.Errorf("expected one writable master, got %d", len(masters))
 		}
-		value := attributes.HostAttributes{Hostname: "*", AttributeName: info.ClusterDomain, AttributeValue: masters[0].Key.StringCode()}
+		value := domain.HostAttributes{Hostname: "*", AttributeName: info.ClusterDomain, AttributeValue: masters[0].Key.StringCode()}
 
 		_, err = orcraft.PublishCommand("set-general-attribute", value)
 

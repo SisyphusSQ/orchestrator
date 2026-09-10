@@ -9,7 +9,7 @@ import (
 // RegisterObservability keeps these routes local and retains router authentication and mTLS checks.
 func RegisterObservability(router *Router, prefix string) {
 	router.Get(prefix+"/metrics", http.HandlerFunc(observability.ServeMetrics))
-	router.Get(prefix+"/health/live", func(_ Params, r Responder) { r.JSON(http.StatusOK, map[string]bool{"live": true}) })
+	router.Get(prefix+"/health/live", func(_ Params, r Responder) { writeHTTPJSON(r, http.StatusOK, map[string]bool{"live": true}) })
 	for _, kind := range []string{"ready", "leader-ready"} {
 		router.Get(prefix+"/health/"+kind, func(_ Params, r Responder) {
 			h := observability.CurrentHealth()
@@ -21,7 +21,7 @@ func RegisterObservability(router *Router, prefix string) {
 			if !ready {
 				status = http.StatusServiceUnavailable
 			}
-			r.JSON(status, h)
+			writeHTTPJSON(r, status, h)
 		})
 	}
 }

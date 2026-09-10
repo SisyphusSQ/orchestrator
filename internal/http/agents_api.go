@@ -36,16 +36,16 @@ var AgentsAPI HttpAgentsAPI = HttpAgentsAPI{}
 func (this *HttpAgentsAPI) SubmitAgent(params Params, r Responder) {
 	port, err := strconv.Atoi(params["port"])
 	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: err.Error()})
+		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
 	output, err := agent.SubmitAgent(params["host"], port, params["token"])
 	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: err.Error()})
+		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	r.JSON(200, output)
+	writeHTTPJSON(r, 200, output)
 }
 
 // SetHostAttribute is a utility method that allows per-host key-value store.
@@ -53,11 +53,11 @@ func (this *HttpAgentsAPI) SetHostAttribute(params Params, r Responder, req *htt
 	err := attributes.SetHostAttributes(params["host"], params["attrVame"], params["attrValue"])
 
 	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
 
-	r.JSON(200, (err == nil))
+	writeHTTPJSON(r, 200, (err == nil))
 }
 
 // GetHostAttributeByAttributeName returns a host attribute
@@ -66,11 +66,11 @@ func (this *HttpAgentsAPI) GetHostAttributeByAttributeName(params Params, r Resp
 	output, err := attributes.GetHostAttributesByAttribute(params["attr"], req.URL.Query().Get("valueMatch"))
 
 	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
 
-	r.JSON(200, output)
+	writeHTTPJSON(r, 200, output)
 }
 
 // AgentsHosts provides list of agent host names
@@ -82,14 +82,14 @@ func (this *HttpAgentsAPI) AgentsHosts(params Params, r Responder, req *http.Req
 	}
 
 	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return ""
 	}
 
 	if req.URL.Query().Get("format") == "txt" {
 		return strings.Join(hostnames, "\n")
 	} else {
-		r.JSON(200, hostnames)
+		writeHTTPJSON(r, 200, hostnames)
 	}
 	return ""
 }
@@ -103,20 +103,20 @@ func (this *HttpAgentsAPI) AgentsInstances(params Params, r Responder, req *http
 	}
 
 	if err != nil {
-		r.JSON(200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
+		writeHTTPJSON(r, 200, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return ""
 	}
 
 	if req.URL.Query().Get("format") == "txt" {
 		return strings.Join(hostnames, "\n")
 	} else {
-		r.JSON(200, hostnames)
+		writeHTTPJSON(r, 200, hostnames)
 	}
 	return ""
 }
 
 func (this *HttpAgentsAPI) AgentPing(params Params, r Responder, req *http.Request) {
-	r.JSON(200, "OK")
+	writeHTTPJSON(r, 200, "OK")
 }
 
 // RegisterRequests makes for the de-facto list of known API calls

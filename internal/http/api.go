@@ -38,6 +38,8 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/logic"
+	"github.com/openark/orchestrator/internal/models/domain"
+	"github.com/openark/orchestrator/internal/models/dto"
 	orchos "github.com/openark/orchestrator/internal/os"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
@@ -124,7 +126,7 @@ func Respond(r Responder, apiResponse *APIResponse) {
 
 func RespondStatus(r Responder, status int, apiResponse *APIResponse) {
 	apiResponse.Message = fmt.Sprintf("%+v%+v", messagePrefix, apiResponse.Message)
-	r.JSON(status, apiResponse)
+	writeHTTPJSON(r, status, apiResponse)
 }
 
 func setupMessagePrefix() {
@@ -233,7 +235,7 @@ func (this *HttpAPI) InstanceReplicas(params Params, r Responder, req *http.Requ
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
 	}
-	r.JSON(http.StatusOK, replicas)
+	writeHTTPJSON(r, http.StatusOK, replicas)
 }
 
 // Instance reads and returns an instance's details.
@@ -249,7 +251,7 @@ func (this *HttpAPI) Instance(params Params, r Responder, req *http.Request) {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
 	}
-	r.JSON(http.StatusOK, instance)
+	writeHTTPJSON(r, http.StatusOK, instance)
 }
 
 // AsyncDiscover issues an asynchronous read on an instance. This is
@@ -479,7 +481,7 @@ func (this *HttpAPI) Maintenance(params Params, r Responder, req *http.Request) 
 		return
 	}
 
-	r.JSON(http.StatusOK, maintenanceList)
+	writeHTTPJSON(r, http.StatusOK, maintenanceList)
 }
 
 // BeginDowntime sets a downtime flag with default duration
@@ -606,7 +608,7 @@ func (this *HttpAPI) Repoint(params Params, r Responder, req *http.Request, user
 		belowKey = &key
 	}
 
-	instance, err := inst.Repoint(&instanceKey, belowKey, inst.GTIDHintNeutral)
+	instance, err := inst.Repoint(&instanceKey, belowKey, domain.GTIDHintNeutral)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -1826,7 +1828,7 @@ func (this *HttpAPI) Cluster(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // ClusterByAlias provides list of instances in given cluster
@@ -1872,7 +1874,7 @@ func (this *HttpAPI) ClusterInfo(params Params, r Responder, req *http.Request) 
 		return
 	}
 
-	r.JSON(http.StatusOK, clusterInfo)
+	writeHTTPJSON(r, http.StatusOK, clusterInfo)
 }
 
 // Cluster provides list of instances in given cluster
@@ -1901,7 +1903,7 @@ func (this *HttpAPI) ClusterOSCReplicas(params Params, r Responder, req *http.Re
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // SetClusterAlias will change an alias for a given clustername
@@ -1933,7 +1935,7 @@ func (this *HttpAPI) Clusters(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, clusterNames)
+	writeHTTPJSON(r, http.StatusOK, clusterNames)
 }
 
 // ClustersInfo provides list of known clusters, along with some added metadata per cluster
@@ -1945,7 +1947,7 @@ func (this *HttpAPI) ClustersInfo(params Params, r Responder, req *http.Request)
 		return
 	}
 
-	r.JSON(http.StatusOK, clustersInfo)
+	writeHTTPJSON(r, http.StatusOK, clustersInfo)
 }
 
 // Tags lists existing tags for a given instance
@@ -1965,7 +1967,7 @@ func (this *HttpAPI) Tags(params Params, r Responder, req *http.Request) {
 	for _, tag := range tags {
 		tagStrings = append(tagStrings, tag.String())
 	}
-	r.JSON(http.StatusOK, tagStrings)
+	writeHTTPJSON(r, http.StatusOK, tagStrings)
 }
 
 // TagValue returns a given tag's value for a specific instance
@@ -1986,7 +1988,7 @@ func (this *HttpAPI) TagValue(params Params, r Responder, req *http.Request) {
 		return
 	}
 	if tagExists {
-		r.JSON(http.StatusOK, tag.TagValue)
+		writeHTTPJSON(r, http.StatusOK, tag.TagValue)
 	} else {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("tag %s not found for %+v", tag.TagName, instanceKey)})
 	}
@@ -2001,7 +2003,7 @@ func (this *HttpAPI) Tagged(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, instanceKeyMap.GetInstanceKeys())
+	writeHTTPJSON(r, http.StatusOK, instanceKeyMap.GetInstanceKeys())
 }
 
 // Tags adds a tag to a given instance
@@ -2108,7 +2110,7 @@ func (this *HttpAPI) Masters(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // ClusterMaster returns the writable master of a given cluster
@@ -2129,7 +2131,7 @@ func (this *HttpAPI) ClusterMaster(params Params, r Responder, req *http.Request
 		return
 	}
 
-	r.JSON(http.StatusOK, masters[0])
+	writeHTTPJSON(r, http.StatusOK, masters[0])
 }
 
 // Downtimed lists downtimed instances, potentially filtered by cluster
@@ -2146,7 +2148,7 @@ func (this *HttpAPI) Downtimed(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // AllInstances lists all known instances
@@ -2158,7 +2160,7 @@ func (this *HttpAPI) AllInstances(params Params, r Responder, req *http.Request)
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // Search provides list of instances matching given search param via various criteria.
@@ -2174,7 +2176,7 @@ func (this *HttpAPI) Search(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // Problems provides list of instances with known problems
@@ -2187,7 +2189,7 @@ func (this *HttpAPI) Problems(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // Audit provides list of audit entries by given page number
@@ -2208,7 +2210,7 @@ func (this *HttpAPI) Audit(params Params, r Responder, req *http.Request) {
 		return
 	}
 
-	r.JSON(http.StatusOK, audits)
+	writeHTTPJSON(r, http.StatusOK, audits)
 }
 
 // HostnameResolveCache shows content of in-memory hostname cache
@@ -2395,7 +2397,7 @@ func (this *HttpAPI) BulkPromotionRules(params Params, r Responder, req *http.Re
 		return
 	}
 
-	r.JSON(http.StatusOK, promotionRules)
+	writeHTTPJSON(r, http.StatusOK, promotionRules)
 }
 
 // BulkInstances returns a list of all known instances
@@ -2411,7 +2413,7 @@ func (this *HttpAPI) BulkInstances(params Params, r Responder, req *http.Request
 		return
 	}
 
-	r.JSON(http.StatusOK, instances)
+	writeHTTPJSON(r, http.StatusOK, instances)
 }
 
 // Agents provides complete list of registered agents (See https://github.com/openark/orchestrator-agent)
@@ -2432,7 +2434,7 @@ func (this *HttpAPI) Agents(params Params, r Responder, req *http.Request, user 
 		return
 	}
 
-	r.JSON(http.StatusOK, agents)
+	writeHTTPJSON(r, http.StatusOK, agents)
 }
 
 // Agent returns complete information of a given agent
@@ -2453,7 +2455,7 @@ func (this *HttpAPI) Agent(params Params, r Responder, req *http.Request, user P
 		return
 	}
 
-	r.JSON(http.StatusOK, agent)
+	writeHTTPJSON(r, http.StatusOK, agent)
 }
 
 // AgentUnmount instructs an agent to unmount the designated mount point
@@ -2474,7 +2476,7 @@ func (this *HttpAPI) AgentUnmount(params Params, r Responder, req *http.Request,
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentMountLV instructs an agent to mount a given volume on the designated mount point
@@ -2495,7 +2497,7 @@ func (this *HttpAPI) AgentMountLV(params Params, r Responder, req *http.Request,
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentCreateSnapshot instructs an agent to create a new snapshot. Agent's DIY implementation.
@@ -2516,7 +2518,7 @@ func (this *HttpAPI) AgentCreateSnapshot(params Params, r Responder, req *http.R
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentRemoveLV instructs an agent to remove a logical volume
@@ -2537,7 +2539,7 @@ func (this *HttpAPI) AgentRemoveLV(params Params, r Responder, req *http.Request
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentMySQLStop stops MySQL service on agent
@@ -2558,7 +2560,7 @@ func (this *HttpAPI) AgentMySQLStop(params Params, r Responder, req *http.Reques
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentMySQLStart starts MySQL service on agent
@@ -2579,7 +2581,7 @@ func (this *HttpAPI) AgentMySQLStart(params Params, r Responder, req *http.Reque
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 func (this *HttpAPI) AgentCustomCommand(params Params, r Responder, req *http.Request, user Principal) {
@@ -2599,7 +2601,7 @@ func (this *HttpAPI) AgentCustomCommand(params Params, r Responder, req *http.Re
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentSeed completely seeds a host with another host's snapshots. This is a complex operation
@@ -2621,7 +2623,7 @@ func (this *HttpAPI) AgentSeed(params Params, r Responder, req *http.Request, us
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentActiveSeeds lists active seeds and their state
@@ -2642,7 +2644,7 @@ func (this *HttpAPI) AgentActiveSeeds(params Params, r Responder, req *http.Requ
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentRecentSeeds lists recent seeds of a given agent
@@ -2663,7 +2665,7 @@ func (this *HttpAPI) AgentRecentSeeds(params Params, r Responder, req *http.Requ
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentSeedDetails provides details of a given seed
@@ -2685,7 +2687,7 @@ func (this *HttpAPI) AgentSeedDetails(params Params, r Responder, req *http.Requ
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AgentSeedStates returns the breakdown of states (steps) of a given seed
@@ -2707,7 +2709,7 @@ func (this *HttpAPI) AgentSeedStates(params Params, r Responder, req *http.Reque
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // Seeds returns all recent seeds
@@ -2728,7 +2730,7 @@ func (this *HttpAPI) Seeds(params Params, r Responder, req *http.Request, user P
 		return
 	}
 
-	r.JSON(http.StatusOK, output)
+	writeHTTPJSON(r, http.StatusOK, output)
 }
 
 // AbortSeed instructs agents to abort an active seed
@@ -2750,12 +2752,12 @@ func (this *HttpAPI) AbortSeed(params Params, r Responder, req *http.Request, us
 		return
 	}
 
-	r.JSON(http.StatusOK, err == nil)
+	writeHTTPJSON(r, http.StatusOK, err == nil)
 }
 
 // Headers is a self-test call which returns HTTP headers
 func (this *HttpAPI) Headers(params Params, r Responder, req *http.Request) {
-	r.JSON(http.StatusOK, req.Header)
+	writeHTTPJSON(r, http.StatusOK, req.Header)
 }
 
 // Health performs a self test
@@ -2772,7 +2774,7 @@ func (this *HttpAPI) Health(params Params, r Responder, req *http.Request) {
 
 // LBCheck returns a constant response, and this can be used by load balancers that expect a given string.
 func (this *HttpAPI) LBCheck(params Params, r Responder, req *http.Request) {
-	r.JSON(http.StatusOK, "OK")
+	writeHTTPJSON(r, http.StatusOK, "OK")
 }
 
 // LBCheck returns a constant response, and this can be used by load balancers that expect a given string.
@@ -2783,9 +2785,9 @@ func (this *HttpAPI) LeaderCheck(params Params, r Responder, req *http.Request) 
 	}
 
 	if logic.IsLeader() {
-		r.JSON(http.StatusOK, "OK")
+		writeHTTPJSON(r, http.StatusOK, "OK")
 	} else {
-		r.JSON(respondStatus, "Not leader")
+		writeHTTPJSON(r, respondStatus, "Not leader")
 	}
 }
 
@@ -2797,7 +2799,7 @@ func (this *HttpAPI) LeaderCheck(params Params, r Responder, req *http.Request) 
 func (this *HttpAPI) StatusCheck(params Params, r Responder, req *http.Request) {
 	health, err := process.HealthTest()
 	if err != nil {
-		r.JSON(500, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Application node is unhealthy %+v", err), Details: health})
+		writeHTTPJSON(r, 500, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Application node is unhealthy %+v", err), Details: health})
 		return
 	}
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Application node is healthy"), Details: health})
@@ -2821,7 +2823,7 @@ func (this *HttpAPI) ReloadConfiguration(params Params, r Responder, req *http.R
 
 // ReplicationAnalysis retuens list of issues
 func (this *HttpAPI) replicationAnalysis(clusterName string, instanceKey *inst.InstanceKey, params Params, r Responder, req *http.Request) {
-	analysis, err := inst.GetReplicationAnalysis(clusterName, &inst.ReplicationAnalysisHints{IncludeDowntimed: req.URL.Query().Get("includeDowntimed") != "false"})
+	analysis, err := inst.GetReplicationAnalysis(clusterName, &dto.ReplicationAnalysisHints{IncludeDowntimed: req.URL.Query().Get("includeDowntimed") != "false"})
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: %+v", err)})
 		return
@@ -3039,7 +3041,7 @@ func (this *HttpAPI) RegisterCandidate(params Params, r Responder, req *http.Req
 
 // AutomatedRecoveryFilters retuens list of clusters which are configured with automated recovery
 func (this *HttpAPI) AutomatedRecoveryFilters(params Params, r Responder, req *http.Request) {
-	doc, err := recoverypolicy.GetPolicy(req.Context(), recoverypolicy.ScopeGlobal, recoverypolicy.GlobalKey)
+	doc, err := recoverypolicy.GetPolicy(req.Context(), domain.ScopeGlobal, domain.GlobalKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -3068,7 +3070,7 @@ func (this *HttpAPI) AuditFailureDetection(params Params, r Responder, req *http
 		return
 	}
 
-	r.JSON(http.StatusOK, audits)
+	writeHTTPJSON(r, http.StatusOK, audits)
 }
 
 // AuditRecoverySteps returns audited steps of a given recovery
@@ -3081,7 +3083,7 @@ func (this *HttpAPI) AuditRecoverySteps(params Params, r Responder, req *http.Re
 		return
 	}
 
-	r.JSON(http.StatusOK, audits)
+	writeHTTPJSON(r, http.StatusOK, audits)
 }
 
 // ReadReplicationAnalysisChangelog lists instances and their analysis changelog
@@ -3093,7 +3095,7 @@ func (this *HttpAPI) ReadReplicationAnalysisChangelog(params Params, r Responder
 		return
 	}
 
-	r.JSON(http.StatusOK, changelogs)
+	writeHTTPJSON(r, http.StatusOK, changelogs)
 }
 
 // AuditRecovery provides list of topology-recovery entries
@@ -3120,7 +3122,7 @@ func (this *HttpAPI) AuditRecovery(params Params, r Responder, req *http.Request
 		return
 	}
 
-	r.JSON(http.StatusOK, audits)
+	writeHTTPJSON(r, http.StatusOK, audits)
 }
 
 // ActiveClusterRecovery returns recoveries in-progress for a given cluster
@@ -3132,7 +3134,7 @@ func (this *HttpAPI) ActiveClusterRecovery(params Params, r Responder, req *http
 		return
 	}
 
-	r.JSON(http.StatusOK, recoveries)
+	writeHTTPJSON(r, http.StatusOK, recoveries)
 }
 
 // RecentlyActiveClusterRecovery returns recoveries in-progress for a given cluster
@@ -3144,7 +3146,7 @@ func (this *HttpAPI) RecentlyActiveClusterRecovery(params Params, r Responder, r
 		return
 	}
 
-	r.JSON(http.StatusOK, recoveries)
+	writeHTTPJSON(r, http.StatusOK, recoveries)
 }
 
 // RecentlyActiveClusterRecovery returns recoveries in-progress for a given cluster
@@ -3162,7 +3164,7 @@ func (this *HttpAPI) RecentlyActiveInstanceRecovery(params Params, r Responder, 
 		return
 	}
 
-	r.JSON(http.StatusOK, recoveries)
+	writeHTTPJSON(r, http.StatusOK, recoveries)
 }
 
 // ClusterInfo provides details of a given cluster
@@ -3326,7 +3328,7 @@ func (this *HttpAPI) BlockedRecoveries(params Params, r Responder, req *http.Req
 		return
 	}
 
-	r.JSON(http.StatusOK, blockedRecoveries)
+	writeHTTPJSON(r, http.StatusOK, blockedRecoveries)
 }
 
 // DisableGlobalRecoveries globally disables recoveries
@@ -3423,7 +3425,7 @@ func (this *HttpAPI) SaveRecoveryPolicy(_ Params, r Responder, req *http.Request
 		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
 		return
 	}
-	var command recoverypolicy.SavePolicyCommand
+	var command dto.SaveRecoveryPolicyCommand
 	if err := decodeConfigurationBody(req, &command); err != nil {
 		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -3435,7 +3437,7 @@ func (this *HttpAPI) SaveRecoveryPolicy(_ Params, r Responder, req *http.Request
 	}
 	if _, err := orcraft.PublishCommand("save-recovery-policy", command); err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, recoverypolicy.ErrRevisionConflict) {
+		if recoverypolicy.IsRevisionConflict(err) {
 			status = http.StatusConflict
 		}
 		RespondStatus(r, status, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
@@ -3463,7 +3465,7 @@ func (this *HttpAPI) SaveRecoveryHookProfile(_ Params, r Responder, req *http.Re
 		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
 		return
 	}
-	var command recoverypolicy.SaveHookProfileCommand
+	var command dto.SaveRecoveryHookProfileCommand
 	if err := decodeConfigurationBody(req, &command); err != nil {
 		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -3475,7 +3477,7 @@ func (this *HttpAPI) SaveRecoveryHookProfile(_ Params, r Responder, req *http.Re
 	}
 	if _, err := orcraft.PublishCommand("save-recovery-hook-profile", command); err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, recoverypolicy.ErrRevisionConflict) {
+		if recoverypolicy.IsRevisionConflict(err) {
 			status = http.StatusConflict
 		}
 		RespondStatus(r, status, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
@@ -3506,7 +3508,7 @@ func (this *HttpAPI) TestRecoveryHookProfile(_ Params, r Responder, req *http.Re
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	var selected *recoverypolicy.HookProfile
+	var selected *domain.RecoveryHookProfile
 	for index := range profiles {
 		if profiles[index].ID == request.ProfileID {
 			selected = &profiles[index]
@@ -3556,7 +3558,7 @@ func (this *HttpAPI) SaveRecoveryHookAssignment(_ Params, r Responder, req *http
 		RespondStatus(r, http.StatusForbidden, &APIResponse{Code: ERROR, Message: "Configuration administrator permission required"})
 		return
 	}
-	var command recoverypolicy.SaveHookAssignmentCommand
+	var command dto.SaveRecoveryHookAssignmentCommand
 	if err := decodeConfigurationBody(req, &command); err != nil {
 		RespondStatus(r, http.StatusBadRequest, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -3568,7 +3570,7 @@ func (this *HttpAPI) SaveRecoveryHookAssignment(_ Params, r Responder, req *http
 	}
 	if _, err := orcraft.PublishCommand("save-recovery-hook-assignment", command); err != nil {
 		status := http.StatusInternalServerError
-		if errors.Is(err, recoverypolicy.ErrRevisionConflict) {
+		if recoverypolicy.IsRevisionConflict(err) {
 			status = http.StatusConflict
 		}
 		RespondStatus(r, status, &APIResponse{Code: ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})

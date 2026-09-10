@@ -19,8 +19,8 @@ package kv
 import (
 	"context"
 
-	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
+	"github.com/openark/orchestrator/internal/repository/metadata"
 )
 
 // Internal key-value store, based on relational backend
@@ -32,37 +32,12 @@ func NewInternalKVStore() KVStore {
 }
 
 func (this *internalKVStore) PutKeyValue(key string, value string) (err error) {
-	_, err = db.ExecOrchestrator(`
-		replace
-			into kv_store (
-        store_key, store_value, last_updated
-			) values (
-				?, ?, now()
-			)
-		`, key, value,
-	)
+	err = metadata.PutKeyValue(context.Background(), key, value)
 	return log.Errore(err)
 }
 
 func (this *internalKVStore) GetKeyValue(key string) (value string, found bool, err error) {
-	query := `
-		select
-			store_value
-		from
-			kv_store
-		where
-      store_key = ?
-		`
-
-	type keyValueRow struct {
-		Value string `gorm:"column:store_value"`
-	}
-	rows, err := db.QueryOrchestratorRows[keyValueRow](context.Background(), query, key)
-	if err == nil && len(rows) > 0 {
-		value = rows[0].Value
-		found = true
-	}
-
+	value, found, err = metadata.ReadKeyValue(context.Background(), key)
 	return value, found, log.Errore(err)
 }
 

@@ -16,7 +16,7 @@
 | 层级 | 入口 / 结果 |
 | --- | --- |
 | 全仓单元测试 | `make test-unit` 通过，包含主模块和独立 orch-cli 模块 |
-| 审查后回归 | `go test -mod=readonly ./internal/db ./internal/logic ./cmd/orchestrator` 通过，覆盖畸形快照拒绝及已有应用版本不能跳过 pending 初始化 |
+| 审查后回归 | `go test -mod=readonly ./internal/repository/database ./internal/logic ./cmd/orchestrator` 通过，覆盖畸形快照拒绝及已有应用版本不能跳过 pending 初始化 |
 | 格式与文档 | `make fmt-check test-docs` 通过，校验 31 个受管 Wiki 页面 |
 | 构建 | `make build` 完成包含 Web 的服务端及 CLI 构建；审查后以 `make build WEB_PREBUILT=1` 重建最终 Go 产物 |
 | SQLite 迁移 | canonical-v1 与 legacy-v1 的全部表带数据迁移、重复执行、历史编号延续、额外索引保留、中断续跑及未知 id 拒绝通过 |
