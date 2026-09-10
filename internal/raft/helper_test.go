@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
+	"github.com/openark/orchestrator/internal/models/vo"
 )
 
 type memoryApp struct {
@@ -125,9 +126,9 @@ func waitForLeader(t *testing.T, nodes ...*Store) *Store {
 	return leader
 }
 
-func waitForConfiguration(t *testing.T, node *Store, servers int) ConfigurationView {
+func waitForConfiguration(t *testing.T, node *Store, servers int) vo.RaftConfiguration {
 	t.Helper()
-	var view ConfigurationView
+	var view vo.RaftConfiguration
 	waitFor(t, 10*time.Second, "configuration", func() bool {
 		cfg, err := node.currentConfigurationView()
 		if err != nil {

@@ -2,23 +2,31 @@ package observability
 
 import (
 	"context"
-	"database/sql"
 	"sync/atomic"
+
+	"github.com/openark/orchestrator/internal/models/domain"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
-var backendPool atomic.Pointer[sql.DB]
+type backendStatsProvider struct {
+	read func() domain.DatabasePoolStats
+}
 
-// SetBackendPool observes the existing pool without acquiring ownership or opening connections.
-func SetBackendPool(database *sql.DB) { backendPool.Store(database) }
-func backendStats() sql.DBStats {
-	p := backendPool.Load()
-	if p == nil {
-		return sql.DBStats{}
+var backendPoolStats atomic.Pointer[backendStatsProvider]
+
+// SetBackendStatsProvider observes an existing repository-owned pool without
+// exposing the raw database handle outside the repository layer.
+func SetBackendStatsProvider(read func() domain.DatabasePoolStats) {
+	backendPoolStats.Store(&backendStatsProvider{read: read})
+}
+func backendStats() domain.DatabasePoolStats {
+	provider := backendPoolStats.Load()
+	if provider == nil || provider.read == nil {
+		return domain.DatabasePoolStats{}
 	}
-	return p.Stats()
+	return provider.read()
 }
 func init() {
 	Gauge("orchestrator_backend_connections", "Existing backend pool connections", func() int64 { return int64(backendStats().InUse) }, attribute.String("state", "in_use"))

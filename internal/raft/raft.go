@@ -29,6 +29,8 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
+	"github.com/openark/orchestrator/internal/models/dto"
+	"github.com/openark/orchestrator/internal/models/vo"
 )
 
 const asyncSnapshotTimeframe = 1 * time.Minute
@@ -260,7 +262,7 @@ func QuorumSize() (int, error) {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return 0, RaftNotRunning
+		return 0, ErrNotRunning
 	}
 	voters, err := store.voterCount()
 	if err != nil {
@@ -286,7 +288,7 @@ func Snapshot() error {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return RaftNotRunning
+		return ErrNotRunning
 	}
 	return store.Snapshot()
 }
@@ -326,54 +328,54 @@ func GetRaftNodeID() string {
 	return store.nodeID
 }
 
-func GetClusterView() (ClusterView, error) {
+func GetClusterView() (vo.RaftCluster, error) {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return ClusterView{}, RaftNotRunning
+		return vo.RaftCluster{}, ErrNotRunning
 	}
 	return store.GetClusterView()
 }
 
-func GetStatus() NodeStatus {
+func GetStatus() vo.RaftNodeStatus {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return NodeStatus{}
+		return vo.RaftNodeStatus{}
 	}
 	return store.Status()
 }
 
-func Bootstrap() (ConfigurationView, error) {
+func Bootstrap() (vo.RaftConfiguration, error) {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return ConfigurationView{}, RaftNotRunning
+		return vo.RaftConfiguration{}, ErrNotRunning
 	}
 	return store.Bootstrap()
 }
 
-func AddMember(req MemberRequest) (ConfigurationView, error) {
+func AddMember(req dto.RaftMember) (vo.RaftConfiguration, error) {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return ConfigurationView{}, RaftNotRunning
+		return vo.RaftConfiguration{}, ErrNotRunning
 	}
 	if req.Address != "" {
 		normalized, err := normalizeRaftNode(req.Address)
 		if err != nil {
-			return ConfigurationView{}, invalidArgument("member address is invalid: %v", err)
+			return vo.RaftConfiguration{}, invalidArgument("member address is invalid: %v", err)
 		}
 		req.Address = normalized
 	}
 	return store.AddMember(req)
 }
 
-func RemoveMember(id string, expectedIndex *uint64) (ConfigurationView, error) {
+func RemoveMember(id string, expectedIndex *uint64) (vo.RaftConfiguration, error) {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return ConfigurationView{}, RaftNotRunning
+		return vo.RaftConfiguration{}, ErrNotRunning
 	}
 	return store.RemoveMember(id, expectedIndex)
 }
@@ -382,7 +384,7 @@ func TransferLeadership(id, address string) error {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return RaftNotRunning
+		return ErrNotRunning
 	}
 	if address != "" {
 		normalized, err := normalizeRaftNode(address)
@@ -398,7 +400,7 @@ func PublishCommand(op string, value interface{}) (response interface{}, err err
 	store, release := acquireStore()
 	defer release()
 	if store == nil {
-		return nil, RaftNotRunning
+		return nil, ErrNotRunning
 	}
 	b, err := json.Marshal(value)
 	if err != nil {

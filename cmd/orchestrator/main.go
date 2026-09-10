@@ -22,17 +22,14 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/openark/orchestrator/internal/app"
 	"github.com/openark/orchestrator/internal/config"
-	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/logic"
 	"github.com/openark/orchestrator/internal/observability"
 	"github.com/openark/orchestrator/internal/process"
+	"github.com/openark/orchestrator/internal/repository"
 )
 
 var AppVersion, GitCommit string
@@ -49,7 +46,7 @@ var configurationExtensions = []string{".yaml", ".yml", ".json"}
 func main() {
 	log.RegisterCloseHook(app.CloseRaftRuntime)
 	log.RegisterCloseHook(app.CloseHealthMonitor)
-	registerProcessCloseHooks(log.RegisterCloseHook, inst.CloseAuditSyslog, db.Close)
+	registerProcessCloseHooks(log.RegisterCloseHook, inst.CloseAuditSyslog, repository.Close)
 	exitCode := run()
 	if err := log.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "logger close failed: %v\n", err)
@@ -153,8 +150,7 @@ func runCommand(options *commandOptions, command string) error {
 		config.RuntimeCLIFlags.MigrateMetadataIDs = true
 		config.RuntimeCLIFlags.ConfiguredVersion = ""
 		config.Config.Metadata.Schema.SkipUpdate = false
-		_, err := db.OpenOrchestratorContext(context.Background())
-		return err
+		return repository.InitializeMetadata(context.Background())
 	case "redeploy-internal-db":
 		config.RuntimeCLIFlags.ConfiguredVersion = ""
 		_, err := inst.ReadClusters()

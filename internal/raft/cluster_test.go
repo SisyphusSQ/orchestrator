@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/openark/orchestrator/internal/models/dto"
 )
 
 func TestThreeNodeLifecycle(t *testing.T) {
@@ -25,14 +26,14 @@ func TestThreeNodeLifecycle(t *testing.T) {
 		t.Fatalf("leader after bootstrap = %s, want node-1", leader.nodeID)
 	}
 
-	node2View, err := n1.AddMember(MemberRequest{ID: n2.nodeID, Address: n2.raftAdvertise, Suffrage: suffrageVoter})
+	node2View, err := n1.AddMember(dto.RaftMember{ID: n2.nodeID, Address: n2.raftAdvertise, Suffrage: suffrageVoter})
 	if err != nil {
 		t.Fatalf("add node-2: %v", err)
 	}
 	if node2View.Index <= bootstrapView.Index {
 		t.Fatalf("node-2 configuration index = %d, want greater than bootstrap index %d", node2View.Index, bootstrapView.Index)
 	}
-	node3View, err := n1.AddMember(MemberRequest{ID: n3.nodeID, Address: n3.raftAdvertise, Suffrage: suffrageVoter})
+	node3View, err := n1.AddMember(dto.RaftMember{ID: n3.nodeID, Address: n3.raftAdvertise, Suffrage: suffrageVoter})
 	if err != nil {
 		t.Fatalf("add node-3: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestThreeNodeLifecycle(t *testing.T) {
 	if followerForMutation == leader {
 		followerForMutation = n2
 	}
-	if _, err := followerForMutation.AddMember(MemberRequest{ID: n3.nodeID, Address: n3.raftAdvertise, Suffrage: suffrageVoter}); ClassOf(err) != ClassNotLeader {
+	if _, err := followerForMutation.AddMember(dto.RaftMember{ID: n3.nodeID, Address: n3.raftAdvertise, Suffrage: suffrageVoter}); ClassOf(err) != ClassNotLeader {
 		t.Fatalf("follower duplicate add class = %s, want not_leader: %v", ClassOf(err), err)
 	}
 	if _, err := followerForMutation.RemoveMember(n3.nodeID, nil); ClassOf(err) != ClassNotLeader {
@@ -68,22 +69,22 @@ func TestThreeNodeLifecycle(t *testing.T) {
 		t.Fatalf("follower directed transfer class = %s, want not_leader: %v", ClassOf(err), err)
 	}
 
-	if _, err := leader.AddMember(MemberRequest{ID: n2.nodeID, Address: n2.raftAdvertise, Suffrage: suffrageVoter}); err != nil {
+	if _, err := leader.AddMember(dto.RaftMember{ID: n2.nodeID, Address: n2.raftAdvertise, Suffrage: suffrageVoter}); err != nil {
 		t.Fatalf("duplicate add node-2: %v", err)
 	}
-	if _, err := leader.AddMember(MemberRequest{ID: n2.nodeID, Address: n3.raftAdvertise, Suffrage: suffrageVoter}); err == nil {
+	if _, err := leader.AddMember(dto.RaftMember{ID: n2.nodeID, Address: n3.raftAdvertise, Suffrage: suffrageVoter}); err == nil {
 		t.Fatal("same id different address succeeded")
 	} else if ClassOf(err) != ClassConflict {
 		t.Fatalf("same id different address class = %s, want conflict: %v", ClassOf(err), err)
 	}
-	if _, err := leader.AddMember(MemberRequest{ID: "node-x", Address: n2.raftAdvertise, Suffrage: suffrageVoter}); err == nil {
+	if _, err := leader.AddMember(dto.RaftMember{ID: "node-x", Address: n2.raftAdvertise, Suffrage: suffrageVoter}); err == nil {
 		t.Fatal("same address different id succeeded")
 	} else if ClassOf(err) != ClassConflict {
 		t.Fatalf("same address different id class = %s, want conflict: %v", ClassOf(err), err)
 	}
 
 	staleIndex := bootstrapView.Index
-	if _, err := leader.AddMember(MemberRequest{ID: "late", Address: "127.0.0.1:1", Suffrage: suffrageVoter, ExpectedIndex: &staleIndex}); err == nil {
+	if _, err := leader.AddMember(dto.RaftMember{ID: "late", Address: "127.0.0.1:1", Suffrage: suffrageVoter, ExpectedIndex: &staleIndex}); err == nil {
 		t.Fatal("stale index succeeded")
 	} else if ClassOf(err) != ClassConflict {
 		t.Fatalf("stale index class = %s: %v", ClassOf(err), err)
@@ -236,7 +237,7 @@ func TestLeadershipTransferRejectsNonvoter(t *testing.T) {
 	waitForLeader(t, leader)
 
 	nonvoterAddress := localAddr(t)
-	if _, err := leader.AddMember(MemberRequest{
+	if _, err := leader.AddMember(dto.RaftMember{
 		ID:       "node-2",
 		Address:  nonvoterAddress,
 		Suffrage: suffrageNonvoter,

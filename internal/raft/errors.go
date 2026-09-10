@@ -81,9 +81,6 @@ var (
 	ErrIndeterminate           = newError(ClassIndeterminate, "raft mutation result is indeterminate")
 	ErrInvalidArgument         = newError(ClassInvalidArgument, "invalid raft request")
 	ErrTimeout                 = newError(ClassIndeterminate, "raft future timed out")
-
-	// RaftNotRunning is the historical alias used by existing call sites.
-	RaftNotRunning = ErrNotRunning
 )
 
 func invalidArgument(format string, args ...interface{}) *Error {

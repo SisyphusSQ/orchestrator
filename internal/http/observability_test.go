@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openark/orchestrator/internal/models/vo"
 	"github.com/openark/orchestrator/internal/observability"
 )
 
@@ -39,16 +40,16 @@ func TestObservabilityRoutesStayLocalAndAuthenticated(t *testing.T) {
 	}
 	cases := []struct {
 		path   string
-		health observability.Health
+		health vo.Health
 		code   int
 	}{
-		{"/metrics", observability.Health{}, 200},
-		{"/health/live", observability.Health{}, 200},
-		{"/health/ready", observability.Health{}, 503},
-		{"/health/ready", observability.Health{Ready: true, CheckedAt: time.Now()}, 200},
-		{"/health/leader-ready", observability.Health{Ready: true, CheckedAt: time.Now()}, 503},
-		{"/health/leader-ready", observability.Health{Ready: true, LeaderReady: true, CheckedAt: time.Now()}, 200},
-		{"/health/leader-ready", observability.Health{Ready: true, LeaderReady: true, CheckedAt: time.Now().Add(-time.Minute)}, 503},
+		{"/metrics", vo.Health{}, 200},
+		{"/health/live", vo.Health{}, 200},
+		{"/health/ready", vo.Health{}, 503},
+		{"/health/ready", vo.Health{Ready: true, CheckedAt: time.Now()}, 200},
+		{"/health/leader-ready", vo.Health{Ready: true, CheckedAt: time.Now()}, 503},
+		{"/health/leader-ready", vo.Health{Ready: true, LeaderReady: true, CheckedAt: time.Now()}, 200},
+		{"/health/leader-ready", vo.Health{Ready: true, LeaderReady: true, CheckedAt: time.Now().Add(-time.Minute)}, 503},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {

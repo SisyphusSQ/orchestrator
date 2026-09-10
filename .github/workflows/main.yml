@@ -46,7 +46,7 @@ jobs:
       env:
         ORCHESTRATOR_METADATA_SCHEMA_TEST_DSN: root@tcp(127.0.0.1:3306)/orchestrator_schema?interpolateParams=true
         ORCHESTRATOR_METADATA_ID_MIGRATION_TEST_DSN: root@tcp(127.0.0.1:3306)/orchestrator_schema?interpolateParams=true
-      run: go test ./internal/db -run '^Test${{ matrix.scenario }}$' -count=1 -v
+      run: go test ./internal/repository/database -run '^Test${{ matrix.scenario }}$' -count=1 -v
 
   build:
 

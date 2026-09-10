@@ -1,0 +1,95 @@
+package domain
+
+import "database/sql"
+
+// BackendInstanceRecord is the repository-neutral representation used to
+// exchange discovered instance state with orchestration logic.
+type BackendInstanceRecord struct {
+	Hostname                          string
+	Port                              int
+	Uptime                            uint
+	ServerID                          uint
+	ServerUUID                        string
+	Version                           string
+	MajorVersion                      string
+	VersionComment                    string
+	BinlogServer                      bool
+	ReadOnly                          bool
+	BinlogFormat                      string
+	BinlogRowImage                    string
+	LogBin                            bool
+	LogSlaveUpdates                   bool
+	MasterHost                        string
+	MasterPort                        int
+	SlaveSQLRunning                   bool
+	SlaveIORunning                    bool
+	ReplicationSQLThreadState         int
+	ReplicationIOThreadState          int
+	HasReplicationFilters             bool
+	SupportsOracleGTID                bool
+	OracleGTID                        bool
+	MasterUUID                        string
+	AncestryUUID                      string
+	ExecutedGTIDSet                   string
+	GTIDMode                          string
+	GTIDPurged                        string
+	GTIDErrant                        string
+	MariaDBGTID                       bool
+	PseudoGTID                        bool
+	BinaryLogFile                     string
+	BinaryLogPos                      int64
+	MasterLogFile                     string
+	ReadMasterLogPos                  int64
+	RelayMasterLogFile                string
+	ExecMasterLogPos                  int64
+	RelayLogFile                      string
+	RelayLogPos                       int64
+	LastSQLError                      string
+	LastIOError                       string
+	SecondsBehindMaster               sql.NullInt64
+	SlaveLagSeconds                   sql.NullInt64
+	SQLDelay                          uint
+	SlaveHosts                        string
+	NumSlaveHosts                     int
+	ClusterName                       string
+	SuggestedClusterAlias             string
+	DataCenter                        string
+	Region                            string
+	PhysicalEnvironment               string
+	SemiSyncEnforced                  uint
+	SemiSyncAvailable                 bool
+	SemiSyncMasterEnabled             bool
+	SemiSyncMasterTimeout             uint64
+	SemiSyncMasterWaitForReplicaCount uint
+	SemiSyncReplicaEnabled            bool
+	SemiSyncMasterStatus              bool
+	SemiSyncMasterClients             uint
+	SemiSyncReplicaStatus             bool
+	ReplicationDepth                  uint
+	CoMaster                          bool
+	ReplicationCredentialsAvailable   bool
+	HasReplicationCredentials         bool
+	SecondsSinceLastChecked           sql.NullInt64
+	LastSeen                          sql.NullString
+	LastCheckValid                    bool
+	LastCheckPartialSuccess           bool
+	SecondsSinceLastSeen              sql.NullInt64
+	Candidate                         bool
+	PromotionRule                     string
+	Downtimed                         bool
+	DowntimeReason                    string
+	DowntimeOwner                     string
+	DowntimeEndTimestamp              string
+	ElapsedDowntimeSeconds            int
+	UnresolvedHostname                string
+	AllowTLS                          bool
+	InstanceAlias                     string
+	LastDiscoveryLatency              int64
+	ReplicationGroupName              string
+	ReplicationGroupSinglePrimary     bool
+	ReplicationGroupMemberState       string
+	ReplicationGroupMemberRole        string
+	ReplicationGroupPrimaryHost       string
+	ReplicationGroupPrimaryPort       int
+	ReplicationGroupMembers           string
+}

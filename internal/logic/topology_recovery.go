@@ -33,6 +33,8 @@ import (
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/inst"
 	"github.com/openark/orchestrator/internal/kv"
+	modeldomain "github.com/openark/orchestrator/internal/models/domain"
+	"github.com/openark/orchestrator/internal/models/dto"
 	"github.com/openark/orchestrator/internal/os"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
@@ -477,7 +479,7 @@ func recoverDeadMasterInBinlogServerTopology(topologyRecovery *TopologyRecovery)
 	if err != nil {
 		return promotedReplica, log.Errore(err)
 	}
-	promotedBinlogServer, err = inst.Repoint(&promotedBinlogServer.Key, &promotedReplica.Key, inst.GTIDHintDeny)
+	promotedBinlogServer, err = inst.Repoint(&promotedBinlogServer.Key, &promotedReplica.Key, modeldomain.GTIDHintDeny)
 	if err != nil {
 		return nil, log.Errore(err)
 	}
@@ -509,7 +511,7 @@ func recoverDeadMasterInBinlogServerTopology(topologyRecovery *TopologyRecovery)
 						return err
 					}
 				}
-				_, err = inst.Repoint(&binlogServerReplica.Key, &promotedReplica.Key, inst.GTIDHintDeny)
+				_, err = inst.Repoint(&binlogServerReplica.Key, &promotedReplica.Key, modeldomain.GTIDHintDeny)
 				return err
 			}
 			topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("recoverDeadMasterInBinlogServerTopology, moving binlog server %+v", binlogServerReplica.Key))
@@ -1945,7 +1947,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplicaKey *inst.InstanceKey, err error) {
 	// Allow the analysis to run even if we don't want to recover
-	replicationAnalysis, err := inst.GetReplicationAnalysis("", &inst.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
+	replicationAnalysis, err := inst.GetReplicationAnalysis("", &dto.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
 	if err != nil {
 		return false, nil, log.Errore(err)
 	}
@@ -1991,7 +1993,7 @@ func forceAnalysisEntry(clusterName string, analysisCode inst.AnalysisCode, comm
 		return analysisEntry, err
 	}
 
-	clusterAnalysisEntries, err := inst.GetReplicationAnalysis(clusterInfo.ClusterName, &inst.ReplicationAnalysisHints{IncludeDowntimed: true, IncludeNoProblem: true})
+	clusterAnalysisEntries, err := inst.GetReplicationAnalysis(clusterInfo.ClusterName, &dto.ReplicationAnalysisHints{IncludeDowntimed: true, IncludeNoProblem: true})
 	if err != nil {
 		return analysisEntry, err
 	}
@@ -2240,9 +2242,9 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		inst.SetReadOnly(&clusterMaster.Key, false)
 		return nil, nil, fmt.Errorf("GracefulMasterTakeover: Recovery attempted yet no replica promoted; err=%+v", err)
 	}
-	var gtidHint inst.OperationGTIDHint = inst.GTIDHintNeutral
+	var gtidHint modeldomain.OperationGTIDHint = modeldomain.GTIDHintNeutral
 	if topologyRecovery.RecoveryType == MasterRecoveryGTID {
-		gtidHint = inst.GTIDHintForce
+		gtidHint = modeldomain.GTIDHintForce
 	}
 	clusterMaster, err = inst.ChangeMasterTo(&clusterMaster.Key, &designatedInstance.Key, promotedMasterCoordinates, false, gtidHint)
 	if !clusterMaster.SelfBinlogCoordinates.Equals(demotedMasterSelfBinlogCoordinates) {

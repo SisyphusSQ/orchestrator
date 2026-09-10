@@ -5,9 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openark/orchestrator/internal/db"
+	"github.com/openark/orchestrator/internal/models/vo"
 	"github.com/openark/orchestrator/internal/observability"
 	orcraft "github.com/openark/orchestrator/internal/raft"
+	"github.com/openark/orchestrator/internal/repository"
 )
 
 // startHealthMonitor owns dependency IO; /metrics and health requests read its atomic snapshot.
@@ -36,11 +37,8 @@ func startHealthMonitor() func() error {
 func sampleHealth(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
-	h := observability.Health{}
-	database, err := db.OpenOrchestratorContext(ctx)
-	if err == nil {
-		err = database.PingContext(ctx)
-	}
+	h := vo.Health{}
+	err := repository.PingMetadata(ctx)
 	h.Backend = err == nil
 	raftStatus := orcraft.ObservabilityStatus()
 	h.LastIndex, h.CommitIndex, h.AppliedIndex = orcraft.LogProgress()

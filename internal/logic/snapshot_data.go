@@ -23,9 +23,10 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/inst"
+	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 	"github.com/openark/orchestrator/internal/recoverypolicy"
+	"github.com/openark/orchestrator/internal/repository/metadata"
 
 	"github.com/openark/orchestrator/internal/golib/log"
 	orcraft "github.com/openark/orchestrator/internal/raft"
@@ -54,7 +55,7 @@ type SnapshotData struct {
 	RecoverySteps,
 	RecoveryPolicy,
 	RecoveryHookProfiles,
-	RecoveryHookAssignments db.NamedResultData
+	RecoveryHookAssignments modeldomain.NamedResultData
 
 	LeaderURI string
 }
@@ -63,21 +64,14 @@ func NewSnapshotData() *SnapshotData {
 	return &SnapshotData{}
 }
 
-func readTableData(tableName string, data *db.NamedResultData) error {
-	orcdb, err := db.OpenOrchestrator()
-	if err != nil {
-		return log.Errore(err)
-	}
-	*data, err = db.ScanTableContext(context.Background(), orcdb, tableName)
+func readTableData(tableName string, data *modeldomain.NamedResultData) error {
+	var err error
+	*data, err = metadata.ReadSnapshotTable(context.Background(), tableName)
 	return log.Errore(err)
 }
 
-func writeTableData(tableName string, data *db.NamedResultData) error {
-	orcdb, err := db.OpenOrchestrator()
-	if err != nil {
-		return log.Errore(err)
-	}
-	err = db.WriteTableContext(context.Background(), orcdb, tableName, *data)
+func writeTableData(tableName string, data *modeldomain.NamedResultData) error {
+	err := metadata.WriteSnapshotTable(context.Background(), tableName, *data)
 	return log.Errore(err)
 }
 

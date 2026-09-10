@@ -29,6 +29,7 @@ import (
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/golib/math"
 	"github.com/openark/orchestrator/internal/golib/util"
+	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 	"github.com/openark/orchestrator/internal/os"
 	"github.com/openark/orchestrator/internal/recoverypolicy"
 )
@@ -264,7 +265,7 @@ func MoveEquivalent(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("MoveEquivalent(): ExecBinlogCoordinates changed after stopping replication on %+v; aborting", instance.Key)
 		goto Cleanup
 	}
-	instance, err = ChangeMasterTo(instanceKey, otherKey, binlogCoordinates, false, GTIDHintNeutral)
+	instance, err = ChangeMasterTo(instanceKey, otherKey, binlogCoordinates, false, modeldomain.GTIDHintNeutral)
 
 Cleanup:
 	instance, _ = StartReplication(instanceKey)
@@ -306,7 +307,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	if master.IsBinlogServer() {
 		// Quick solution via binlog servers
-		return Repoint(instanceKey, &master.MasterKey, GTIDHintDeny)
+		return Repoint(instanceKey, &master.MasterKey, modeldomain.GTIDHintDeny)
 	}
 
 	log.Infof("Will move %+v up the topology", *instanceKey)
@@ -344,7 +345,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	// We can skip hostname unresolve; we just copy+paste whatever our master thinks of its master.
-	instance, err = ChangeMasterTo(instanceKey, &master.MasterKey, &master.ExecBinlogCoordinates, true, GTIDHintDeny)
+	instance, err = ChangeMasterTo(instanceKey, &master.MasterKey, &master.ExecBinlogCoordinates, true, modeldomain.GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -437,7 +438,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([](*Instance), *I
 				}
 				if instance.IsBinlogServer() {
 					// Special case. Just repoint
-					replica, err = Repoint(&replica.Key, instanceKey, GTIDHintDeny)
+					replica, err = Repoint(&replica.Key, instanceKey, modeldomain.GTIDHintDeny)
 					if err != nil {
 						replicaErr = err
 						return
@@ -455,7 +456,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([](*Instance), *I
 						return
 					}
 
-					replica, err = ChangeMasterTo(&replica.Key, &instance.MasterKey, &instance.ExecBinlogCoordinates, false, GTIDHintDeny)
+					replica, err = ChangeMasterTo(&replica.Key, &instance.MasterKey, &instance.ExecBinlogCoordinates, false, modeldomain.GTIDHintDeny)
 					if err != nil {
 						replicaErr = err
 						return
@@ -513,7 +514,7 @@ func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
 	if sibling.IsBinlogServer() {
 		// Binlog server has same coordinates as master
 		// Easy solution!
-		return Repoint(instanceKey, &sibling.Key, GTIDHintDeny)
+		return Repoint(instanceKey, &sibling.Key, modeldomain.GTIDHintDeny)
 	}
 
 	rinstance, _, _ := ReadInstance(&instance.Key)
@@ -569,7 +570,7 @@ func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
 	}
 	// At this point both siblings have executed exact same statements and are identical
 
-	instance, err = ChangeMasterTo(instanceKey, &sibling.Key, &sibling.SelfBinlogCoordinates, false, GTIDHintDeny)
+	instance, err = ChangeMasterTo(instanceKey, &sibling.Key, &sibling.SelfBinlogCoordinates, false, modeldomain.GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -655,7 +656,7 @@ func moveInstanceBelowViaGTID(instance, otherInstance *Instance) (*Instance, err
 		goto Cleanup
 	}
 
-	instance, err = ChangeMasterTo(instanceKey, &otherInstance.Key, &otherInstance.SelfBinlogCoordinates, false, GTIDHintForce)
+	instance, err = ChangeMasterTo(instanceKey, &otherInstance.Key, &otherInstance.SelfBinlogCoordinates, false, modeldomain.GTIDHintForce)
 	if err != nil {
 		goto Cleanup
 	}
@@ -787,7 +788,7 @@ func MoveReplicasGTID(masterKey *InstanceKey, belowKey *InstanceKey, pattern str
 // Two use cases:
 // - masterKey is nil: use case is corrupted relay logs on replica
 // - masterKey is not nil: using Binlog servers (coordinates remain the same)
-func Repoint(instanceKey *InstanceKey, masterKey *InstanceKey, gtidHint OperationGTIDHint) (*Instance, error) {
+func Repoint(instanceKey *InstanceKey, masterKey *InstanceKey, gtidHint modeldomain.OperationGTIDHint) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, err
@@ -888,7 +889,7 @@ func RepointTo(replicas [](*Instance), belowKey *InstanceKey) ([](*Instance), er
 		go func() {
 			defer func() { barrier <- &replica.Key }()
 			ExecuteOnTopology(func() {
-				replica, replicaErr := Repoint(&replica.Key, belowKey, GTIDHintNeutral)
+				replica, replicaErr := Repoint(&replica.Key, belowKey, modeldomain.GTIDHintNeutral)
 
 				func() {
 					// Instantaneous mutex.
@@ -998,7 +999,7 @@ func MakeCoMaster(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	log.Infof("Will make %+v co-master of %+v", instanceKey, master.Key)
 
-	var gitHint OperationGTIDHint = GTIDHintNeutral
+	var gitHint modeldomain.OperationGTIDHint = modeldomain.GTIDHintNeutral
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("make co-master of %+v", master.Key)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
@@ -1041,7 +1042,7 @@ func MakeCoMaster(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if instance.UsingOracleGTID {
-		gitHint = GTIDHintForce
+		gitHint = modeldomain.GTIDHintForce
 	}
 	master, err = ChangeMasterTo(&master.Key, instanceKey, &instance.SelfBinlogCoordinates, false, gitHint)
 	if err != nil {
@@ -1128,7 +1129,7 @@ func DetachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
 		goto Cleanup
 	}
 
-	instance, err = ChangeMasterTo(instanceKey, detachedMasterKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	instance, err = ChangeMasterTo(instanceKey, detachedMasterKey, &instance.ExecBinlogCoordinates, true, modeldomain.GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1173,7 +1174,7 @@ func ReattachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
 		goto Cleanup
 	}
 
-	instance, err = ChangeMasterTo(instanceKey, reattachedMasterKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	instance, err = ChangeMasterTo(instanceKey, reattachedMasterKey, &instance.ExecBinlogCoordinates, true, modeldomain.GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1203,7 +1204,7 @@ func EnableGTID(instanceKey *InstanceKey) (*Instance, error) {
 
 	log.Infof("Will attempt to enable GTID on %+v", *instanceKey)
 
-	instance, err = Repoint(instanceKey, nil, GTIDHintForce)
+	instance, err = Repoint(instanceKey, nil, modeldomain.GTIDHintForce)
 	if err != nil {
 		return instance, err
 	}
@@ -1228,7 +1229,7 @@ func DisableGTID(instanceKey *InstanceKey) (*Instance, error) {
 
 	log.Infof("Will attempt to disable GTID on %+v", *instanceKey)
 
-	instance, err = Repoint(instanceKey, nil, GTIDHintDeny)
+	instance, err = Repoint(instanceKey, nil, modeldomain.GTIDHintDeny)
 	if err != nil {
 		return instance, err
 	}
@@ -1628,7 +1629,7 @@ func MatchBelow(instanceKey, otherKey *InstanceKey, requireInstanceMaintenance b
 	log.Debugf("%+v will match below %+v at %+v; validated events: %d", *instanceKey, *otherKey, *nextBinlogCoordinatesToMatch, countMatchedEvents)
 
 	// Drum roll...
-	instance, err = ChangeMasterTo(instanceKey, otherKey, nextBinlogCoordinatesToMatch, false, GTIDHintDeny)
+	instance, err = ChangeMasterTo(instanceKey, otherKey, nextBinlogCoordinatesToMatch, false, modeldomain.GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1815,12 +1816,12 @@ func TakeMaster(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, 
 	// We skip name unresolve. It is OK if the master's master is dead, unreachable, does not resolve properly.
 	// We just copy+paste info from the master.
 	// In particular, this is commonly calledin DeadMaster recovery
-	instance, err = ChangeMasterTo(&instance.Key, &masterInstance.MasterKey, &masterInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	instance, err = ChangeMasterTo(&instance.Key, &masterInstance.MasterKey, &masterInstance.ExecBinlogCoordinates, true, modeldomain.GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
 	// instance is now sibling of master
-	masterInstance, err = ChangeMasterTo(&masterInstance.Key, &instance.Key, &instance.SelfBinlogCoordinates, false, GTIDHintNeutral)
+	masterInstance, err = ChangeMasterTo(&masterInstance.Key, &instance.Key, &instance.SelfBinlogCoordinates, false, modeldomain.GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -2372,7 +2373,7 @@ func RegroupReplicasPseudoGTID(
 			go func() {
 				defer func() { barrier <- &candidateReplica.Key }()
 				ExecuteOnTopology(func() {
-					ChangeMasterTo(&replica.Key, &candidateReplica.Key, &candidateReplica.SelfBinlogCoordinates, false, GTIDHintDeny)
+					ChangeMasterTo(&replica.Key, &candidateReplica.Key, &candidateReplica.SelfBinlogCoordinates, false, modeldomain.GTIDHintDeny)
 				})
 			}()
 		}
@@ -2477,7 +2478,7 @@ func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
 		if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateBinlogServer.ExecBinlogCoordinates) {
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: candidate replica %+v coordinates smaller than binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
 			// Need to align under binlog server...
-			candidateReplica, err = Repoint(&candidateReplica.Key, &mostUpToDateBinlogServer.Key, GTIDHintDeny)
+			candidateReplica, err = Repoint(&candidateReplica.Key, &mostUpToDateBinlogServer.Key, modeldomain.GTIDHintDeny)
 			if err != nil {
 				return log.Errore(err)
 			}
@@ -2488,7 +2489,7 @@ func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
 			}
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: aligned candidate replica %+v under binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
 			// and move back
-			candidateReplica, err = Repoint(&candidateReplica.Key, masterKey, GTIDHintDeny)
+			candidateReplica, err = Repoint(&candidateReplica.Key, masterKey, modeldomain.GTIDHintDeny)
 			if err != nil {
 				return log.Errore(err)
 			}
@@ -2666,7 +2667,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 	// simplest:
 	if InstanceIsMasterOf(other, instance) {
 		// already the desired setup.
-		return Repoint(&instance.Key, &other.Key, GTIDHintNeutral)
+		return Repoint(&instance.Key, &other.Key, modeldomain.GTIDHintNeutral)
 	}
 	// Do we have record of equivalent coordinates?
 	if !instance.IsBinlogServer() {
@@ -2684,12 +2685,12 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 	}
 	if instanceMaster != nil && instanceMaster.MasterKey.Equals(&other.Key) && instanceMaster.IsBinlogServer() {
 		// Moving to grandparent via binlog server
-		return Repoint(&instance.Key, &instanceMaster.MasterKey, GTIDHintDeny)
+		return Repoint(&instance.Key, &instanceMaster.MasterKey, modeldomain.GTIDHintDeny)
 	}
 	if other.IsBinlogServer() {
 		if instanceMaster != nil && instanceMaster.IsBinlogServer() && InstancesAreSiblings(instanceMaster, other) {
 			// Special case: this is a binlog server family; we move under the uncle, in one single step
-			return Repoint(&instance.Key, &other.Key, GTIDHintDeny)
+			return Repoint(&instance.Key, &other.Key, modeldomain.GTIDHintDeny)
 		}
 
 		// Relocate to its master, then repoint to the binlog server
@@ -2708,7 +2709,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 		if _, err := relocateBelowInternal(instance, otherMaster); err != nil {
 			return instance, err
 		}
-		return Repoint(&instance.Key, &other.Key, GTIDHintDeny)
+		return Repoint(&instance.Key, &other.Key, modeldomain.GTIDHintDeny)
 	}
 	if instance.IsBinlogServer() {
 		// Can only move within the binlog-server family tree

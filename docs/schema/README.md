@@ -58,7 +58,7 @@ legacy-v1 / canonical-v1 / canonical-v1-pending / auto-id-v2-pending
 ## 验证入口
 
 ```bash
-go test ./docs/schema ./internal/db
+go test ./docs/schema ./internal/repository/database
 make test-unit
 make test-docs
 ```

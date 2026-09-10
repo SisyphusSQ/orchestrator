@@ -17,7 +17,6 @@
 package inst
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -27,6 +26,7 @@ import (
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 	"github.com/openark/orchestrator/internal/golib/math"
+	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 	"github.com/openark/orchestrator/internal/recoverypolicy"
 )
 
@@ -74,7 +74,7 @@ type Instance struct {
 	RelaylogCoordinates   BinlogCoordinates
 	LastSQLError          string
 	LastIOError           string
-	SecondsBehindMaster   sql.NullInt64
+	SecondsBehindMaster   modeldomain.NullInt64
 	SQLDelay              uint
 	ExecutedGtidSet       string
 	GtidPurged            string
@@ -82,8 +82,8 @@ type Instance struct {
 
 	masterExecutedGtidSet string // Not exported
 
-	SlaveLagSeconds                   sql.NullInt64 // for API backwards compatibility. Equals `ReplicationLagSeconds`
-	ReplicationLagSeconds             sql.NullInt64
+	SlaveLagSeconds                   modeldomain.NullInt64 // for API backwards compatibility. Equals `ReplicationLagSeconds`
+	ReplicationLagSeconds             modeldomain.NullInt64
 	SlaveHosts                        InstanceKeyMap // for API backwards compatibility. Equals `Replicas`
 	Replicas                          InstanceKeyMap
 	ClusterName                       string
@@ -111,7 +111,7 @@ type Instance struct {
 	IsLastCheckValid     bool
 	IsUpToDate           bool
 	IsRecentlyChecked    bool
-	SecondsSinceLastSeen sql.NullInt64
+	SecondsSinceLastSeen modeldomain.NullInt64
 	CountMySQLSnapshots  int
 
 	// Careful. IsCandidate and PromotionRule are used together
@@ -135,11 +135,11 @@ type Instance struct {
 	ReplicationSSLCRLFile          string
 	ReplicationSSLCRLPath          string
 	ReplicationSSLKey              string
-	ReplicationSSLVerifyServerCert sql.NullBool
+	ReplicationSSLVerifyServerCert modeldomain.NullBool
 	ReplicationTLSVersion          string
 	ReplicationTLSCiphersuites     string
 	ReplicationSourcePublicKeyPath string
-	ReplicationGetSourcePublicKey  sql.NullBool
+	ReplicationGetSourcePublicKey  modeldomain.NullBool
 
 	Problems []string
 

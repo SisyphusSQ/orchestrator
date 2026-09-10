@@ -32,27 +32,13 @@ package logic
 import (
 	"context"
 
-	"github.com/openark/orchestrator/internal/db"
 	"github.com/openark/orchestrator/internal/golib/log"
+	"github.com/openark/orchestrator/internal/repository/metadata"
 )
 
 // IsRecoveryDisabled returns true if Recoveries are disabled globally
 func IsRecoveryDisabled() (disabled bool, err error) {
-	query := `
-		SELECT
-			COUNT(*) as mycount
-		FROM
-			global_recovery_disable
-		WHERE
-			disable_recovery=?
-		`
-	type recoveryDisabledRow struct {
-		Count int `gorm:"column:mycount"`
-	}
-	rows, err := db.QueryOrchestratorRows[recoveryDisabledRow](context.Background(), query, 1)
-	if err == nil && len(rows) > 0 {
-		disabled = rows[0].Count > 0
-	}
+	disabled, err = metadata.RecoveryDisabled(context.Background())
 	if err != nil {
 		err = log.Errorf("recovery.IsRecoveryDisabled(): %v", err)
 	}
@@ -61,23 +47,12 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 
 // DisableRecovery ensures recoveries are disabled globally
 func DisableRecovery() error {
-	_, err := db.ExecOrchestrator(`
-		INSERT IGNORE INTO global_recovery_disable
-			(disable_recovery)
-		VALUES  (1)
-	`,
-	)
-	return err
+	return metadata.SetRecoveryDisabled(context.Background(), true)
 }
 
 // EnableRecovery ensures recoveries are enabled globally
 func EnableRecovery() error {
-	// The "WHERE" clause is just to avoid full-scan reports by monitoring tools
-	_, err := db.ExecOrchestrator(`
-		DELETE FROM global_recovery_disable WHERE disable_recovery >= 0
-	`,
-	)
-	return err
+	return metadata.SetRecoveryDisabled(context.Background(), false)
 }
 
 func SetRecoveryDisabled(disabled bool) error {

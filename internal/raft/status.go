@@ -5,29 +5,11 @@ import (
 
 	"github.com/hashicorp/raft"
 	"github.com/openark/orchestrator/internal/config"
+	"github.com/openark/orchestrator/internal/models/vo"
 )
 
-// NodeStatus is the ID-aware raft health snapshot for this process.
-type NodeStatus struct {
-	Running                bool   `json:"running"`
-	NodeID                 string `json:"nodeId"`
-	Address                string `json:"address"`
-	Bind                   string `json:"bind"`
-	State                  string `json:"state"`
-	InConfiguration        bool   `json:"inConfiguration"`
-	IsVoter                bool   `json:"isVoter"`
-	LeaderID               string `json:"leaderId"`
-	LeaderAddress          string `json:"leaderAddress"`
-	LeaderKnown            bool   `json:"leaderKnown"`
-	Ready                  bool   `json:"ready"`
-	IsLeader               bool   `json:"isLeader"`
-	LeaderVerified         bool   `json:"leaderVerified"`
-	ConfigurationIndex     uint64 `json:"configurationIndex"`
-	ConfigurationCommitted bool   `json:"configurationCommitted"`
-}
-
-func (store *Store) Status() NodeStatus {
-	status := NodeStatus{}
+func (store *Store) Status() vo.RaftNodeStatus {
+	status := vo.RaftNodeStatus{}
 	if store == nil || store.raft == nil {
 		return status
 	}
@@ -61,7 +43,7 @@ func (store *Store) Status() NodeStatus {
 	return status
 }
 
-func (store *Store) ready(status NodeStatus) bool {
+func (store *Store) ready(status vo.RaftNodeStatus) bool {
 	if store == nil || store.raft == nil {
 		return false
 	}

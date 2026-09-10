@@ -9,6 +9,7 @@ Current user, operator, and developer documentation is maintained bilingually in
 | Path / 路径 | Responsibility / 职责 |
 | --- | --- |
 | [`wiki/`](wiki/README.md) | Reviewable bilingual Wiki source and publication manifest / 可审查的双语 Wiki 源文件及发布清单 |
+| [`architecture/`](architecture/repository-models.md) | Internal dependency boundaries and model ownership / 内部依赖边界与模型归属 |
 | [`schema/`](schema/README.md) | Executable metadata schema, compatibility matrix, and migration guide / 可执行元数据库 Schema、兼容矩阵及迁移指南 |
 | [`verification/`](verification/README.md) | Issue-specific validation records not published as user documentation / 不作为用户文档发布的 Issue 验证记录 |
 

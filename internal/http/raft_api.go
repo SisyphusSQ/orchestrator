@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/openark/orchestrator/internal/models/dto"
 	orcraft "github.com/openark/orchestrator/internal/raft"
 )
 
@@ -136,7 +137,7 @@ func (this *HttpAPI) RaftAddMember(params Params, r Responder, req *http.Request
 		respondRaft(r, err, "", nil)
 		return
 	}
-	view, err := orcraft.AddMember(orcraft.MemberRequest{
+	view, err := orcraft.AddMember(dto.RaftMember{
 		ID:            body.ID,
 		Address:       body.Address,
 		Suffrage:      body.Suffrage,
@@ -197,18 +198,18 @@ func (this *HttpAPI) RaftSnapshot(params Params, r Responder, req *http.Request,
 
 func (this *HttpAPI) RaftState(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
-		respondRaft(r, orcraft.RaftNotRunning, "", nil)
+		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
 	}
-	r.JSON(http.StatusOK, orcraft.GetState().String())
+	writeHTTPJSON(r, http.StatusOK, orcraft.GetState().String())
 }
 
 func (this *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
-		respondRaft(r, orcraft.RaftNotRunning, "", nil)
+		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
 	}
-	r.JSON(http.StatusOK, map[string]string{
+	writeHTTPJSON(r, http.StatusOK, map[string]string{
 		"id":      orcraft.GetLeader(),
 		"address": orcraft.GetLeaderAddress(),
 	})
@@ -216,7 +217,7 @@ func (this *HttpAPI) RaftLeader(params Params, r Responder, req *http.Request, u
 
 func (this *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
-		respondRaft(r, orcraft.RaftNotRunning, "", nil)
+		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
 	}
 	status := orcraft.GetStatus()
@@ -224,12 +225,12 @@ func (this *HttpAPI) RaftHealth(params Params, r Responder, req *http.Request, u
 		Respond(r, &APIResponse{Code: ERROR, Message: "unhealthy", Details: status})
 		return
 	}
-	r.JSON(http.StatusOK, "healthy")
+	writeHTTPJSON(r, http.StatusOK, "healthy")
 }
 
 func (this *HttpAPI) RaftStatus(params Params, r Responder, req *http.Request, user Principal) {
 	if !orcraft.IsInitialized() {
-		respondRaft(r, orcraft.RaftNotRunning, "", nil)
+		respondRaft(r, orcraft.ErrNotRunning, "", nil)
 		return
 	}
 	status := orcraft.GetStatus()
@@ -238,7 +239,7 @@ func (this *HttpAPI) RaftStatus(params Params, r Responder, req *http.Request, u
 		respondRaft(r, err, "", status)
 		return
 	}
-	r.JSON(http.StatusOK, map[string]interface{}{
+	writeHTTPJSON(r, http.StatusOK, map[string]interface{}{
 		"status":        status,
 		"configuration": view,
 		"leaderURI":     orcraft.LeaderURI.Get(),
