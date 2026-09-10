@@ -32,7 +32,6 @@ func init() {
 
 var instance1 = Instance{Key: key1}
 var instance2 = Instance{Key: key2}
-var instance3 = Instance{Key: key3}
 
 func TestIsSmallerMajorVersion(t *testing.T) {
 	i55 := Instance{Version: "5.5"}
@@ -135,10 +134,11 @@ func TestCanReplicateFrom(t *testing.T) {
 	canReplicate, _ = i55.CanReplicateFrom(&i56)
 	test.S(t).ExpectFalse(canReplicate)
 
-	i80 := Instance{Key: key3, Version: "8.0"}
-	i80.LogBinEnabled = true
-	i80.LogReplicationUpdatesEnabled = true
-	i80.ServerID = 80
+	i80 := Instance{Key: key3, Version: "8.0",
+		LogBinEnabled:                true,
+		LogReplicationUpdatesEnabled: true,
+		ServerID:                     80,
+	}
 
 	canReplicate, err = i56.CanReplicateFrom(&i80)
 	test.S(t).ExpectNotNil(err)
@@ -182,19 +182,19 @@ func TestNextGTID(t *testing.T) {
 
 func TestRemoveInstance(t *testing.T) {
 	{
-		instances := [](*Instance){&instance1, &instance2}
+		instances := []*Instance{&instance1, &instance2}
 		test.S(t).ExpectEquals(len(instances), 2)
 		instances = RemoveNilInstances(instances)
 		test.S(t).ExpectEquals(len(instances), 2)
 	}
 	{
-		instances := [](*Instance){&instance1, nil, &instance2}
+		instances := []*Instance{&instance1, nil, &instance2}
 		test.S(t).ExpectEquals(len(instances), 3)
 		instances = RemoveNilInstances(instances)
 		test.S(t).ExpectEquals(len(instances), 2)
 	}
 	{
-		instances := [](*Instance){&instance1, &instance2}
+		instances := []*Instance{&instance1, &instance2}
 		test.S(t).ExpectEquals(len(instances), 2)
 		instances = RemoveInstance(instances, &key1)
 		test.S(t).ExpectEquals(len(instances), 1)

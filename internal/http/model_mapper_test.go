@@ -164,8 +164,8 @@ func TestAnalysisRecoveryAndAgentVOsPreserveJSON(t *testing.T) {
 		MinReplicaGTIDMode:                "ON_PERMISSIVE",
 		MaxReplicaGTIDMode:                "ON",
 		CommandHint:                       inst.ForceMasterFailoverCommandHint,
+		SlaveHosts:                        *inst.NewInstanceKeyMap(),
 	}
-	analysis.SlaveHosts = *inst.NewInstanceKeyMap()
 	analysis.SlaveHosts.AddKey(inst.InstanceKey{Hostname: "stale.example", Port: 3306})
 	analysis.Replicas = *inst.NewInstanceKeyMap()
 	analysis.Replicas.AddKey(inst.InstanceKey{Hostname: "replica-b.example", Port: 3306})

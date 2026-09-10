@@ -35,8 +35,8 @@ type HostnameResolve struct {
 	resolvedHostname string
 }
 
-func (this HostnameResolve) String() string {
-	return fmt.Sprintf("%s %s", this.hostname, this.resolvedHostname)
+func (resolve HostnameResolve) String() string {
+	return fmt.Sprintf("%s %s", resolve.hostname, resolve.resolvedHostname)
 }
 
 type HostnameUnresolve struct {
@@ -44,8 +44,8 @@ type HostnameUnresolve struct {
 	unresolvedHostname string
 }
 
-func (this HostnameUnresolve) String() string {
-	return fmt.Sprintf("%s %s", this.hostname, this.unresolvedHostname)
+func (unresolve HostnameUnresolve) String() string {
+	return fmt.Sprintf("%s %s", unresolve.hostname, unresolve.unresolvedHostname)
 }
 
 type HostnameRegistration struct {
@@ -71,8 +71,8 @@ func NewHostnameDeregistration(instanceKey *InstanceKey) *HostnameRegistration {
 }
 
 var hostnameResolvesLightweightCache *cache.Cache
-var hostnameResolvesLightweightCacheInit = &sync.Mutex{}
-var hostnameResolvesLightweightCacheLoadedOnceFromDB bool = false
+var hostnameResolvesLightweightCacheInit sync.Mutex
+var hostnameResolvesLightweightCacheLoadedOnceFromDB bool
 var hostnameIPsCache = cache.New(10*time.Minute, time.Minute)
 
 func init() {
@@ -123,10 +123,10 @@ func resolveHostname(hostname string) (string, error) {
 func ResolveHostname(hostname string) (string, error) {
 	hostname = strings.TrimSpace(hostname)
 	if hostname == "" {
-		return hostname, errors.New("Will not resolve empty hostname")
+		return hostname, errors.New("will not resolve empty hostname")
 	}
 	if strings.Contains(hostname, ",") {
-		return hostname, fmt.Errorf("Will not resolve multi-hostname: %+v", hostname)
+		return hostname, fmt.Errorf("will not resolve multi-hostname: %+v", hostname)
 	}
 	if (&InstanceKey{Hostname: hostname}).IsDetached() {
 		// quietly abort. Nothing to do. The hostname is detached for a reason: it

@@ -19,7 +19,6 @@ package inst
 import (
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/kv"
@@ -42,7 +41,7 @@ func getClusterMasterKVPair(clusterAlias string, masterKey *InstanceKey) *kv.KVP
 
 // GetClusterMasterKVPairs returns all KV pairs associated with a master. This includes the
 // full identity of the master as well as a breakdown by hostname, port, ipv4, ipv6
-func GetClusterMasterKVPairs(clusterAlias string, masterKey *InstanceKey) (kvPairs [](*kv.KVPair)) {
+func GetClusterMasterKVPairs(clusterAlias string, masterKey *InstanceKey) (kvPairs []*kv.KVPair) {
 	masterKVPair := getClusterMasterKVPair(clusterAlias, masterKey)
 	if masterKVPair == nil {
 		return kvPairs
@@ -90,49 +89,19 @@ type ClusterInfo struct {
 }
 
 // ReadRecoveryInfo
-func (this *ClusterInfo) ReadRecoveryInfo() {
-	policy := recoverypolicy.Current(this.ClusterName)
-	this.HasAutomatedMasterRecovery = policy.AutoMasterRecovery
-	this.HasAutomatedIntermediateMasterRecovery = policy.AutoIntermediateMasterRecovery
-}
-
-// filtersMatchCluster will see whether the given filters match the given cluster details
-func (this *ClusterInfo) filtersMatchCluster(filters []string) bool {
-	for _, filter := range filters {
-		if filter == this.ClusterName {
-			return true
-		}
-		if filter == this.ClusterAlias {
-			return true
-		}
-		if strings.HasPrefix(filter, "alias=") {
-			// Match by exact cluster alias name
-			alias := strings.SplitN(filter, "=", 2)[1]
-			if alias == this.ClusterAlias {
-				return true
-			}
-		} else if strings.HasPrefix(filter, "alias~=") {
-			// Match by cluster alias regex
-			aliasPattern := strings.SplitN(filter, "~=", 2)[1]
-			if matched, _ := regexp.MatchString(aliasPattern, this.ClusterAlias); matched {
-				return true
-			}
-		} else if filter == "*" {
-			return true
-		} else if matched, _ := regexp.MatchString(filter, this.ClusterName); matched && filter != "" {
-			return true
-		}
-	}
-	return false
+func (cluster *ClusterInfo) ReadRecoveryInfo() {
+	policy := recoverypolicy.Current(cluster.ClusterName)
+	cluster.HasAutomatedMasterRecovery = policy.AutoMasterRecovery
+	cluster.HasAutomatedIntermediateMasterRecovery = policy.AutoIntermediateMasterRecovery
 }
 
 // ApplyClusterAlias updates the given clusterInfo's ClusterAlias property
-func (this *ClusterInfo) ApplyClusterAlias() {
-	if this.ClusterAlias != "" && this.ClusterAlias != this.ClusterName {
+func (cluster *ClusterInfo) ApplyClusterAlias() {
+	if cluster.ClusterAlias != "" && cluster.ClusterAlias != cluster.ClusterName {
 		// Already has an alias; abort
 		return
 	}
-	if alias := mappedClusterNameToAlias(this.ClusterName); alias != "" {
-		this.ClusterAlias = alias
+	if alias := mappedClusterNameToAlias(cluster.ClusterName); alias != "" {
+		cluster.ClusterAlias = alias
 	}
 }

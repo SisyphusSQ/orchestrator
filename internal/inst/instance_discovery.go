@@ -111,7 +111,7 @@ func ReadTopologyInstances(instanceKeys []InstanceKey) ([]*Instance, error) {
 }
 
 func RetryInstanceFunction(f func() (*Instance, error)) (instance *Instance, err error) {
-	for i := 0; i < retryInstanceFunctionCount; i++ {
+	for range retryInstanceFunctionCount {
 		if instance, err = f(); err == nil {
 			return instance, nil
 		}
@@ -337,7 +337,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		user := m.GetString(instance.QSP.master_user())
 
 		if FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
-			err = fmt.Errorf("Host %+v is excluded from discovery by DiscoveryIgnoreReplicationUsernameFilters.", *instanceKey)
+			err = fmt.Errorf("host %+v is excluded from discovery by DiscoveryIgnoreReplicationUsernameFilters", *instanceKey)
 			instanceDiscoverySkipped = true
 			return err
 		}
@@ -399,9 +399,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	if !isMaxScale {
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
+			waitGroup.Go(func() {
 				var dummy string
 				// show global status works just as well with 5.6 & 5.7 (5.7 moves variables to performance_schema)
 				err := topologyDB.ReadRowContext(ctx, "show global status like 'Uptime'").Decode(&dummy, &instance.Uptime)
@@ -417,7 +415,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 					// This is supposed to be fixed in 5.7.9
 				}
 				errorChan <- err
-			}()
+			})
 		}
 
 		// Synchronously query for some params needed in following go routines
@@ -444,9 +442,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		}
 
 		if instance.LogBinEnabled {
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
+			waitGroup.Go(func() {
 				err := topologyDB.ReadDynamicRowsContext(ctx, instance.QSP.show_master_status(), func(m modeldomain.DynamicRow) error {
 					var err error
 					instance.SelfBinlogCoordinates.LogFile = m.GetString("File")
@@ -454,13 +450,11 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 					return err
 				})
 				errorChan <- err
-			}()
+			})
 		}
 
 		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
+			waitGroup.Go(func() {
 				semiSyncMasterPluginLoaded := false
 				semiSyncReplicaPluginLoaded := false
 				instance.SemiSyncAvailable = false
@@ -512,12 +506,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 
 				instance.SemiSyncAvailable = (semiSyncMasterPluginLoaded && semiSyncReplicaPluginLoaded)
 				errorChan <- err
-			}()
+			})
 		}
 		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
+			waitGroup.Go(func() {
 				err := topologyDB.ReadDynamicRowsContext(ctx, "show global status like 'rpl_semi_sync_%'", func(m modeldomain.DynamicRow) error {
 					variableName := m.GetString("Variable_name")
 					matched, regexperr := regexp.MatchString("^Rpl_semi_sync_(master|source)_status$", variableName)
@@ -547,7 +539,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 					return nil
 				})
 				errorChan <- err
-			}()
+			})
 		}
 		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
 			waitGroup.Add(1)
@@ -640,14 +632,12 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 		}
 	}
 	if isMaxScale && !slaveStatusFound {
-		err = fmt.Errorf("No 'SHOW SLAVE STATUS' output found for a MaxScale instance: %+v", instanceKey)
+		err = fmt.Errorf("no 'SHOW SLAVE STATUS' output found for a MaxScale instance: %+v", instanceKey)
 		goto Cleanup
 	}
 
 	if config.Config.Topology.Replication.LagQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			if err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Replication.LagQuery).Decode(&instance.ReplicationLagSeconds); err == nil {
 				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
 					log.Warningf("Host: %+v, instance.SlaveLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
@@ -657,7 +647,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 				instance.ReplicationLagSeconds = instance.SecondsBehindMaster
 				logReadTopologyInstanceError(instanceKey, "topology.replication.lagQuery", err)
 			}
-		}()
+		})
 	}
 
 	instanceFound = true
@@ -722,9 +712,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	if !foundByShowSlaveHosts && !isMaxScale {
 		// Either not configured to read SHOW SLAVE HOSTS or nothing was there.
 		// Discover by information_schema.processlist
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadDynamicRowsContext(ctx, instance.QSP.select_user_host(),
 				func(m modeldomain.DynamicRow) error {
 					cname, resolveErr := ResolveHostname(m.GetString("slave_hostname"))
@@ -747,14 +735,12 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 				})
 
 			logReadTopologyInstanceError(instanceKey, "processlist", err)
-		}()
+		})
 	}
 
 	if instance.IsNDB() {
 		// Discover by ndbinfo about MySQL Cluster SQL nodes
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadDynamicRowsContext(ctx, `
 				select
 					substring(service_URI,9) mysql_host
@@ -774,52 +760,42 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 				})
 
 			logReadTopologyInstanceError(instanceKey, "ndbinfo", err)
-		}()
+		})
 	}
 
 	if config.Config.Topology.Classification.DetectDataCenterQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectDataCenterQuery).Decode(&instance.DataCenter)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectDataCenterQuery", err)
-		}()
+		})
 	}
 
 	if config.Config.Topology.Classification.DetectRegionQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectRegionQuery).Decode(&instance.Region)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectRegionQuery", err)
-		}()
+		})
 	}
 
 	if config.Config.Topology.Classification.DetectPhysicalEnvironmentQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectPhysicalEnvironmentQuery).Decode(&instance.PhysicalEnvironment)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectPhysicalEnvironmentQuery", err)
-		}()
+		})
 	}
 
 	if config.Config.Topology.Classification.DetectInstanceAliasQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectInstanceAliasQuery).Decode(&instance.InstanceAlias)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectInstanceAliasQuery", err)
-		}()
+		})
 	}
 
 	if config.Config.Topology.Classification.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectSemiSyncEnforcedQuery).Decode(&instance.SemiSyncPriority)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectSemiSyncEnforcedQuery", err)
-		}()
+		})
 	}
 
 	{
@@ -838,9 +814,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 			instance.UsingPseudoGTID, err = isInjectedPseudoGTID(instance.ClusterName)
 			log.Errore(err)
 		} else if config.Config.PseudoGTID.DetectQuery != "" {
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
+			waitGroup.Go(func() {
 				if resultData, err := topologyDB.ReadResultDataContext(ctx, config.Config.PseudoGTID.DetectQuery); err == nil {
 					if len(resultData) > 0 {
 						if len(resultData[0]) > 0 {
@@ -852,7 +826,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 				} else {
 					logReadTopologyInstanceError(instanceKey, "pseudoGTID.detectQuery", err)
 				}
-			}()
+			})
 		}
 	}
 
@@ -867,9 +841,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 	// We'll set it here on their behalf so there's no race between the first
 	// time an instance is discovered, and setting a rule like "must_not".
 	if config.Config.Topology.Classification.DetectPromotionRuleQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			var value string
 			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectPromotionRuleQuery).Decode(&value)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectPromotionRuleQuery", err)
@@ -883,7 +855,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *Ins
 				err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, promotionRule).WithCurrentTime())
 				logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 			}
-		}()
+		})
 	}
 
 	ReadClusterAliasOverride(instance)
@@ -955,7 +927,7 @@ Cleanup:
 			// such that the replica may _seems_ to have more entries than the master, when in fact
 			// it's just that the master's probing is stale.
 			redactedExecutedGtidSet, _ := NewOracleGtidSet(instance.ExecutedGtidSet)
-			for _, uuid := range strings.Split(instance.AncestryUUID, ",") {
+			for uuid := range strings.SplitSeq(instance.AncestryUUID, ",") {
 				if uuid != instance.ServerUUID {
 					redactedExecutedGtidSet.RemoveUUID(uuid)
 				}

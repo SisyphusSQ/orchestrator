@@ -27,7 +27,7 @@ import (
 )
 
 // writePoolInstances will write (and override) a single cluster name mapping
-func writePoolInstances(pool string, instanceKeys [](*InstanceKey)) error {
+func writePoolInstances(pool string, instanceKeys []*InstanceKey) error {
 	writeFunc := func() error {
 		keys := make([]modeldomain.InstanceIdentity, 0, len(instanceKeys))
 		for _, key := range instanceKeys {
@@ -39,7 +39,7 @@ func writePoolInstances(pool string, instanceKeys [](*InstanceKey)) error {
 }
 
 // ReadClusterPoolInstances reads cluster-pool-instance associationsfor given cluster and pool
-func ReadClusterPoolInstances(clusterName string, pool string) (result [](*ClusterPoolInstance), err error) {
+func ReadClusterPoolInstances(clusterName string, pool string) (result []*ClusterPoolInstance, err error) {
 	rows, err := metadata.ReadClusterPoolInstances(context.Background(), clusterName, pool)
 	for _, row := range rows {
 		clusterPoolInstance := ClusterPoolInstance{
@@ -60,7 +60,7 @@ func ReadClusterPoolInstances(clusterName string, pool string) (result [](*Clust
 }
 
 // ReadAllClusterPoolInstances returns all clusters-pools-insatnces associations
-func ReadAllClusterPoolInstances() ([](*ClusterPoolInstance), error) {
+func ReadAllClusterPoolInstances() ([]*ClusterPoolInstance, error) {
 	return ReadClusterPoolInstances("", "")
 }
 
@@ -75,7 +75,7 @@ func ReadClusterPoolInstancesMap(clusterName string, pool string) (*PoolInstance
 	}
 	for _, clusterPoolInstance := range clusterPoolInstances {
 		if _, ok := poolInstancesMap[clusterPoolInstance.Pool]; !ok {
-			poolInstancesMap[clusterPoolInstance.Pool] = [](*InstanceKey){}
+			poolInstancesMap[clusterPoolInstance.Pool] = []*InstanceKey{}
 		}
 		poolInstancesMap[clusterPoolInstance.Pool] = append(poolInstancesMap[clusterPoolInstance.Pool], &InstanceKey{Hostname: clusterPoolInstance.Hostname, Port: clusterPoolInstance.Port})
 	}
@@ -87,8 +87,9 @@ func ReadAllPoolInstancesSubmissions() ([]PoolInstancesSubmission, error) {
 	rows, err := metadata.ReadPoolInstancesSubmissions(context.Background())
 	result := make([]PoolInstancesSubmission, 0, len(rows))
 	for _, row := range rows {
-		submission := PoolInstancesSubmission{}
-		submission.Pool = row.Pool
+		submission := PoolInstancesSubmission{
+			Pool: row.Pool,
+		}
 		submission.CreatedAt, _ = time.Parse(modeldomain.DateTimeFormat, row.RegisteredAt)
 		submission.RegisteredAt = row.RegisteredAt
 		submission.DelimitedInstances = row.Hosts

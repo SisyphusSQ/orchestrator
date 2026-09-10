@@ -282,7 +282,7 @@ func Revisions(ctx context.Context, clusterName string) (int64, int64, error) {
 		return 0, 0, err
 	}
 	policyHash, hookHash := fnv.New64a(), fnv.New64a()
-	write := func(hash interface{ Write([]byte) (int, error) }, value interface{}) {
+	write := func(hash interface{ Write([]byte) (int, error) }, value any) {
 		payload, _ := json.Marshal(value)
 		_, _ = hash.Write(payload)
 	}

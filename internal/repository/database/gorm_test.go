@@ -108,20 +108,19 @@ func TestQueryOrchestratorRowsScansTypedDTOAndPropagatesContext(t *testing.T) {
 
 func TestConcurrentGORMOpenCannotOutliveRuntimeClose(t *testing.T) {
 	useSQLiteBackendRuntime(t)
+	ctx := t.Context()
 	const callers = 32
 	start := make(chan struct{})
 	errs := make(chan error, callers)
 	var wait sync.WaitGroup
-	wait.Add(callers)
 	for range callers {
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			<-start
-			_, err := OpenOrchestratorGORMContext(context.Background())
+			_, err := OpenOrchestratorGORMContext(ctx)
 			if err != nil && !errors.Is(err, ErrDatabaseRuntimeClosed) {
 				errs <- err
 			}
-		}()
+		})
 	}
 	close(start)
 	if err := processDatabaseRuntime.Close(); err != nil {
@@ -135,7 +134,7 @@ func TestConcurrentGORMOpenCannotOutliveRuntimeClose(t *testing.T) {
 	if processDatabaseRuntime.gorm != nil {
 		t.Fatal("runtime close left a cached GORM handle")
 	}
-	if _, err := OpenOrchestratorGORMContext(context.Background()); !errors.Is(err, ErrDatabaseRuntimeClosed) {
+	if _, err := OpenOrchestratorGORMContext(ctx); !errors.Is(err, ErrDatabaseRuntimeClosed) {
 		t.Fatalf("OpenOrchestratorGORMContext() after concurrent close error = %v; want ErrDatabaseRuntimeClosed", err)
 	}
 }

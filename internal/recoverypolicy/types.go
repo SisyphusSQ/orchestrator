@@ -3,6 +3,7 @@ package recoverypolicy
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/openark/orchestrator/internal/models/domain"
@@ -132,13 +133,7 @@ func ValidateHookAssignment(assignment domain.RecoveryHookAssignment) error {
 	if err := ValidateScope(assignment.ScopeType, assignment.ScopeKey); err != nil {
 		return err
 	}
-	validPhase := false
-	for _, phase := range domain.RecoveryHookPhases {
-		if assignment.Phase == phase {
-			validPhase = true
-			break
-		}
-	}
+	validPhase := slices.Contains(domain.RecoveryHookPhases, assignment.Phase)
 	if !validPhase {
 		return fmt.Errorf("invalid hook phase %q", assignment.Phase)
 	}

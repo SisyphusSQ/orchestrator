@@ -34,8 +34,8 @@ import (
 // LogLevel indicates the severity of a log entry
 type LogLevel int
 
-func (this LogLevel) String() string {
-	switch this {
+func (level LogLevel) String() string {
+	switch level {
 	case FATAL:
 		return "FATAL"
 	case CRITICAL:
@@ -71,7 +71,7 @@ func LogLevelFromString(logLevelName string) (LogLevel, error) {
 	case "DEBUG":
 		return DEBUG, nil
 	}
-	return 0, fmt.Errorf("Unknown LogLevel name: %+v", logLevelName)
+	return 0, fmt.Errorf("unknown LogLevel name: %+v", logLevelName)
 }
 
 const (
@@ -163,7 +163,7 @@ func SetSyslogLevel(logLevel LogLevel) {
 }
 
 // logFormattedEntry nicely formats and emits a log entry
-func logFormattedEntry(logLevel LogLevel, message string, args ...interface{}) string {
+func logFormattedEntry(logLevel LogLevel, message string, args ...any) string {
 	return emit(logLevel, fmt.Sprintf(message, args...))
 }
 
@@ -435,12 +435,13 @@ func toZapLevel(level LogLevel) zapcore.Level {
 }
 
 // logEntry emits a formatted log entry
-func logEntry(logLevel LogLevel, message string, args ...interface{}) string {
-	entryString := message
+func logEntry(logLevel LogLevel, message string, args ...any) string {
+	var entryString strings.Builder
+	entryString.WriteString(message)
 	for _, s := range args {
-		entryString += fmt.Sprintf(" %s", s)
+		entryString.WriteString(fmt.Sprintf(" %s", s))
 	}
-	return emit(logLevel, entryString)
+	return emit(logLevel, entryString.String())
 }
 
 // logErrorEntry emits a log entry based on given error object
@@ -457,43 +458,43 @@ func logErrorEntry(logLevel LogLevel, err error) error {
 	return err
 }
 
-func Debug(message string, args ...interface{}) string {
+func Debug(message string, args ...any) string {
 	return logEntry(DEBUG, message, args...)
 }
 
-func Debugf(message string, args ...interface{}) string {
+func Debugf(message string, args ...any) string {
 	return logFormattedEntry(DEBUG, message, args...)
 }
 
-func Info(message string, args ...interface{}) string {
+func Info(message string, args ...any) string {
 	return logEntry(INFO, message, args...)
 }
 
-func Infof(message string, args ...interface{}) string {
+func Infof(message string, args ...any) string {
 	return logFormattedEntry(INFO, message, args...)
 }
 
-func Notice(message string, args ...interface{}) string {
+func Notice(message string, args ...any) string {
 	return logEntry(NOTICE, message, args...)
 }
 
-func Noticef(message string, args ...interface{}) string {
+func Noticef(message string, args ...any) string {
 	return logFormattedEntry(NOTICE, message, args...)
 }
 
-func Warning(message string, args ...interface{}) error {
+func Warning(message string, args ...any) error {
 	return errors.New(logEntry(WARNING, message, args...))
 }
 
-func Warningf(message string, args ...interface{}) error {
+func Warningf(message string, args ...any) error {
 	return errors.New(logFormattedEntry(WARNING, message, args...))
 }
 
-func Error(message string, args ...interface{}) error {
+func Error(message string, args ...any) error {
 	return errors.New(logEntry(ERROR, message, args...))
 }
 
-func Errorf(message string, args ...interface{}) error {
+func Errorf(message string, args ...any) error {
 	return errors.New(logFormattedEntry(ERROR, message, args...))
 }
 
@@ -501,11 +502,11 @@ func Errore(err error) error {
 	return logErrorEntry(ERROR, err)
 }
 
-func Critical(message string, args ...interface{}) error {
+func Critical(message string, args ...any) error {
 	return errors.New(logEntry(CRITICAL, message, args...))
 }
 
-func Criticalf(message string, args ...interface{}) error {
+func Criticalf(message string, args ...any) error {
 	return errors.New(logFormattedEntry(CRITICAL, message, args...))
 }
 
@@ -514,14 +515,14 @@ func Criticale(err error) error {
 }
 
 // Fatal emits a FATAL level entry and exists the program
-func Fatal(message string, args ...interface{}) error {
+func Fatal(message string, args ...any) error {
 	logEntry(FATAL, message, args...)
 	os.Exit(1)
 	return errors.New(logEntry(CRITICAL, message, args...))
 }
 
 // Fatalf emits a FATAL level entry and exists the program
-func Fatalf(message string, args ...interface{}) error {
+func Fatalf(message string, args ...any) error {
 	logFormattedEntry(FATAL, message, args...)
 	os.Exit(1)
 	return errors.New(logFormattedEntry(CRITICAL, message, args...))

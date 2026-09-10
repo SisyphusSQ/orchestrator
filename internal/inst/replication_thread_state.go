@@ -19,10 +19,10 @@ package inst
 type ReplicationThreadState int
 
 const (
-	ReplicationThreadStateNoThread ReplicationThreadState = -1
-	ReplicationThreadStateStopped                         = 0
-	ReplicationThreadStateRunning                         = 1
-	ReplicationThreadStateOther                           = 2
+	ReplicationThreadStateNoThread = -1
+	ReplicationThreadStateStopped  = 0
+	ReplicationThreadStateRunning  = 1
+	ReplicationThreadStateOther    = 2
 )
 
 func ReplicationThreadStateFromStatus(status string) ReplicationThreadState {
@@ -34,6 +34,6 @@ func ReplicationThreadStateFromStatus(status string) ReplicationThreadState {
 	}
 	return ReplicationThreadStateOther
 }
-func (this *ReplicationThreadState) IsRunning() bool { return *this == ReplicationThreadStateRunning }
-func (this *ReplicationThreadState) IsStopped() bool { return *this == ReplicationThreadStateStopped }
-func (this *ReplicationThreadState) Exists() bool    { return *this != ReplicationThreadStateNoThread }
+func (state *ReplicationThreadState) IsRunning() bool { return *state == ReplicationThreadStateRunning }
+func (state *ReplicationThreadState) IsStopped() bool { return *state == ReplicationThreadStateStopped }
+func (state *ReplicationThreadState) Exists() bool    { return *state != ReplicationThreadStateNoThread }

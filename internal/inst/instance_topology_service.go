@@ -43,7 +43,7 @@ const (
 )
 
 // ExecuteInstanceCommand executes a given query on the given MySQL topology instance
-func ExecuteInstanceCommand(instanceKey *InstanceKey, query string, args ...interface{}) error {
+func ExecuteInstanceCommand(instanceKey *InstanceKey, query string, args ...any) error {
 	db, err := topology.Open(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func ExecuteOnTopology(f func()) {
 }
 
 // ReadInstanceRow executes a read-a-single-row query on a given MySQL topology instance
-func ReadInstanceRow(instanceKey *InstanceKey, query string, dest ...interface{}) error {
+func ReadInstanceRow(instanceKey *InstanceKey, query string, dest ...any) error {
 	db, err := topology.Open(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
@@ -94,11 +94,10 @@ func RefreshTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 }
 
 // RefreshTopologyInstances will do a blocking (though concurrent) refresh of all given instances
-func RefreshTopologyInstances(instances [](*Instance)) {
+func RefreshTopologyInstances(instances []*Instance) {
 	// use concurrency but wait for all to complete
 	barrier := make(chan InstanceKey)
 	for _, instance := range instances {
-		instance := instance
 		go func() {
 			// Signal completed replica
 			defer func() { barrier <- instance.Key }()
@@ -147,10 +146,10 @@ func GetReplicationRestartPreserveStatements(instanceKey *InstanceKey, injectedS
 // FlushBinaryLogs attempts a 'FLUSH BINARY LOGS' statement on the given instance.
 func FlushBinaryLogs(instanceKey *InstanceKey, count int) (*Instance, error) {
 	if *config.RuntimeCLIFlags.Noop {
-		return nil, fmt.Errorf("noop: aborting flush-binary-logs operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return nil, fmt.Errorf("noop: aborting flush-binary-logs operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
-	for i := 0; i < count; i++ {
+	for range count {
 		err := ExecuteInstanceCommand(instanceKey, `flush binary logs`)
 		if err != nil {
 			return nil, log.Errore(err)
@@ -180,7 +179,7 @@ func FlushBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 // purgeBinaryLogsTo attempts to 'PURGE BINARY LOGS' until given binary log is reached
 func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, error) {
 	if *config.RuntimeCLIFlags.Noop {
-		return nil, fmt.Errorf("noop: aborting purge-binary-logs operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return nil, fmt.Errorf("noop: aborting purge-binary-logs operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	err := ExecuteInstanceCommand(instanceKey, "purge binary logs to ?", logFile)
@@ -341,17 +340,16 @@ func WaitForSQLThreadUpToDate(instanceKey *InstanceKey, overallTimeout time.Dura
 
 // StopReplicas will stop replication concurrently on given set of replicas.
 // It will potentially do nothing, or attempt to stop _nicely_ or just stop normally, all according to stopReplicationMethod
-func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationMethod, timeout time.Duration) [](*Instance) {
+func StopReplicas(replicas []*Instance, stopReplicationMethod StopReplicationMethod, timeout time.Duration) []*Instance {
 	if stopReplicationMethod == NoStopReplication {
 		return replicas
 	}
-	refreshedReplicas := [](*Instance){}
+	refreshedReplicas := []*Instance{}
 
 	log.Debugf("Stopping %d replicas via %s", len(replicas), string(stopReplicationMethod))
 	// use concurrency but wait for all to complete
 	barrier := make(chan *Instance)
 	for _, replica := range replicas {
-		replica := replica
 		go func() {
 			updatedReplica := &replica
 			// Signal completed replica
@@ -461,7 +459,7 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errore(err)
 	}
 	if !instance.ReplicaRunning() {
-		return instance, ReplicationNotRunningError
+		return instance, ErrReplicationNotRunning
 	}
 	return instance, nil
 }
@@ -477,12 +475,11 @@ func RestartReplication(instanceKey *InstanceKey) (instance *Instance, err error
 }
 
 // StartReplicas will do concurrent start-replica
-func StartReplicas(replicas [](*Instance)) {
+func StartReplicas(replicas []*Instance) {
 	// use concurrency but wait for all to complete
 	log.Debugf("Starting %d replicas", len(replicas))
 	barrier := make(chan InstanceKey)
 	for _, instance := range replicas {
-		instance := instance
 		go func() {
 			// Signal compelted replica
 			defer func() { barrier <- instance.Key }()
@@ -556,7 +553,7 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 		return instance, log.Errore(err)
 	}
 	if !exactMatch {
-		return instance, fmt.Errorf("Start SLAVE UNTIL is past coordinates: %+v", instanceKey)
+		return instance, fmt.Errorf("start SLAVE UNTIL is past coordinates: %+v", instanceKey)
 	}
 
 	instance, err = StopReplication(instanceKey)
@@ -803,11 +800,11 @@ func ChangeMasterCredentials(instanceKey *InstanceKey, creds *modeldomain.Replic
 	log.Debugf("ChangeMasterTo: will attempt changing master credentials on %+v", *instanceKey)
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	var query_params []string
-	var query_params_args []interface{}
+	var query_params_args []any
 
 	// User
 	query_params = append(query_params, instance.QSP.master_user_param())
@@ -861,7 +858,7 @@ func EnableMasterGetSourcePublicKey(instanceKey *InstanceKey) (*Instance, error)
 	log.Debugf("EnableMasterGetSourcePublicKey: Will attempt enabling GetSourcePublicKey replication on %+v", *instanceKey)
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE REPLICATION SOURCE TO GET_SOURCE_PUBLIC_KEY=1 operation on %+v; signaling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting CHANGE REPLICATION SOURCE TO GET_SOURCE_PUBLIC_KEY=1 operation on %+v; signaling error but nothing went wrong", *instanceKey)
 	}
 	err = ExecuteInstanceCommand(instanceKey, instance.QSP.change_master_to_get_source_public_key())
 
@@ -875,7 +872,7 @@ func EnableMasterGetSourcePublicKey(instanceKey *InstanceKey) (*Instance, error)
 	return instance, err
 }
 
-func appendReplicationChangeTLSFragments(instance *Instance, queryParams *[]string, queryArgs *[]interface{}) {
+func appendReplicationChangeTLSFragments(instance *Instance, queryParams *[]string, queryArgs *[]any) {
 	q := instance.QSP
 	if instance.AllowTLS {
 		*queryParams = append(*queryParams, q.master_ssl()+" = 1")
@@ -942,7 +939,7 @@ func appendReplicationChangeTLSFragments(instance *Instance, queryParams *[]stri
 	}
 }
 
-func changeReplicationSourceWithTLS(instanceKey *InstanceKey, instance *Instance, params []string, args []interface{}) error {
+func changeReplicationSourceWithTLS(instanceKey *InstanceKey, instance *Instance, params []string, args []any) error {
 	appendReplicationChangeTLSFragments(instance, &params, &args)
 	query := fmt.Sprintf(instance.QSP.change_master_to_with_params(), strings.Join(params, ", "))
 	err := ExecuteInstanceCommand(instanceKey, query, args...)
@@ -990,7 +987,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	originalMasterKey := instance.MasterKey
@@ -1002,7 +999,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Keep on using GTID
 		changeMasterFunc = func() error {
 			params := []string{instance.QSP.master_host_assign(), instance.QSP.master_port_assign()}
-			args := []interface{}{changeToMasterKey.Hostname, changeToMasterKey.Port}
+			args := []any{changeToMasterKey.Hostname, changeToMasterKey.Port}
 			return changeReplicationSourceWithTLS(instanceKey, instance, params, args)
 		}
 		changedViaGTID = true
@@ -1016,7 +1013,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 				instance.QSP.master_log_pos_assign(),
 				"master_use_gtid=no",
 			}
-			args := []interface{}{
+			args := []any{
 				changeToMasterKey.Hostname,
 				changeToMasterKey.Port,
 				masterBinlogCoordinates.LogFile,
@@ -1042,7 +1039,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 				instance.QSP.master_port_assign(),
 				fmt.Sprintf("master_use_gtid=%s", mariadbGTIDHint),
 			}
-			args := []interface{}{changeToMasterKey.Hostname, changeToMasterKey.Port}
+			args := []any{changeToMasterKey.Hostname, changeToMasterKey.Port}
 			return changeReplicationSourceWithTLS(instanceKey, instance, params, args)
 		}
 		changedViaGTID = true
@@ -1050,7 +1047,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Is Oracle; already uses GTID; keep using it.
 		changeMasterFunc = func() error {
 			params := []string{instance.QSP.master_host_assign(), instance.QSP.master_port_assign()}
-			args := []interface{}{changeToMasterKey.Hostname, changeToMasterKey.Port}
+			args := []any{changeToMasterKey.Hostname, changeToMasterKey.Port}
 			return changeReplicationSourceWithTLS(instanceKey, instance, params, args)
 		}
 		changedViaGTID = true
@@ -1064,7 +1061,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 				instance.QSP.master_log_pos_assign(),
 				instance.QSP.master_auto_position_assign(),
 			}
-			args := []interface{}{
+			args := []any{
 				changeToMasterKey.Hostname,
 				changeToMasterKey.Port,
 				masterBinlogCoordinates.LogFile,
@@ -1081,7 +1078,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 				instance.QSP.master_port_assign(),
 				instance.QSP.master_auto_position_assign(),
 			}
-			args := []interface{}{changeToMasterKey.Hostname, changeToMasterKey.Port, 1}
+			args := []any{changeToMasterKey.Hostname, changeToMasterKey.Port, 1}
 			return changeReplicationSourceWithTLS(instanceKey, instance, params, args)
 		}
 		changedViaGTID = true
@@ -1094,7 +1091,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 				instance.QSP.master_log_file_assign(),
 				instance.QSP.master_log_pos_assign(),
 			}
-			args := []interface{}{
+			args := []any{
 				changeToMasterKey.Hostname,
 				changeToMasterKey.Port,
 				masterBinlogCoordinates.LogFile,
@@ -1153,11 +1150,11 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("Cannot reset replication on: %+v because replication threads are not stopped", instanceKey)
+		return instance, fmt.Errorf("cannot reset replication on: %+v because replication threads are not stopped", instanceKey)
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting reset-replication operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting reset-replication operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	// MySQL's RESET SLAVE is done correctly; however SHOW SLAVE STATUS still returns old hostnames etc
@@ -1191,11 +1188,11 @@ func ResetMaster(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("Cannot reset master on: %+v because replication threads are not stopped", instanceKey)
+		return instance, fmt.Errorf("cannot reset master on: %+v because replication threads are not stopped", instanceKey)
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting reset-master operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting reset-master operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	err = ExecuteInstanceCommand(instanceKey, instance.QSP.reset_master())
@@ -1211,7 +1208,7 @@ func ResetMaster(instanceKey *InstanceKey) (*Instance, error) {
 // skipQueryClassic skips a query in normal binlog file:pos replication
 func setGTIDPurged(instance *Instance, gtidPurged string) error {
 	if *config.RuntimeCLIFlags.Noop {
-		return fmt.Errorf("noop: aborting set-gtid-purged operation on %+v; signalling error but nothing went wrong.", instance.Key)
+		return fmt.Errorf("noop: aborting set-gtid-purged operation on %+v; signalling error but nothing went wrong", instance.Key)
 	}
 
 	err := ExecuteInstanceCommand(&instance.Key, `set global gtid_purged := ?`, gtidPurged)
@@ -1241,7 +1238,7 @@ func skipQueryOracleGtid(instance *Instance) error {
 		return err
 	}
 	if nextGtid == "" {
-		return fmt.Errorf("Empty NextGTID() in skipQueryGtid() for %+v", instance.Key)
+		return fmt.Errorf("empty NextGTID() in skipQueryGtid() for %+v", instance.Key)
 	}
 	if err := ExecuteInstanceCommand(&instance.Key, `SET GTID_NEXT=?`, nextGtid); err != nil {
 		return err
@@ -1266,14 +1263,14 @@ func SkipQuery(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, fmt.Errorf("instance is not a replica: %+v", instanceKey)
 	}
 	if instance.ReplicationSQLThreadRuning {
-		return instance, fmt.Errorf("Replication SQL thread is running on %+v", instanceKey)
+		return instance, fmt.Errorf("replication SQL thread is running on %+v", instanceKey)
 	}
 	if instance.LastSQLError == "" {
-		return instance, fmt.Errorf("No SQL error on %+v", instanceKey)
+		return instance, fmt.Errorf("no SQL error on %+v", instanceKey)
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting skip-query operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting skip-query operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	log.Debugf("Skipping one query on %+v", instanceKey)
@@ -1342,7 +1339,7 @@ func ReadReplicationCredentials(instanceKey *InstanceKey) (creds *modeldomain.Re
 			}
 		}
 		if err == nil && creds.User == "" {
-			err = fmt.Errorf("Empty username retrieved by ReplicationCredentialsQuery")
+			err = fmt.Errorf("empty username retrieved by ReplicationCredentialsQuery")
 		}
 		if err == nil {
 			return creds, nil
@@ -1362,7 +1359,7 @@ func ReadReplicationCredentials(instanceKey *InstanceKey) (creds *modeldomain.Re
 		`
 		err = ReadInstanceRow(instanceKey, query, &creds.User, &creds.Password)
 		if err == nil && creds.User == "" {
-			err = fmt.Errorf("Empty username found in mysql.slave_master_info")
+			err = fmt.Errorf("empty username found in mysql.slave_master_info")
 		}
 
 	}
@@ -1377,7 +1374,7 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting set-read-only operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting set-read-only operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	// If async fallback is disallowed, we're responsible for flipping the master
@@ -1427,7 +1424,7 @@ func KillQuery(instanceKey *InstanceKey, process int64) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting kill-query operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting kill-query operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	err = ExecuteInstanceCommand(instanceKey, `kill query ?`, process)
@@ -1448,7 +1445,7 @@ func KillQuery(instanceKey *InstanceKey, process int64) (*Instance, error) {
 // injectPseudoGTID injects a Pseudo-GTID statement on a writable instance
 func injectPseudoGTID(instance *Instance) (hint string, err error) {
 	if *config.RuntimeCLIFlags.Noop {
-		return hint, fmt.Errorf("noop: aborting inject-pseudo-gtid operation on %+v; signalling error but nothing went wrong.", instance.Key)
+		return hint, fmt.Errorf("noop: aborting inject-pseudo-gtid operation on %+v; signalling error but nothing went wrong", instance.Key)
 	}
 
 	now := time.Now()

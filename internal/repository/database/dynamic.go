@@ -21,7 +21,7 @@ func scanRowsToData(rows *sql.Rows, onRow func(modeldomain.RowData) error) error
 	}
 	for rows.Next() {
 		data := make(modeldomain.RowData, len(columns))
-		destinations := make([]interface{}, len(columns))
+		destinations := make([]any, len(columns))
 		for i := range data {
 			destinations[i] = data[i].NullString()
 		}
@@ -46,7 +46,7 @@ func rowDataToDynamicRow(data modeldomain.RowData, columns []string) modeldomain
 	return row
 }
 
-func queryNamedResultDataContext(ctx context.Context, database *sql.DB, query string, args ...interface{}) (result modeldomain.NamedResultData, returnErr error) {
+func queryNamedResultDataContext(ctx context.Context, database *sql.DB, query string, args ...any) (result modeldomain.NamedResultData, returnErr error) {
 	if ctx == nil {
 		return result, errors.New("dynamic query context is nil")
 	}
@@ -79,7 +79,7 @@ func queryNamedResultDataContext(ctx context.Context, database *sql.DB, query st
 	return result, nil
 }
 
-func QueryDynamicRowsContext(ctx context.Context, database *sql.DB, query string, onRow func(modeldomain.DynamicRow) error, args ...interface{}) (returnErr error) {
+func QueryDynamicRowsContext(ctx context.Context, database *sql.DB, query string, onRow func(modeldomain.DynamicRow) error, args ...any) (returnErr error) {
 	if ctx == nil {
 		return errors.New("dynamic query context is nil")
 	}
@@ -109,16 +109,16 @@ func QueryDynamicRowsContext(ctx context.Context, database *sql.DB, query string
 	})
 }
 
-func QueryDynamicRows(database *sql.DB, query string, onRow func(modeldomain.DynamicRow) error, args ...interface{}) error {
+func QueryDynamicRows(database *sql.DB, query string, onRow func(modeldomain.DynamicRow) error, args ...any) error {
 	return QueryDynamicRowsContext(context.Background(), database, query, onRow, args...)
 }
 
-func QueryResultDataContext(ctx context.Context, database *sql.DB, query string, args ...interface{}) (modeldomain.ResultData, error) {
+func QueryResultDataContext(ctx context.Context, database *sql.DB, query string, args ...any) (modeldomain.ResultData, error) {
 	result, err := queryNamedResultDataContext(ctx, database, query, args...)
 	return result.Data, err
 }
 
-func QueryResultData(database *sql.DB, query string, args ...interface{}) (modeldomain.ResultData, error) {
+func QueryResultData(database *sql.DB, query string, args ...any) (modeldomain.ResultData, error) {
 	return QueryResultDataContext(context.Background(), database, query, args...)
 }
 
@@ -184,7 +184,7 @@ func WriteTableContext(ctx context.Context, database *sql.DB, tableName string, 
 	return nil
 }
 
-func NilIfZero(value int64) interface{} {
+func NilIfZero(value int64) any {
 	if value == 0 {
 		return nil
 	}

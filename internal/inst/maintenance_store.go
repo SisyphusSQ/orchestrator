@@ -32,8 +32,9 @@ func ReadActiveMaintenance() ([]Maintenance, error) {
 	rows, err := metadata.ReadActiveMaintenance(context.Background())
 	res := make([]Maintenance, 0, len(rows))
 	for _, row := range rows {
-		maintenance := Maintenance{}
-		maintenance.MaintenanceId = row.ID
+		maintenance := Maintenance{
+			MaintenanceId: row.ID,
+		}
 		maintenance.Key.Hostname = row.Hostname
 		maintenance.Key.Port = row.Port
 		maintenance.BeginTimestamp = row.BeginTimestamp
@@ -66,7 +67,7 @@ func BeginBoundedMaintenance(instanceKey *InstanceKey, owner string, reason stri
 	}
 
 	if !inserted {
-		err = fmt.Errorf("Cannot begin maintenance for instance: %+v; maintenance reason: %+v", instanceKey, reason)
+		err = fmt.Errorf("cannot begin maintenance for instance: %+v; maintenance reason: %+v", instanceKey, reason)
 	} else {
 		AuditOperation("begin-maintenance", instanceKey, fmt.Sprintf("maintenanceToken: %d, owner: %s, reason: %s", maintenanceToken, owner, reason))
 	}

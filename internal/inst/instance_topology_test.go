@@ -24,26 +24,26 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func generateTestInstances() (instances [](*Instance), instancesMap map[string](*Instance)) {
+func generateTestInstances() (instances []*Instance, instancesMap map[string]*Instance) {
 	i710 := Instance{Key: i710Key, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
 	i720 := Instance{Key: i720Key, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
 	i730 := Instance{Key: i730Key, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
 	i810 := Instance{Key: i810Key, ServerID: 810, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000008", LogPos: 10}}
 	i820 := Instance{Key: i820Key, ServerID: 820, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000008", LogPos: 20}}
 	i830 := Instance{Key: i830Key, ServerID: 830, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000008", LogPos: 30}}
-	instances = [](*Instance){&i710, &i720, &i730, &i810, &i820, &i830}
+	instances = []*Instance{&i710, &i720, &i730, &i810, &i820, &i830}
 	for _, instance := range instances {
 		instance.Version = "5.6.7"
 		instance.Binlog_format = "STATEMENT"
 	}
-	instancesMap = make(map[string](*Instance))
+	instancesMap = make(map[string]*Instance)
 	for _, instance := range instances {
 		instancesMap[instance.Key.StringCode()] = instance
 	}
 	return instances, instancesMap
 }
 
-func applyGeneralGoodToGoReplicationParams(instances [](*Instance)) {
+func applyGeneralGoodToGoReplicationParams(instances []*Instance) {
 	for _, instance := range instances {
 		instance.IsLastCheckValid = true
 		instance.LogBinEnabled = true

@@ -45,15 +45,15 @@ import (
 	"github.com/openark/orchestrator/internal/observability"
 )
 
-var countPendingRecoveries int64
+var countPendingRecoveries atomic.Int64
 
 type RecoveryType string
 
 const (
-	MasterRecovery                 RecoveryType = "MasterRecovery"
-	CoMasterRecovery                            = "CoMasterRecovery"
-	IntermediateMasterRecovery                  = "IntermediateMasterRecovery"
-	ReplicationGroupMemberRecovery              = "ReplicationGroupMemberRecovery"
+	MasterRecovery                 = "MasterRecovery"
+	CoMasterRecovery               = "CoMasterRecovery"
+	IntermediateMasterRecovery     = "IntermediateMasterRecovery"
+	ReplicationGroupMemberRecovery = "ReplicationGroupMemberRecovery"
 )
 
 type RecoveryAcknowledgement struct {
@@ -138,16 +138,16 @@ func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *Topology
 	return topologyRecovery
 }
 
-func (this *TopologyRecovery) AddError(err error) error {
+func (recovery *TopologyRecovery) AddError(err error) error {
 	if err != nil {
-		this.AllErrors = append(this.AllErrors, err.Error())
+		recovery.AllErrors = append(recovery.AllErrors, err.Error())
 	}
 	return err
 }
 
-func (this *TopologyRecovery) AddErrors(errs []error) {
+func (recovery *TopologyRecovery) AddErrors(errs []error) {
 	for _, err := range errs {
-		this.AddError(err)
+		recovery.AddError(err)
 	}
 }
 
@@ -168,10 +168,10 @@ func NewTopologyRecoveryStep(uid string, message string) *TopologyRecoveryStep {
 type MasterRecoveryType string
 
 const (
-	NotMasterRecovery          MasterRecoveryType = "NotMasterRecovery"
-	MasterRecoveryGTID                            = "MasterRecoveryGTID"
-	MasterRecoveryPseudoGTID                      = "MasterRecoveryPseudoGTID"
-	MasterRecoveryBinlogServer                    = "MasterRecoveryBinlogServer"
+	NotMasterRecovery          = "NotMasterRecovery"
+	MasterRecoveryGTID         = "MasterRecoveryGTID"
+	MasterRecoveryPseudoGTID   = "MasterRecoveryPseudoGTID"
+	MasterRecoveryBinlogServer = "MasterRecoveryBinlogServer"
 )
 
 var emergencyReadTopologyInstanceMap *cache.Cache
@@ -179,16 +179,18 @@ var emergencyRestartReplicaTopologyInstanceMap *cache.Cache
 var emergencyOperationGracefulPeriodMap *cache.Cache
 
 // InstancesByCountReplicas sorts instances by umber of replicas, descending
-type InstancesByCountReplicas [](*inst.Instance)
+type InstancesByCountReplicas []*inst.Instance
 
-func (this InstancesByCountReplicas) Len() int      { return len(this) }
-func (this InstancesByCountReplicas) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByCountReplicas) Less(i, j int) bool {
-	if len(this[i].Replicas) == len(this[j].Replicas) {
+func (instances InstancesByCountReplicas) Len() int { return len(instances) }
+func (instances InstancesByCountReplicas) Swap(i, j int) {
+	instances[i], instances[j] = instances[j], instances[i]
+}
+func (instances InstancesByCountReplicas) Less(i, j int) bool {
+	if len(instances[i].Replicas) == len(instances[j].Replicas) {
 		// Secondary sorting: prefer more advanced replicas
-		return !this[i].ExecBinlogCoordinates.SmallerThan(&this[j].ExecBinlogCoordinates)
+		return !instances[i].ExecBinlogCoordinates.SmallerThan(&instances[j].ExecBinlogCoordinates)
 	}
-	return len(this[i].Replicas) < len(this[j].Replicas)
+	return len(instances[i].Replicas) < len(instances[j].Replicas)
 }
 
 func init() {
@@ -199,7 +201,7 @@ func init() {
 }
 
 func getCountPendingRecoveries() int64 {
-	return atomic.LoadInt64(&countPendingRecoveries)
+	return countPendingRecoveries.Load()
 }
 
 func initializeTopologyRecoveryPostConfiguration() {
@@ -329,67 +331,6 @@ func applyEnvironmentVariables(topologyRecovery *TopologyRecovery) []string {
 	return env
 }
 
-func executeProcess(command string, env []string, topologyRecovery *TopologyRecovery, fullDescription string) error {
-	return executeProcessContext(context.Background(), command, env, topologyRecovery, fullDescription)
-}
-
-func executeProcessContext(ctx context.Context, command string, env []string, topologyRecovery *TopologyRecovery, fullDescription string) (err error) {
-	_, span := observability.StartSpan(ctx, "recovery.hook")
-	defer func() { observability.EndSpan(span, err) }()
-	// Log the command to be run and record how long it takes as this may be useful
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Running %s: %s", fullDescription, command))
-	start := time.Now()
-	var info string
-	if err = os.CommandRun(command, env); err == nil {
-		info = fmt.Sprintf("Completed %s in %v", fullDescription, time.Since(start))
-	} else {
-		info = fmt.Sprintf("Execution of %s failed in %v with error: %v", fullDescription, time.Since(start), err)
-		log.Errorf("%s", info)
-	}
-	AuditTopologyRecovery(topologyRecovery, info)
-	return err
-}
-
-// executeProcesses executes a list of processes
-func executeProcesses(processes []string, description string, topologyRecovery *TopologyRecovery, failOnError bool) error {
-	return executeProcessesContext(context.Background(), processes, description, topologyRecovery, failOnError)
-}
-
-func executeProcessesContext(ctx context.Context, processes []string, description string, topologyRecovery *TopologyRecovery, failOnError bool) (err error) {
-	if len(processes) == 0 {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("No %s hooks to run", description))
-		return nil
-	}
-
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Running %d %s hooks", len(processes), description))
-	for i, command := range processes {
-		command, async := prepareCommand(command, topologyRecovery)
-		env := applyEnvironmentVariables(topologyRecovery)
-
-		fullDescription := fmt.Sprintf("%s hook %d of %d", description, i+1, len(processes))
-		if async {
-			fullDescription = fmt.Sprintf("%s (async)", fullDescription)
-		}
-		if async {
-			// Ignore errors
-			go executeProcessContext(context.WithoutCancel(ctx), command, env, topologyRecovery, fullDescription)
-		} else {
-			if cmdErr := executeProcessContext(ctx, command, env, topologyRecovery, fullDescription); cmdErr != nil {
-				if failOnError {
-					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Not running further %s hooks", description))
-					return cmdErr
-				}
-				if err == nil {
-					// Keep first error encountered
-					err = cmdErr
-				}
-			}
-		}
-	}
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("done running %s hooks", description))
-	return err
-}
-
 func executeHookPhaseContext(ctx context.Context, phase, description string, topologyRecovery *TopologyRecovery) error {
 	clusterName := ""
 	if topologyRecovery != nil {
@@ -494,7 +435,6 @@ func recoverDeadMasterInBinlogServerTopology(topologyRecovery *TopologyRecovery)
 		}
 		maxBinlogServersToPromote := 3
 		for i, binlogServerReplica := range binlogServerReplicas {
-			binlogServerReplica := binlogServerReplica
 			if i >= maxBinlogServersToPromote {
 				return
 			}
@@ -531,17 +471,13 @@ func GetMasterRecoveryType(analysisEntry *inst.ReplicationAnalysis) (masterRecov
 	return masterRecoveryType
 }
 
-// recoverDeadMaster recovers a dead master, complete logic inside
-func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
-	return recoverDeadMasterContext(context.Background(), topologyRecovery, candidateInstanceKey, skipProcesses)
-}
-func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplica *inst.Instance, lostReplicas []*inst.Instance, err error) {
 	ctx, span := observability.StartSpan(ctx, "recovery.execute")
 	defer func() { observability.EndSpan(span, err) }()
 	topologyRecovery.Type = MasterRecovery
 	analysisEntry := &topologyRecovery.AnalysisEntry
 	failedInstanceKey := &analysisEntry.AnalyzedInstanceKey
-	var cannotReplicateReplicas [](*inst.Instance)
+	var cannotReplicateReplicas []*inst.Instance
 	postponedAll := false
 
 	inst.AuditOperation("recover-dead-master", failedInstanceKey, "problem found; will recover")
@@ -578,17 +514,17 @@ func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRec
 	switch topologyRecovery.RecoveryType {
 	case MasterRecoveryGTID:
 		{
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: regrouping replicas via GTID"))
+			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
 			lostReplicas, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasGTID(failedInstanceKey, true, false, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
 		}
 	case MasterRecoveryPseudoGTID:
 		{
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: regrouping replicas via Pseudo-GTID"))
+			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: regrouping replicas via Pseudo-GTID")
 			lostReplicas, _, _, cannotReplicateReplicas, promotedReplica, err = inst.RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(failedInstanceKey, true, nil, &topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal)
 		}
 	case MasterRecoveryBinlogServer:
 		{
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: recovering via binlog servers"))
+			AuditTopologyRecovery(topologyRecovery, "RecoverDeadMaster: recovering via binlog servers")
 			promotedReplica, err = recoverDeadMasterInBinlogServerTopology(topologyRecovery)
 		}
 	}
@@ -602,7 +538,6 @@ func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRec
 		postponedFunction := func() error {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
-				replica := replica
 				inst.DetachReplicaMasterHost(&replica.Key)
 			}
 			return nil
@@ -614,7 +549,6 @@ func recoverDeadMasterContext(ctx context.Context, topologyRecovery *TopologyRec
 		inst.BeginDowntime(inst.NewDowntime(failedInstanceKey, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
 		acknowledgeInstanceFailureDetection(&analysisEntry.AnalyzedInstanceKey)
 		for _, replica := range lostReplicas {
-			replica := replica
 			inst.BeginDowntime(inst.NewDowntime(&replica.Key, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
 		}
 		return nil
@@ -670,9 +604,9 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	// Maybe we promoted a "prefer_not"
 	// Maybe we promoted a server in a different DC than the master
 	// There's many options. We may wish to replace the server we promoted with a better one.
-	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("checking if should replace promoted replica with a better candidate"))
+	AuditTopologyRecovery(topologyRecovery, "checking if should replace promoted replica with a better candidate")
 	if candidateInstanceKey == nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ checking if promoted replica is the ideal candidate"))
+		AuditTopologyRecovery(topologyRecovery, "+ checking if promoted replica is the ideal candidate")
 		if deadInstance != nil {
 			for _, candidateReplica := range candidateReplicas {
 				if promotedReplica.Key.Equals(&candidateReplica.Key) &&
@@ -688,7 +622,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	// We didn't pick the ideal candidate; let's see if we can replace with a candidate from same DC and ENV
 	if candidateInstanceKey == nil {
 		// Try a candidate replica that is in same DC & env as the dead instance
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ searching for an ideal candidate"))
+		AuditTopologyRecovery(topologyRecovery, "+ searching for an ideal candidate")
 		if deadInstance != nil {
 			for _, candidateReplica := range candidateReplicas {
 				if canTakeOverPromotedServerAsMaster(candidateReplica, promotedReplica) &&
@@ -703,7 +637,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	}
 	if candidateInstanceKey == nil {
 		// We cannot find a candidate in same DC and ENV as dead master
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ checking if promoted replica is an OK candidate"))
+		AuditTopologyRecovery(topologyRecovery, "+ checking if promoted replica is an OK candidate")
 		for _, candidateReplica := range candidateReplicas {
 			if promotedReplica.Key.Equals(&candidateReplica.Key) {
 				// Seems like we promoted a candidate replica (though not in same DC and ENV as dead master)
@@ -720,7 +654,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	// Still nothing?
 	if candidateInstanceKey == nil {
 		// Try a candidate replica that is in same DC & env as the promoted replica (our promoted replica is not an "is_candidate")
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ searching for a candidate"))
+		AuditTopologyRecovery(topologyRecovery, "+ searching for a candidate")
 		for _, candidateReplica := range candidateReplicas {
 			if canTakeOverPromotedServerAsMaster(candidateReplica, promotedReplica) &&
 				promotedReplica.DataCenter == candidateReplica.DataCenter &&
@@ -734,7 +668,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	// Still nothing?
 	if candidateInstanceKey == nil {
 		// Try a candidate replica (our promoted replica is not an "is_candidate")
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ searching for a candidate"))
+		AuditTopologyRecovery(topologyRecovery, "+ searching for a candidate")
 		for _, candidateReplica := range candidateReplicas {
 			if canTakeOverPromotedServerAsMaster(candidateReplica, promotedReplica) {
 				if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, candidateReplica); satisfied {
@@ -761,7 +695,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 		if candidateInstanceKey == nil {
 			// Still nothing? Then we didn't find a replica marked as "candidate". OK, further down the stream we have:
 			// find neutral instance in same dv&env as dead master
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ searching for a neutral server to replace promoted server, in same DC and env as dead master"))
+			AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace promoted server, in same DC and env as dead master")
 			for _, neutralReplica := range neutralReplicas {
 				if canTakeOverPromotedServerAsMaster(neutralReplica, promotedReplica) &&
 					deadInstance.DataCenter == neutralReplica.DataCenter &&
@@ -773,7 +707,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 		}
 		if candidateInstanceKey == nil {
 			// find neutral instance in same dv&env as promoted replica
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ searching for a neutral server to replace promoted server, in same DC and env as promoted replica"))
+			AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace promoted server, in same DC and env as promoted replica")
 			for _, neutralReplica := range neutralReplicas {
 				if canTakeOverPromotedServerAsMaster(neutralReplica, promotedReplica) &&
 					promotedReplica.DataCenter == neutralReplica.DataCenter &&
@@ -784,7 +718,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 			}
 		}
 		if candidateInstanceKey == nil {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ searching for a neutral server to replace a prefer_not"))
+			AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace a prefer_not")
 			for _, neutralReplica := range neutralReplicas {
 				if canTakeOverPromotedServerAsMaster(neutralReplica, promotedReplica) {
 					if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, neutralReplica); satisfied {
@@ -802,12 +736,12 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	// So do we have a candidate?
 	if candidateInstanceKey == nil {
 		// Found nothing. Stick with promoted replica
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ found no server to promote on top promoted replica"))
+		AuditTopologyRecovery(topologyRecovery, "+ found no server to promote on top promoted replica")
 		return promotedReplica, false, nil
 	}
 	if promotedReplica.Key.Equals(candidateInstanceKey) {
 		// Sanity. It IS the candidate, nothing to promote...
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("+ sanity check: found our very own server to promote; doing nothing"))
+		AuditTopologyRecovery(topologyRecovery, "+ sanity check: found our very own server to promote; doing nothing")
 		return promotedReplica, false, nil
 	}
 	replacement, _, err = inst.ReadInstance(candidateInstanceKey)
@@ -844,7 +778,7 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 		relocateReplicasFunc := func() error {
 			log.Debugf("replace-promoted-replica-with-candidate: relocating replicas of %+v below %+v", promotedReplica.Key, candidateInstance.Key)
 
-			relocatedReplicas, _, err, _ := inst.RelocateReplicas(&promotedReplica.Key, &candidateInstance.Key, "")
+			relocatedReplicas, _, _, err := inst.RelocateReplicas(&promotedReplica.Key, &candidateInstance.Key, "")
 			log.Debugf("replace-promoted-replica-with-candidate: + relocated %+v replicas of %+v below %+v", len(relocatedReplicas), promotedReplica.Key, candidateInstance.Key)
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("relocated %+v replicas of %+v below %+v", len(relocatedReplicas), promotedReplica.Key, candidateInstance.Key))
 			return log.Errore(err)
@@ -934,7 +868,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 
 		if policy.ApplyMySQLPromotionAfterMasterFailover || analysisEntry.CommandHint == inst.GracefulMasterTakeoverCommandHint {
 			// on GracefulMasterTakeoverCommandHint it makes utter sense to RESET SLAVE ALL and read_only=0, and there is no sense in not doing so.
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: will apply MySQL changes to promoted master"))
+			AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
 			{
 				_, err := inst.ResetReplicationOperation(&promotedReplica.Key)
 				if err != nil {
@@ -975,7 +909,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 		}
 		if policy.MasterFailoverDetachReplicaMasterHost {
 			postponedFunction := func() error {
-				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: detaching master host on promoted master"))
+				AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: detaching master host on promoted master")
 				inst.DetachReplicaMasterHost(&promotedReplica.Key)
 				return nil
 			}
@@ -1105,7 +1039,6 @@ func GetCandidateSiblingOfIntermediateMaster(topologyRecovery *TopologyRecovery,
 	// At first, we try to return an "is_candidate" server in same dc & env
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("searching for the best candidate sibling of dead intermediate master %+v", intermediateMasterInstance.Key))
 	for _, sibling := range siblings {
-		sibling := sibling
 		if isValidAsCandidateSiblingOfIntermediateMaster(intermediateMasterInstance, sibling) &&
 			sibling.IsCandidate &&
 			sibling.DataCenter == intermediateMasterInstance.DataCenter &&
@@ -1116,7 +1049,6 @@ func GetCandidateSiblingOfIntermediateMaster(topologyRecovery *TopologyRecovery,
 	}
 	// No candidate in same DC & env, let's search for a candidate anywhere
 	for _, sibling := range siblings {
-		sibling := sibling
 		if isValidAsCandidateSiblingOfIntermediateMaster(intermediateMasterInstance, sibling) && sibling.IsCandidate {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found %+v as a replacement for %+v [candidate sibling]", sibling.Key, intermediateMasterInstance.Key))
 			return sibling, nil
@@ -1124,7 +1056,6 @@ func GetCandidateSiblingOfIntermediateMaster(topologyRecovery *TopologyRecovery,
 	}
 	// Go for some valid in the same DC & ENV
 	for _, sibling := range siblings {
-		sibling := sibling
 		if isValidAsCandidateSiblingOfIntermediateMaster(intermediateMasterInstance, sibling) &&
 			sibling.DataCenter == intermediateMasterInstance.DataCenter &&
 			sibling.PhysicalEnvironment == intermediateMasterInstance.PhysicalEnvironment {
@@ -1134,7 +1065,6 @@ func GetCandidateSiblingOfIntermediateMaster(topologyRecovery *TopologyRecovery,
 	}
 	// Just whatever is valid.
 	for _, sibling := range siblings {
-		sibling := sibling
 		if isValidAsCandidateSiblingOfIntermediateMaster(intermediateMasterInstance, sibling) {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found %+v as a replacement for %+v [any sibling]", sibling.Key, intermediateMasterInstance.Key))
 			return sibling, nil
@@ -1174,7 +1104,7 @@ func RecoverDeadIntermediateMasterContext(ctx context.Context, topologyRecovery 
 		}
 		// We have a candidate
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediateMaster: will attempt a candidate intermediate master: %+v", candidateSiblingOfIntermediateMaster.Key))
-		relocatedReplicas, candidateSibling, err, errs := inst.RelocateReplicas(failedInstanceKey, &candidateSiblingOfIntermediateMaster.Key, "")
+		relocatedReplicas, candidateSibling, errs, err := inst.RelocateReplicas(failedInstanceKey, &candidateSiblingOfIntermediateMaster.Key, "")
 		topologyRecovery.AddErrors(errs)
 		topologyRecovery.ParticipatingInstanceKeys.AddKey(candidateSiblingOfIntermediateMaster.Key)
 
@@ -1198,7 +1128,7 @@ func RecoverDeadIntermediateMasterContext(ctx context.Context, topologyRecovery 
 		relocateReplicasToCandidateSibling()
 	}
 	if !recoveryResolved {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediateMaster: will next attempt regrouping of replicas"))
+		AuditTopologyRecovery(topologyRecovery, "- RecoverDeadIntermediateMaster: will next attempt regrouping of replicas")
 		// Plan B: regroup (we wish to reduce cross-DC replication streams)
 		lostReplicas, _, _, _, regroupPromotedReplica, regroupError := inst.RegroupReplicas(failedInstanceKey, true, nil, nil)
 		if regroupError != nil {
@@ -1216,7 +1146,7 @@ func RecoverDeadIntermediateMasterContext(ctx context.Context, topologyRecovery 
 		}
 		// Plan C: try replacement intermediate master in other DC...
 		if candidateSiblingOfIntermediateMaster != nil && candidateSiblingOfIntermediateMaster.DataCenter != intermediateMasterInstance.DataCenter {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediateMaster: will next attempt relocating to another DC server"))
+			AuditTopologyRecovery(topologyRecovery, "- RecoverDeadIntermediateMaster: will next attempt relocating to another DC server")
 			relocateReplicasToCandidateSibling()
 		}
 	}
@@ -1229,7 +1159,8 @@ func RecoverDeadIntermediateMasterContext(ctx context.Context, topologyRecovery 
 		// So, match up all that's left, plan D
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadIntermediateMaster: will next attempt to relocate up from %+v", *failedInstanceKey))
 
-		relocatedReplicas, masterInstance, err, errs := inst.RelocateReplicas(failedInstanceKey, &analysisEntry.AnalyzedInstanceMasterKey, "")
+		relocatedReplicas, masterInstance, errs, err := inst.RelocateReplicas(failedInstanceKey, &analysisEntry.AnalyzedInstanceMasterKey, "")
+		topologyRecovery.AddError(err)
 		topologyRecovery.AddErrors(errs)
 		topologyRecovery.ParticipatingInstanceKeys.AddKey(analysisEntry.AnalyzedInstanceMasterKey)
 
@@ -1277,11 +1208,11 @@ func RecoverDeadReplicationGroupMemberWithReplicas(topologyRecovery *TopologyRec
 	AuditTopologyRecovery(topologyRecovery, "Finding a candidate group member to relocate replicas to")
 	candidateGroupMemberInstanceKey := &groupMembers[rand.Intn(len(failedGroupMember.ReplicationGroupMembers.GetInstanceKeys()))]
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Found group member %+v", candidateGroupMemberInstanceKey))
-	relocatedReplicas, successorInstance, err, errs := inst.RelocateReplicas(failedGroupMemberInstanceKey, candidateGroupMemberInstanceKey, "")
+	relocatedReplicas, successorInstance, errs, err := inst.RelocateReplicas(failedGroupMemberInstanceKey, candidateGroupMemberInstanceKey, "")
 	topologyRecovery.AddErrors(errs)
 	if len(relocatedReplicas) != len(failedGroupMember.Replicas.GetInstanceKeys()) {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadReplicationGroupMemberWithReplicas: failed to move all replicas to candidate group member (%+v)", candidateGroupMemberInstanceKey))
-		return nil, topologyRecovery.AddError(errors.New(fmt.Sprintf("RecoverDeadReplicationGroupMemberWithReplicas: Unable to relocate replicas to +%v", candidateGroupMemberInstanceKey)))
+		return nil, topologyRecovery.AddError(fmt.Errorf("RecoverDeadReplicationGroupMemberWithReplicas: Unable to relocate replicas to +%v", candidateGroupMemberInstanceKey))
 	}
 	AuditTopologyRecovery(topologyRecovery, "All replicas successfully relocated")
 	resolveRecovery(topologyRecovery, successorInstance)
@@ -1322,10 +1253,10 @@ func checkAndRecoverDeadIntermediateMaster(analysisEntry inst.ReplicationAnalysi
 }
 
 // RecoverDeadCoMaster recovers a dead co-master, complete logic inside
-func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+func RecoverDeadCoMaster(topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas []*inst.Instance, err error) {
 	return RecoverDeadCoMasterContext(context.Background(), topologyRecovery, skipProcesses)
 }
-func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas [](*inst.Instance), err error) {
+func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyRecovery, skipProcesses bool) (promotedReplica *inst.Instance, lostReplicas []*inst.Instance, err error) {
 	ctx, span := observability.StartSpan(ctx, "recovery.execute")
 	defer func() { observability.EndSpan(span, err) }()
 	topologyRecovery.Type = CoMasterRecovery
@@ -1353,7 +1284,7 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadCoMaster: coMasterRecoveryType=%+v", coMasterRecoveryType))
 
-	var cannotReplicateReplicas [](*inst.Instance)
+	var cannotReplicateReplicas []*inst.Instance
 	switch coMasterRecoveryType {
 	case MasterRecoveryGTID:
 		{
@@ -1425,7 +1356,6 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 		postponedFunction := func() error {
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadCoMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
-				replica := replica
 				inst.DetachReplicaMasterHost(&replica.Key)
 			}
 			return nil
@@ -1437,7 +1367,6 @@ func RecoverDeadCoMasterContext(ctx context.Context, topologyRecovery *TopologyR
 		inst.BeginDowntime(inst.NewDowntime(failedInstanceKey, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
 		acknowledgeInstanceFailureDetection(&analysisEntry.AnalyzedInstanceKey)
 		for _, replica := range lostReplicas {
-			replica := replica
 			inst.BeginDowntime(inst.NewDowntime(&replica.Key, inst.GetMaintenanceOwner(), inst.DowntimeLostInRecoveryMessage, time.Duration(config.LostInRecoveryDowntimeSeconds)*time.Second))
 		}
 		return nil
@@ -1480,7 +1409,7 @@ func checkAndRecoverDeadCoMaster(analysisEntry inst.ReplicationAnalysis, candida
 		recoveryResult = "success"
 
 		if policy.ApplyMySQLPromotionAfterMasterFailover {
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: will apply MySQL changes to promoted master"))
+			AuditTopologyRecovery(topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
 			inst.SetReadOnly(&promotedReplica.Key, false)
 		}
 		if !skipProcesses {
@@ -1839,8 +1768,8 @@ func runEmergentOperations(analysisEntry *inst.ReplicationAnalysis, allowInstanc
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
 // It executes the function synchronuously
 func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	atomic.AddInt64(&countPendingRecoveries, 1)
-	defer atomic.AddInt64(&countPendingRecoveries, -1)
+	countPendingRecoveries.Add(1)
+	defer countPendingRecoveries.Add(-1)
 
 	recoveryDisabledGlobally, recerr := IsRecoveryDisabled()
 	// Check for recovery being disabled globally
@@ -1923,7 +1852,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	if b, err := json.Marshal(topologyRecovery); err == nil {
 		log.Infof("Topology recovery: %+v", string(b))
 	} else {
-		log.Infof("Topology recovery: %+v", *topologyRecovery)
+		log.Infof("Topology recovery: %+v", topologyRecovery)
 	}
 	if !skipProcesses {
 		if topologyRecovery.SuccessorKey == nil {
@@ -2022,10 +1951,10 @@ func ForceExecuteRecovery(analysisEntry inst.ReplicationAnalysis, candidateInsta
 func ForceMasterFailover(clusterName string) (topologyRecovery *TopologyRecovery, err error) {
 	clusterMasters, err := inst.ReadClusterMaster(clusterName)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot deduce cluster master for %+v", clusterName)
+		return nil, fmt.Errorf("cannot deduce cluster master for %+v", clusterName)
 	}
 	if len(clusterMasters) != 1 {
-		return nil, fmt.Errorf("Cannot deduce cluster master for %+v", clusterName)
+		return nil, fmt.Errorf("cannot deduce cluster master for %+v", clusterName)
 	}
 	clusterMaster := clusterMasters[0]
 
@@ -2038,13 +1967,13 @@ func ForceMasterFailover(clusterName string) (topologyRecovery *TopologyRecovery
 		return nil, err
 	}
 	if !recoveryAttempted {
-		return nil, fmt.Errorf("Unexpected error: recovery not attempted. This should not happen")
+		return nil, fmt.Errorf("unexpected error: recovery not attempted. This should not happen")
 	}
 	if topologyRecovery == nil {
-		return nil, fmt.Errorf("Recovery attempted but with no results. This should not happen")
+		return nil, fmt.Errorf("recovery attempted but with no results. This should not happen")
 	}
 	if topologyRecovery.SuccessorKey == nil {
-		return nil, fmt.Errorf("Recovery attempted yet no replica promoted")
+		return nil, fmt.Errorf("recovery attempted yet no replica promoted")
 	}
 	return topologyRecovery, nil
 }
@@ -2054,15 +1983,15 @@ func ForceMasterFailover(clusterName string) (topologyRecovery *TopologyRecovery
 func ForceMasterTakeover(clusterName string, destination *inst.Instance) (topologyRecovery *TopologyRecovery, err error) {
 	clusterMasters, err := inst.ReadClusterWriteableMaster(clusterName)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot deduce cluster master for %+v", clusterName)
+		return nil, fmt.Errorf("cannot deduce cluster master for %+v", clusterName)
 	}
 	if len(clusterMasters) != 1 {
-		return nil, fmt.Errorf("Cannot deduce cluster master for %+v", clusterName)
+		return nil, fmt.Errorf("cannot deduce cluster master for %+v", clusterName)
 	}
 	clusterMaster := clusterMasters[0]
 
 	if !destination.MasterKey.Equals(&clusterMaster.Key) {
-		return nil, fmt.Errorf("You may only promote a direct child of the master %+v. The master of %+v is %+v.", clusterMaster.Key, destination.Key, destination.MasterKey)
+		return nil, fmt.Errorf("you may only promote a direct child of the master %+v. The master of %+v is %+v", clusterMaster.Key, destination.Key, destination.MasterKey)
 	}
 	log.Infof("Will demote %+v and promote %+v instead", clusterMaster.Key, destination.Key)
 
@@ -2075,18 +2004,18 @@ func ForceMasterTakeover(clusterName string, destination *inst.Instance) (topolo
 		return nil, err
 	}
 	if !recoveryAttempted {
-		return nil, fmt.Errorf("Unexpected error: recovery not attempted. This should not happen")
+		return nil, fmt.Errorf("unexpected error: recovery not attempted. This should not happen")
 	}
 	if topologyRecovery == nil {
-		return nil, fmt.Errorf("Recovery attempted but with no results. This should not happen")
+		return nil, fmt.Errorf("recovery attempted but with no results. This should not happen")
 	}
 	if topologyRecovery.SuccessorKey == nil {
-		return nil, fmt.Errorf("Recovery attempted yet no replica promoted")
+		return nil, fmt.Errorf("recovery attempted yet no replica promoted")
 	}
 	return topologyRecovery, nil
 }
 
-func getGracefulMasterTakeoverDesignatedInstance(clusterMasterKey *inst.InstanceKey, designatedKey *inst.InstanceKey, clusterMasterDirectReplicas [](*inst.Instance), auto bool) (designatedInstance *inst.Instance, err error) {
+func getGracefulMasterTakeoverDesignatedInstance(clusterMasterKey *inst.InstanceKey, designatedKey *inst.InstanceKey, clusterMasterDirectReplicas []*inst.Instance, auto bool) (designatedInstance *inst.Instance, err error) {
 	if designatedKey == nil {
 		// User did not specify a replica to promote
 		if len(clusterMasterDirectReplicas) == 1 {
@@ -2132,10 +2061,10 @@ func getGracefulMasterTakeoverDesignatedInstance(clusterMasterKey *inst.Instance
 func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey, auto bool) (topologyRecovery *TopologyRecovery, promotedMasterCoordinates *inst.BinlogCoordinates, err error) {
 	clusterMasters, err := inst.ReadClusterMaster(clusterName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster master for %+v; error: %+v", clusterName, err)
+		return nil, nil, fmt.Errorf("cannot deduce cluster master for %+v; error: %+v", clusterName, err)
 	}
 	if len(clusterMasters) != 1 {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster master for %+v. Found %+v potential masters", clusterName, len(clusterMasters))
+		return nil, nil, fmt.Errorf("cannot deduce cluster master for %+v. Found %+v potential masters", clusterName, len(clusterMasters))
 	}
 	clusterMaster := clusterMasters[0]
 
@@ -2145,7 +2074,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	}
 
 	if len(clusterMasterDirectReplicas) == 0 {
-		return nil, nil, fmt.Errorf("Master %+v doesn't seem to have replicas", clusterMaster.Key)
+		return nil, nil, fmt.Errorf("master %+v doesn't seem to have replicas", clusterMaster.Key)
 	}
 
 	if designatedKey != nil && !designatedKey.IsValid() {
@@ -2166,15 +2095,15 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		return nil, nil, err
 	}
 	if !masterOfDesignatedInstance.Key.Equals(&clusterMaster.Key) {
-		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the master %+v (designated instance's master key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterMaster.Key, designatedInstance.MasterKey)
+		return nil, nil, fmt.Errorf("sanity check failure. It seems like the designated instance %+v does not replicate from the master %+v (designated instance's master key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterMaster.Key, designatedInstance.MasterKey)
 	}
 	if !designatedInstance.HasReasonableMaintenanceReplicationLag() {
-		return nil, nil, fmt.Errorf("Desginated instance %+v seems to be lagging too much for this operation. Aborting.", designatedInstance.Key)
+		return nil, nil, fmt.Errorf("desginated instance %+v seems to be lagging too much for this operation. Aborting", designatedInstance.Key)
 	}
 
 	if len(clusterMasterDirectReplicas) > 1 {
 		log.Infof("GracefulMasterTakeover: Will let %+v take over its siblings", designatedInstance.Key)
-		relocatedReplicas, _, err, _ := inst.RelocateReplicas(&clusterMaster.Key, &designatedInstance.Key, "")
+		relocatedReplicas, _, _, err := inst.RelocateReplicas(&clusterMaster.Key, &designatedInstance.Key, "")
 		if len(relocatedReplicas) != len(clusterMasterDirectReplicas)-1 {
 			// We are unable to make designated instance master of all its siblings
 			relocatedReplicasKeyMap := inst.NewInstanceKeyMap()
@@ -2194,7 +2123,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 					log.Warningf("GracefulMasterTakeover: unable to relocate %+v below designated %+v, but since it is downtimed (downtime reason: %s) I will proceed", directReplica.Key, designatedInstance.Key, directReplica.DowntimeReason)
 					continue
 				}
-				return nil, nil, fmt.Errorf("Desginated instance %+v cannot take over all of its siblings. Error: %+v", designatedInstance.Key, err)
+				return nil, nil, fmt.Errorf("desginated instance %+v cannot take over all of its siblings. Error: %+v", designatedInstance.Key, err)
 			}
 		}
 	}
@@ -2211,7 +2140,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		AnalysisEntry: analysisEntry,
 	}
 	if err := executeHookPhaseContext(context.Background(), "pre_graceful_takeover", "PreGracefulTakeoverProcesses", preGracefulTakeoverTopologyRecovery); err != nil {
-		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
+		return nil, nil, fmt.Errorf("failed running PreGracefulTakeoverProcesses: %+v", err)
 	}
 
 	log.Infof("GracefulMasterTakeover: Will set %+v as read_only", clusterMaster.Key)

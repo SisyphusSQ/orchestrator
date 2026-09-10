@@ -31,25 +31,25 @@ func NewInternalKVStore() KVStore {
 	return &internalKVStore{}
 }
 
-func (this *internalKVStore) PutKeyValue(key string, value string) (err error) {
+func (store *internalKVStore) PutKeyValue(key string, value string) (err error) {
 	err = metadata.PutKeyValue(context.Background(), key, value)
 	return log.Errore(err)
 }
 
-func (this *internalKVStore) GetKeyValue(key string) (value string, found bool, err error) {
+func (store *internalKVStore) GetKeyValue(key string) (value string, found bool, err error) {
 	value, found, err = metadata.ReadKeyValue(context.Background(), key)
 	return value, found, log.Errore(err)
 }
 
-func (this *internalKVStore) PutKVPairs(kvPairs []*KVPair) (err error) {
+func (store *internalKVStore) PutKVPairs(kvPairs []*KVPair) (err error) {
 	for _, pair := range kvPairs {
-		if err := this.PutKeyValue(pair.Key, pair.Value); err != nil {
+		if err := store.PutKeyValue(pair.Key, pair.Value); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (this *internalKVStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
+func (store *internalKVStore) DistributePairs(kvPairs []*KVPair) (err error) {
 	return nil
 }

@@ -153,8 +153,7 @@ func DetectLayout(ctx context.Context, database *sql.DB) (Layout, error) {
 }
 
 func isDuplicateIndexError(err error) bool {
-	var mysqlError *mysql.MySQLError
-	if errors.As(err, &mysqlError) {
+	if mysqlError, ok := errors.AsType[*mysql.MySQLError](err); ok {
 		return mysqlError.Number == 1061
 	}
 	return config.Config.IsSQLite() && strings.Contains(strings.ToLower(err.Error()), "already exists")

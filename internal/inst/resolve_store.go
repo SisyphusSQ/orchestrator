@@ -32,9 +32,6 @@ var readResolvedHostnameCounter = observability.NewCounter("orchestrator_resolve
 var readUnresolvedHostnameCounter = observability.NewCounter("orchestrator_resolve_read_unresolved_total", "resolve.read_unresolved events")
 var readAllResolvedHostnamesCounter = observability.NewCounter("orchestrator_resolve_read_resolved_all_total", "resolve.read_resolved_all events")
 
-func init() {
-}
-
 // WriteResolvedHostname stores a hostname and the resolved hostname to backend database
 func WriteResolvedHostname(hostname string, resolvedHostname string) error {
 	writeFunc := func() error {
@@ -118,21 +115,6 @@ func readUnresolvedHostname(hostname string) (string, error) {
 	return unresolvedHostname, err
 }
 
-// readMissingHostnamesToResolve gets those (unresolved, e.g. VIP) hostnames that *should* be present in
-// the hostname_resolve table, but aren't.
-func readMissingKeysToResolve() (result InstanceKeyMap, err error) {
-	rows, err := metadata.ReadMissingHostnameResolves(context.Background())
-	for _, row := range rows {
-		instanceKey := InstanceKey{Hostname: row.UnresolvedHostname, Port: row.Port}
-		result.AddKey(instanceKey)
-	}
-
-	if err != nil {
-		log.Errore(err)
-	}
-	return result, err
-}
-
 // WriteHostnameUnresolve upserts an entry in hostname_unresolve
 func WriteHostnameUnresolve(instanceKey *InstanceKey, unresolvedHostname string) error {
 	writeFunc := func() error {
@@ -174,15 +156,11 @@ func ForgetExpiredHostnameResolves() error {
 // DeleteInvalidHostnameResolves removes invalid resolves. At this time these are:
 // - infinite loop resolves (A->B and B->A), remove earlier mapping
 func DeleteInvalidHostnameResolves() error {
-	var invalidHostnames []string
-
 	rows, err := metadata.ReadInvalidHostnameResolves(context.Background())
-	for _, row := range rows {
-		invalidHostnames = append(invalidHostnames, row)
-	}
 	if err != nil {
 		return err
 	}
+	invalidHostnames := rows
 
 	for _, invalidHostname := range invalidHostnames {
 		err = metadata.DeleteResolvedHostname(context.Background(), invalidHostname)

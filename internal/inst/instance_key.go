@@ -34,8 +34,8 @@ var (
 	ipv4Regexp         = regexp.MustCompile("^([0-9]+)[.]([0-9]+)[.]([0-9]+)[.]([0-9]+)$")
 	ipv4HostPortRegexp = regexp.MustCompile("^([^:]+):([0-9]+)$")
 	ipv4HostRegexp     = regexp.MustCompile("^([^:]+)$")
-	ipv6HostPortRegexp = regexp.MustCompile("^\\[([:0-9a-fA-F]+)\\]:([0-9]+)$") // e.g. [2001:db8:1f70::999:de8:7648:6e8]:3308
-	ipv6HostRegexp     = regexp.MustCompile("^([:0-9a-fA-F]+)$")                // e.g. 2001:db8:1f70::999:de8:7648:6e8
+	ipv6HostPortRegexp = regexp.MustCompile(`^\[([:0-9a-fA-F]+)\]:([0-9]+)$`) // e.g. [2001:db8:1f70::999:de8:7648:6e8]:3308
+	ipv6HostRegexp     = regexp.MustCompile("^([:0-9a-fA-F]+)$")              // e.g. 2001:db8:1f70::999:de8:7648:6e8
 )
 
 const detachHint = "//"
@@ -55,7 +55,7 @@ func newInstanceKey(hostname string, port int, resolve bool) (instanceKey *Insta
 // newInstanceKeyStrings
 func newInstanceKeyStrings(hostname string, port string, resolve bool) (*InstanceKey, error) {
 	if portInt, err := strconv.Atoi(port); err != nil {
-		return nil, fmt.Errorf("Invalid port: %s", port)
+		return nil, fmt.Errorf("invalid port: %s", port)
 	} else {
 		return newInstanceKey(hostname, portInt, resolve)
 	}
@@ -74,7 +74,7 @@ func parseRawInstanceKey(hostPort string, resolve bool) (instanceKey *InstanceKe
 	} else if submatch := ipv6HostRegexp.FindStringSubmatch(hostPort); len(submatch) > 0 {
 		hostname = submatch[1]
 	} else {
-		return nil, fmt.Errorf("Cannot parse address: %s", hostPort)
+		return nil, fmt.Errorf("cannot parse address: %s", hostPort)
 	}
 	if port == "" {
 		port = fmt.Sprintf("%d", config.Config.Topology.MySQL.DefaultPort)
@@ -104,86 +104,86 @@ func NewRawInstanceKeyStrings(hostname string, port string) (*InstanceKey, error
 	return newInstanceKeyStrings(hostname, port, false)
 }
 
-func (this *InstanceKey) ResolveHostname() (*InstanceKey, error) {
-	if !this.IsValid() {
-		return this, nil
+func (key *InstanceKey) ResolveHostname() (*InstanceKey, error) {
+	if !key.IsValid() {
+		return key, nil
 	}
 
-	hostname, err := ResolveHostname(this.Hostname)
+	hostname, err := ResolveHostname(key.Hostname)
 	if err == nil {
-		this.Hostname = hostname
+		key.Hostname = hostname
 	}
-	return this, err
+	return key, err
 }
 
 // Equals tests equality between this key and another key
-func (this *InstanceKey) Equals(other *InstanceKey) bool {
+func (key *InstanceKey) Equals(other *InstanceKey) bool {
 	if other == nil {
 		return false
 	}
-	return this.Hostname == other.Hostname && this.Port == other.Port
+	return key.Hostname == other.Hostname && key.Port == other.Port
 }
 
 // SmallerThan returns true if this key is dictionary-smaller than another.
 // This is used for consistent sorting/ordering; there's nothing magical about it.
-func (this *InstanceKey) SmallerThan(other *InstanceKey) bool {
-	if this.Hostname < other.Hostname {
+func (key *InstanceKey) SmallerThan(other *InstanceKey) bool {
+	if key.Hostname < other.Hostname {
 		return true
 	}
-	if this.Hostname == other.Hostname && this.Port < other.Port {
+	if key.Hostname == other.Hostname && key.Port < other.Port {
 		return true
 	}
 	return false
 }
 
 // IsDetached returns 'true' when this hostname is logically "detached"
-func (this *InstanceKey) IsDetached() bool {
-	return strings.HasPrefix(this.Hostname, detachHint)
+func (key *InstanceKey) IsDetached() bool {
+	return strings.HasPrefix(key.Hostname, detachHint)
 }
 
 // IsValid uses simple heuristics to see whether this key represents an actual instance
-func (this *InstanceKey) IsValid() bool {
-	if this.Hostname == "_" {
+func (key *InstanceKey) IsValid() bool {
+	if key.Hostname == "_" {
 		return false
 	}
-	if this.IsDetached() {
+	if key.IsDetached() {
 		return false
 	}
-	return len(this.Hostname) > 0 && this.Port > 0
+	return len(key.Hostname) > 0 && key.Port > 0
 }
 
 // DetachedKey returns an instance key whose hostname is detached: invalid, but recoverable
-func (this *InstanceKey) DetachedKey() *InstanceKey {
-	if this.IsDetached() {
-		return this
+func (key *InstanceKey) DetachedKey() *InstanceKey {
+	if key.IsDetached() {
+		return key
 	}
-	return &InstanceKey{Hostname: fmt.Sprintf("%s%s", detachHint, this.Hostname), Port: this.Port}
+	return &InstanceKey{Hostname: fmt.Sprintf("%s%s", detachHint, key.Hostname), Port: key.Port}
 }
 
 // ReattachedKey returns an instance key whose hostname is detached: invalid, but recoverable
-func (this *InstanceKey) ReattachedKey() *InstanceKey {
-	if !this.IsDetached() {
-		return this
+func (key *InstanceKey) ReattachedKey() *InstanceKey {
+	if !key.IsDetached() {
+		return key
 	}
-	return &InstanceKey{Hostname: this.Hostname[len(detachHint):], Port: this.Port}
+	return &InstanceKey{Hostname: key.Hostname[len(detachHint):], Port: key.Port}
 }
 
 // StringCode returns an official string representation of this key
-func (this *InstanceKey) StringCode() string {
-	return fmt.Sprintf("%s:%d", this.Hostname, this.Port)
+func (key *InstanceKey) StringCode() string {
+	return fmt.Sprintf("%s:%d", key.Hostname, key.Port)
 }
 
 // DisplayString returns a user-friendly string representation of this key
-func (this *InstanceKey) DisplayString() string {
-	return this.StringCode()
+func (key *InstanceKey) DisplayString() string {
+	return key.StringCode()
 }
 
 // String returns a user-friendly string representation of this key
-func (this InstanceKey) String() string {
-	return this.StringCode()
+func (key InstanceKey) String() string {
+	return key.StringCode()
 }
 
 // IsValid uses simple heuristics to see whether this key represents an actual instance
-func (this *InstanceKey) IsIPv4() bool {
-	return ipv4Regexp.MatchString(this.Hostname)
+func (key *InstanceKey) IsIPv4() bool {
+	return ipv4Regexp.MatchString(key.Hostname)
 }

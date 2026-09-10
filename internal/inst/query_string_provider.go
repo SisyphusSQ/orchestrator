@@ -1,6 +1,9 @@
 package inst
 
-import "unicode"
+import (
+	"maps"
+	"unicode"
+)
 
 type QueryStringKey int
 
@@ -423,9 +426,7 @@ var queryStrings8014 = func() map[QueryStringKey]string {
 	m := make(map[QueryStringKey]string, len(queryStrings80))
 
 	// copy everything from version < 8.0.14
-	for k, v := range queryStrings80 {
-		m[k] = v
-	}
+	maps.Copy(m, queryStrings80)
 
 	// change for 8.0.14 and newer 8.0
 	m[select_user_host] = "select user, substring_index(host, ':', 1) as slave_hostname from performance_schema.processlist where command IN ('Binlog Dump', 'Binlog Dump GTID')"

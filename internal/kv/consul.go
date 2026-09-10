@@ -38,7 +38,7 @@ func getConsulKVCacheKey(dc, key string) string {
 type consulStore struct {
 	client              *consulapi.Client
 	kvCache             *cache.Cache
-	distributionReentry int64
+	distributionReentry atomic.Int64
 }
 
 // NewConsulStore creates a Consul KV store that uses an already constructed official client.
@@ -50,20 +50,20 @@ func NewConsulStore(client *consulapi.Client) KVStore {
 	}
 }
 
-func (this *consulStore) PutKeyValue(key string, value string) (err error) {
-	if this.client == nil {
+func (store *consulStore) PutKeyValue(key string, value string) (err error) {
+	if store.client == nil {
 		return nil
 	}
 	pair := &consulapi.KVPair{Key: key, Value: []byte(value)}
-	_, err = this.client.KV().Put(pair, nil)
+	_, err = store.client.KV().Put(pair, nil)
 	return err
 }
 
-func (this *consulStore) GetKeyValue(key string) (value string, found bool, err error) {
-	if this.client == nil {
+func (store *consulStore) GetKeyValue(key string) (value string, found bool, err error) {
+	if store.client == nil {
 		return "", false, nil
 	}
-	pair, _, err := this.client.KV().Get(key, nil)
+	pair, _, err := store.client.KV().Get(key, nil)
 	if err != nil {
 		return "", false, err
 	}
@@ -73,22 +73,22 @@ func (this *consulStore) GetKeyValue(key string) (value string, found bool, err 
 	return string(pair.Value), true, nil
 }
 
-func (this *consulStore) PutKVPairs(kvPairs []*KVPair) (err error) {
-	if this.client == nil {
+func (store *consulStore) PutKVPairs(kvPairs []*KVPair) (err error) {
+	if store.client == nil {
 		return nil
 	}
 	for _, pair := range kvPairs {
-		if err := this.PutKeyValue(pair.Key, pair.Value); err != nil {
+		if err := store.PutKeyValue(pair.Key, pair.Value); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (this *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
+func (store *consulStore) DistributePairs(kvPairs []*KVPair) (err error) {
 	// This function is non re-entrant (it can only be running once at any point in time)
-	if atomic.CompareAndSwapInt64(&this.distributionReentry, 0, 1) {
-		defer atomic.StoreInt64(&this.distributionReentry, 0)
+	if store.distributionReentry.CompareAndSwap(0, 1) {
+		defer store.distributionReentry.Store(0)
 	} else {
 		return nil
 	}
@@ -96,11 +96,11 @@ func (this *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 	if !config.Config.Consul.KV.CrossDataCenterDistribution {
 		return nil
 	}
-	if this.client == nil {
+	if store.client == nil {
 		return nil
 	}
 
-	datacenters, err := this.client.Catalog().Datacenters()
+	datacenters, err := store.client.Catalog().Datacenters()
 	if err != nil {
 		return err
 	}
@@ -112,9 +112,8 @@ func (this *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 
 	errCh := make(chan error, len(datacenters))
 	for _, datacenter := range datacenters {
-		datacenter := datacenter
 		go func() {
-			errCh <- this.distributePairsToDatacenter(datacenter, consulPairs)
+			errCh <- store.distributePairsToDatacenter(datacenter, consulPairs)
 		}()
 	}
 	var errs []error
@@ -126,7 +125,7 @@ func (this *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {
 	return errors.Join(errs...)
 }
 
-func (this *consulStore) distributePairsToDatacenter(datacenter string, consulPairs []*consulapi.KVPair) error {
+func (store *consulStore) distributePairsToDatacenter(datacenter string, consulPairs []*consulapi.KVPair) error {
 	writeOptions := &consulapi.WriteOptions{Datacenter: datacenter}
 	queryOptions := &consulapi.QueryOptions{Datacenter: datacenter}
 	skipped := 0
@@ -139,20 +138,20 @@ func (this *consulStore) distributePairsToDatacenter(datacenter string, consulPa
 		val := string(consulPair.Value)
 		kcCacheKey := getConsulKVCacheKey(datacenter, consulPair.Key)
 
-		if value, found := this.kvCache.Get(kcCacheKey); found && val == value {
+		if value, found := store.kvCache.Get(kcCacheKey); found && val == value {
 			skipped++
 			continue
 		}
-		pair, _, err := this.client.KV().Get(consulPair.Key, queryOptions)
+		pair, _, err := store.client.KV().Get(consulPair.Key, queryOptions)
 		if err != nil {
 			log.Debugf("consulStore.DistributePairs(): read-before-write optimization failed for %s; proceeding with intended write: %v", kcCacheKey, err)
 		} else if pair != nil && val == string(pair.Value) {
 			existing++
-			this.kvCache.SetDefault(kcCacheKey, val)
+			store.kvCache.SetDefault(kcCacheKey, val)
 			continue
 		}
 
-		if _, err := this.client.KV().Put(consulPair, writeOptions); err != nil {
+		if _, err := store.client.KV().Put(consulPair, writeOptions); err != nil {
 			log.Errorf("consulStore.DistributePairs(): failed %s", kcCacheKey)
 			failed++
 			errs = append(errs, fmt.Errorf("consul datacenter %s key %s: %w", datacenter, consulPair.Key, err))
@@ -160,7 +159,7 @@ func (this *consulStore) distributePairsToDatacenter(datacenter string, consulPa
 		}
 		log.Debugf("consulStore.DistributePairs(): written %s=%s", kcCacheKey, val)
 		written++
-		this.kvCache.SetDefault(kcCacheKey, val)
+		store.kvCache.SetDefault(kcCacheKey, val)
 	}
 	log.Debugf("consulStore.DistributePairs(): datacenter: %s; skipped: %d, existing: %d, written: %d, failed: %d", datacenter, skipped, existing, written, failed)
 	return errors.Join(errs...)

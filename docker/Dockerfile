@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM golang:1.26.8-alpine3.23 as build
+FROM golang:1.27.0-alpine3.23 as build
 
 RUN apk --no-cache add libcurl rsync gcc g++ build-base bash git make
 

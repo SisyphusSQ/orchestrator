@@ -3,9 +3,9 @@ package domain
 type OperationGTIDHint string
 
 const (
-	GTIDHintDeny    OperationGTIDHint = "NoGTID"
-	GTIDHintNeutral                   = "GTIDHintNeutral"
-	GTIDHintForce                     = "GTIDHintForce"
+	GTIDHintDeny    = "NoGTID"
+	GTIDHintNeutral = "GTIDHintNeutral"
+	GTIDHintForce   = "GTIDHintForce"
 )
 
 type ReplicationCredentials struct {

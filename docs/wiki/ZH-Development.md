@@ -2,7 +2,7 @@
 
 [English](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Development) · **中文** · [Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-仓库根 Go module 构建服务端，`tools/orch-cli` 下的嵌套 module 构建客户端。当前基线为 Go 1.26.8、Node.js 22.22.2 或更新版本、pnpm 10.33.2；准备构建时仍需重新读取 `go.mod` 和 `web/package.json`。
+仓库根 Go module 构建服务端，`tools/orch-cli` 下的嵌套 module 构建客户端。当前基线为 Go 1.27.0、Node.js 22.22.2 或更新版本、pnpm 10.33.2；准备构建时仍需重新读取 `go.mod` 和 `web/package.json`。
 
 ## 源码布局
 

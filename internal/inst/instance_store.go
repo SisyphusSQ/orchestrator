@@ -42,12 +42,14 @@ var instanceReadChan = make(chan bool, backendDBConcurrency)
 var instanceWriteChan = make(chan bool, backendDBConcurrency)
 
 // InstancesByCountReplicas is a sortable type for Instance
-type InstancesByCountReplicas [](*Instance)
+type InstancesByCountReplicas []*Instance
 
-func (this InstancesByCountReplicas) Len() int      { return len(this) }
-func (this InstancesByCountReplicas) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByCountReplicas) Less(i, j int) bool {
-	return len(this[i].Replicas) < len(this[j].Replicas)
+func (instances InstancesByCountReplicas) Len() int { return len(instances) }
+func (instances InstancesByCountReplicas) Swap(i, j int) {
+	instances[i], instances[j] = instances[j], instances[i]
+}
+func (instances InstancesByCountReplicas) Less(i, j int) bool {
+	return len(instances[i].Replicas) < len(instances[j].Replicas)
 }
 
 // InstancesByDc is a sortable type for Instance
@@ -60,18 +62,20 @@ func (this InstancesByCountReplicas) Less(i, j int) bool {
 // DC1 < DC2
 // if DC1 == DC2 => len(Replicas1) < len (Replicas2)
 // if Replicas.cnt == 0 => replicationLag1 < replicatonLag2
-type InstancesByDc [](*Instance)
+type InstancesByDc []*Instance
 
-func (this InstancesByDc) Len() int      { return len(this) }
-func (this InstancesByDc) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByDc) Less(i, j int) bool {
-	if this[i].DataCenter == this[j].DataCenter {
-		if len(this[i].Replicas) == 0 && len(this[j].Replicas) == 0 {
-			return this[i].ReplicationLagSeconds.Int64 < this[j].ReplicationLagSeconds.Int64
+func (instances InstancesByDc) Len() int { return len(instances) }
+func (instances InstancesByDc) Swap(i, j int) {
+	instances[i], instances[j] = instances[j], instances[i]
+}
+func (instances InstancesByDc) Less(i, j int) bool {
+	if instances[i].DataCenter == instances[j].DataCenter {
+		if len(instances[i].Replicas) == 0 && len(instances[j].Replicas) == 0 {
+			return instances[i].ReplicationLagSeconds.Int64 < instances[j].ReplicationLagSeconds.Int64
 		}
-		return len(this[i].Replicas) < len(this[j].Replicas)
+		return len(instances[i].Replicas) < len(instances[j].Replicas)
 	}
-	return (this[i].DataCenter < this[j].DataCenter)
+	return (instances[i].DataCenter < instances[j].DataCenter)
 }
 
 // Constant strings for Group Replication information

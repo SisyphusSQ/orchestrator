@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-func init() {
-}
-
 func TestNewToken(t *testing.T) {
 	token1 := NewToken()
 

@@ -40,12 +40,12 @@ var promotionRuleOrderMap = map[CandidatePromotionRule]int{
 	MustNotPromoteRule:   4,
 }
 
-func (this *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) bool {
+func (rule *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) bool {
 	otherOrder, ok := promotionRuleOrderMap[other]
 	if !ok {
 		return false
 	}
-	return promotionRuleOrderMap[*this] < otherOrder
+	return promotionRuleOrderMap[*rule] < otherOrder
 }
 
 // ParseCandidatePromotionRule returns a CandidatePromotionRule by name.
@@ -57,6 +57,6 @@ func ParseCandidatePromotionRule(ruleName string) (CandidatePromotionRule, error
 	case "must":
 		return CandidatePromotionRule(""), fmt.Errorf("CandidatePromotionRule: %v not supported yet", ruleName)
 	default:
-		return CandidatePromotionRule(""), fmt.Errorf("Invalid CandidatePromotionRule: %v", ruleName)
+		return CandidatePromotionRule(""), fmt.Errorf("invalid CandidatePromotionRule: %v", ruleName)
 	}
 }

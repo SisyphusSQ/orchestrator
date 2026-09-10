@@ -146,15 +146,14 @@ func TestPoolRegistryPublishesOnePoolForConcurrentInitialization(t *testing.T) {
 	const callers = 16
 	results := make(chan *sql.DB, callers)
 	errs := make(chan error, callers)
+	ctx := t.Context()
 	var wg sync.WaitGroup
 	for range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			database, _, err := registry.GetOrCreate(context.Background(), "backend", opener)
+		wg.Go(func() {
+			database, _, err := registry.GetOrCreate(ctx, "backend", opener)
 			results <- database
 			errs <- err
-		}()
+		})
 	}
 	wg.Wait()
 	close(results)

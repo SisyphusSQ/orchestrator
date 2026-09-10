@@ -47,7 +47,7 @@ func ReadClusterNameByAlias(alias string) (clusterName string, err error) {
 		return "", err
 	}
 	if clusterName == "" {
-		err = fmt.Errorf("No cluster found for alias %s", alias)
+		err = fmt.Errorf("no cluster found for alias %s", alias)
 	}
 	return clusterName, err
 }
@@ -79,15 +79,6 @@ func ReadAliasByClusterName(clusterName string) (alias string, err error) {
 func writeClusterAlias(clusterName string, alias string) error {
 	writeFunc := func() error {
 		err := metadata.WriteClusterAlias(context.Background(), clusterName, alias)
-		return log.Errore(err)
-	}
-	return ExecDBWriteFunc(writeFunc)
-}
-
-// writeClusterAliasManualOverride will write (and override) a single cluster name mapping
-func writeClusterAliasManualOverride(clusterName string, alias string) error {
-	writeFunc := func() error {
-		err := metadata.WriteClusterAliasOverride(context.Background(), clusterName, alias)
 		return log.Errore(err)
 	}
 	return ExecDBWriteFunc(writeFunc)

@@ -139,7 +139,6 @@ func TestNormalizeConsulEndpoint(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			endpoint, err := NormalizeConsulEndpoint(testCase.address, testCase.scheme)
@@ -180,7 +179,6 @@ func TestNormalizeConsulKVStoreProvider(t *testing.T) {
 		{in: "consul-watch", wantErr: true},
 	}
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.in, func(t *testing.T) {
 			t.Parallel()
 			got, err := NormalizeConsulKVStoreProvider(testCase.in)

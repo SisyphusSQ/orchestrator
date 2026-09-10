@@ -57,10 +57,10 @@ func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
 		// already expired; no need to persist
 		return nil
 	}
-	var instanceKeys [](*InstanceKey)
+	var instanceKeys []*InstanceKey
 	if submission.DelimitedInstances != "" {
-		instancesStrings := strings.Split(submission.DelimitedInstances, ",")
-		for _, instanceString := range instancesStrings {
+		instancesStrings := strings.SplitSeq(submission.DelimitedInstances, ",")
+		for instanceString := range instancesStrings {
 			instanceString = strings.TrimSpace(instanceString)
 			instanceKey, err := ParseResolveInstanceKey(instanceString)
 			if config.Config.Topology.Pools.SupportFuzzyHostnames {

@@ -184,19 +184,16 @@ func TestConcurrentSetPrintStackTraceAndErrorLogging(t *testing.T) {
 	})
 
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(2)
-	go func() {
-		defer waitGroup.Done()
-		for index := 0; index < 1_000; index++ {
+	waitGroup.Go(func() {
+		for index := range 1_000 {
 			SetPrintStackTrace(index%2 == 0)
 		}
-	}()
-	go func() {
-		defer waitGroup.Done()
-		for index := 0; index < 1_000; index++ {
+	})
+	waitGroup.Go(func() {
+		for range 1_000 {
 			Errore(errors.New("read failed"))
 		}
-	}()
+	})
 	waitGroup.Wait()
 }
 
@@ -215,8 +212,8 @@ func TestFatalFlushesClosesAndExits(t *testing.T) {
 	command.Stderr = &stderr
 
 	err := command.Run()
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
+	exitErr, ok := errors.AsType[*exec.ExitError](err)
+	if !ok {
 		t.Fatalf("fatal helper error = %v; want process exit error", err)
 	}
 	if exitErr.ExitCode() != 1 {
@@ -374,23 +371,20 @@ func TestConcurrentSetLevelAndLogging(t *testing.T) {
 	})
 
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(2)
-	go func() {
-		defer waitGroup.Done()
-		for index := 0; index < 1_000; index++ {
+	waitGroup.Go(func() {
+		for index := range 1_000 {
 			if index%2 == 0 {
 				SetLevel(DEBUG)
 			} else {
 				SetLevel(ERROR)
 			}
 		}
-	}()
-	go func() {
-		defer waitGroup.Done()
-		for index := 0; index < 1_000; index++ {
+	})
+	waitGroup.Go(func() {
+		for index := range 1_000 {
 			Infof("operation %d", index)
 		}
-	}()
+	})
 	waitGroup.Wait()
 }
 
@@ -540,21 +534,18 @@ func TestConcurrentLoggingAndClose(t *testing.T) {
 		}
 	})
 
-	for attempt := 0; attempt < 100; attempt++ {
+	for attempt := range 100 {
 		syslogWriter = errorSyslogSink{}
 		start := make(chan struct{})
 		var waitGroup sync.WaitGroup
-		waitGroup.Add(2)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			<-start
 			Infof("operation %d", attempt)
-		}()
-		go func() {
-			defer waitGroup.Done()
+		})
+		waitGroup.Go(func() {
 			<-start
 			_ = Close()
-		}()
+		})
 		close(start)
 		waitGroup.Wait()
 	}

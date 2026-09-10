@@ -71,7 +71,7 @@ func ParseTag(tagString string) (*Tag, error) {
 			TagName: submatch[1],
 		}, nil
 	}
-	return nil, fmt.Errorf("Unable to parse tag: %s", tagString)
+	return nil, fmt.Errorf("unable to parse tag: %s", tagString)
 }
 
 func (tag *Tag) String() string {
@@ -80,14 +80,14 @@ func (tag *Tag) String() string {
 
 func (tag *Tag) Display() string {
 	if tag.TagValue == "" {
-		return fmt.Sprintf("%s", tag.TagName)
+		return tag.TagName
 	} else {
 		return fmt.Sprintf("%s=%s", tag.TagName, tag.TagValue)
 	}
 }
 
-func ParseIntersectTags(tagsString string) (tags [](*Tag), err error) {
-	for _, tagString := range strings.Split(tagsString, ",") {
+func ParseIntersectTags(tagsString string) (tags []*Tag, err error) {
+	for tagString := range strings.SplitSeq(tagsString, ",") {
 		tag, err := ParseTag(tagString)
 		if err != nil {
 			return tags, err

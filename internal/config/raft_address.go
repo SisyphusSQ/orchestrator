@@ -65,11 +65,11 @@ func raftHostWithoutPort(addr string) (string, bool) {
 }
 
 func isIPLiteral(host string) bool {
-	if zoneIndex := strings.LastIndex(host, "%"); zoneIndex >= 0 {
-		if zoneIndex == len(host)-1 {
+	if address, zone, ok := strings.CutLast(host, "%"); ok {
+		if zone == "" {
 			return false
 		}
-		host = host[:zoneIndex]
+		host = address
 	}
 	return net.ParseIP(host) != nil
 }

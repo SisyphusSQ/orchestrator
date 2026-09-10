@@ -70,8 +70,8 @@ func InstanceTagExists(instanceKey *InstanceKey, tag *Tag) (tagExists bool, err 
 	return ReadInstanceTag(instanceKey, &Tag{TagName: tag.TagName})
 }
 
-func ReadInstanceTags(instanceKey *InstanceKey) (tags [](*Tag), err error) {
-	tags = [](*Tag){}
+func ReadInstanceTags(instanceKey *InstanceKey) (tags []*Tag, err error) {
+	tags = []*Tag{}
 	rows, err := metadata.ReadInstanceTags(context.Background(), instanceKey.Hostname, instanceKey.Port)
 	for _, row := range rows {
 		tag := &Tag{

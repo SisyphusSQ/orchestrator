@@ -43,9 +43,6 @@ type auditSyslogSink interface {
 
 var auditOperationCounter = observability.NewCounter("orchestrator_audit_write_total", "audit.write events")
 
-func init() {
-}
-
 // EnableSyslogWriter enables, if possible, writes to syslog. These will execute _in addition_ to normal logging
 func EnableAuditSyslog() (err error) {
 	writer, err := syslog.New(syslog.LOG_ERR, "orchestrator")
@@ -148,10 +145,11 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 	)
 	res := make([]Audit, 0, len(rows))
 	for _, row := range rows {
-		audit := Audit{}
-		audit.AuditId = row.ID
-		audit.AuditTimestamp = row.Timestamp
-		audit.AuditType = row.Type
+		audit := Audit{
+			AuditId:        row.ID,
+			AuditTimestamp: row.Timestamp,
+			AuditType:      row.Type,
+		}
 		audit.AuditInstanceKey.Hostname = row.Hostname
 		audit.AuditInstanceKey.Port = row.Port
 		audit.Message = row.Message

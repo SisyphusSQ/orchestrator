@@ -32,21 +32,21 @@ func NewKVPair(key string, value string) *KVPair {
 	return &KVPair{Key: key, Value: value}
 }
 
-func (this *KVPair) String() string {
-	return fmt.Sprintf("%s:%s", this.Key, this.Value)
+func (pair *KVPair) String() string {
+	return fmt.Sprintf("%s:%s", pair.Key, pair.Value)
 }
 
 type KVStore interface {
 	PutKeyValue(key string, value string) (err error)
 	PutKVPairs(kvPairs []*KVPair) (err error)
 	GetKeyValue(key string) (value string, found bool, err error)
-	DistributePairs(kvPairs [](*KVPair)) (err error)
+	DistributePairs(kvPairs []*KVPair) (err error)
 }
 
 var kvMutex sync.Mutex
 var kvInitOnce sync.Once
 var kvInitErr error
-var kvStores = []KVStore{}
+var kvStores []KVStore
 
 // InitKVStores initializes the KV stores once in the lifetime of this app.
 // Configuration reload does not rebuild the store or Consul client; restart after Consul settings change.
@@ -128,7 +128,7 @@ func PutKVPairs(kvPairs []*KVPair) (err error) {
 	return nil
 }
 
-func DistributePairs(kvPairs [](*KVPair)) (err error) {
+func DistributePairs(kvPairs []*KVPair) (err error) {
 	for _, store := range getKVStores() {
 		if err := store.DistributePairs(kvPairs); err != nil {
 			return err

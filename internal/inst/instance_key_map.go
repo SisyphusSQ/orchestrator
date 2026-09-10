@@ -30,34 +30,34 @@ func NewInstanceKeyMap() *InstanceKeyMap {
 }
 
 // AddKey adds a single key to this map
-func (this *InstanceKeyMap) AddKey(key InstanceKey) {
-	(*this)[key] = true
+func (keyMap *InstanceKeyMap) AddKey(key InstanceKey) {
+	(*keyMap)[key] = true
 }
 
 // AddKeys adds all given keys to this map
-func (this *InstanceKeyMap) AddKeys(keys []InstanceKey) {
+func (keyMap *InstanceKeyMap) AddKeys(keys []InstanceKey) {
 	for _, key := range keys {
-		this.AddKey(key)
+		keyMap.AddKey(key)
 	}
 }
 
 // AddInstances adds keys of all given instances to this map
-func (this *InstanceKeyMap) AddInstances(instances [](*Instance)) {
+func (keyMap *InstanceKeyMap) AddInstances(instances []*Instance) {
 	for _, instance := range instances {
-		this.AddKey(instance.Key)
+		keyMap.AddKey(instance.Key)
 	}
 }
 
 // HasKey checks if given key is within the map
-func (this *InstanceKeyMap) HasKey(key InstanceKey) bool {
-	_, ok := (*this)[key]
+func (keyMap *InstanceKeyMap) HasKey(key InstanceKey) bool {
+	_, ok := (*keyMap)[key]
 	return ok
 }
 
 // GetInstanceKeys returns keys in this map in the form of an array
-func (this *InstanceKeyMap) GetInstanceKeys() []InstanceKey {
+func (keyMap *InstanceKeyMap) GetInstanceKeys() []InstanceKey {
 	res := []InstanceKey{}
-	for key := range *this {
+	for key := range *keyMap {
 		res = append(res, key)
 	}
 	sort.Slice(res, func(i, j int) bool {
@@ -67,10 +67,10 @@ func (this *InstanceKeyMap) GetInstanceKeys() []InstanceKey {
 }
 
 // Intersect returns a keymap which is the intersection of this and another map
-func (this *InstanceKeyMap) Intersect(other *InstanceKeyMap) *InstanceKeyMap {
+func (keyMap *InstanceKeyMap) Intersect(other *InstanceKeyMap) *InstanceKeyMap {
 	intersected := NewInstanceKeyMap()
 	for key := range *other {
-		if this.HasKey(key) {
+		if keyMap.HasKey(key) {
 			intersected.AddKey(key)
 		}
 	}
@@ -78,64 +78,64 @@ func (this *InstanceKeyMap) Intersect(other *InstanceKeyMap) *InstanceKeyMap {
 }
 
 // MarshalJSON will marshal this map as JSON
-func (this InstanceKeyMap) MarshalJSON() ([]byte, error) {
-	return json.Marshal(this.GetInstanceKeys())
+func (keyMap InstanceKeyMap) MarshalJSON() ([]byte, error) {
+	return json.Marshal(keyMap.GetInstanceKeys())
 }
 
 // UnmarshalJSON reds this object from JSON
-func (this *InstanceKeyMap) UnmarshalJSON(b []byte) error {
+func (keyMap *InstanceKeyMap) UnmarshalJSON(b []byte) error {
 	var keys []InstanceKey
 	if err := json.Unmarshal(b, &keys); err != nil {
 		return err
 	}
-	*this = make(InstanceKeyMap)
+	*keyMap = make(InstanceKeyMap)
 	for _, key := range keys {
-		this.AddKey(key)
+		keyMap.AddKey(key)
 	}
 	return nil
 }
 
 // ToJSON will marshal this map as JSON
-func (this *InstanceKeyMap) ToJSON() (string, error) {
-	bytes, err := this.MarshalJSON()
+func (keyMap *InstanceKeyMap) ToJSON() (string, error) {
+	bytes, err := keyMap.MarshalJSON()
 	return string(bytes), err
 }
 
 // ToJSONString will marshal this map as JSON
-func (this *InstanceKeyMap) ToJSONString() string {
-	s, _ := this.ToJSON()
+func (keyMap *InstanceKeyMap) ToJSONString() string {
+	s, _ := keyMap.ToJSON()
 	return s
 }
 
 // ToCommaDelimitedList will export this map in comma delimited format
-func (this *InstanceKeyMap) ToCommaDelimitedList() string {
+func (keyMap *InstanceKeyMap) ToCommaDelimitedList() string {
 	keyDisplays := []string{}
-	for key := range *this {
+	for key := range *keyMap {
 		keyDisplays = append(keyDisplays, key.DisplayString())
 	}
 	return strings.Join(keyDisplays, ",")
 }
 
 // ReadJson unmarshalls a json into this map
-func (this *InstanceKeyMap) ReadJson(jsonString string) error {
+func (keyMap *InstanceKeyMap) ReadJson(jsonString string) error {
 	var keys []InstanceKey
 	err := json.Unmarshal([]byte(jsonString), &keys)
 	if err != nil {
 		return err
 	}
-	this.AddKeys(keys)
+	keyMap.AddKeys(keys)
 	return err
 }
 
 // ReadJson unmarshalls a json into this map
-func (this *InstanceKeyMap) ReadCommaDelimitedList(list string) error {
-	tokens := strings.Split(list, ",")
-	for _, token := range tokens {
+func (keyMap *InstanceKeyMap) ReadCommaDelimitedList(list string) error {
+	tokens := strings.SplitSeq(list, ",")
+	for token := range tokens {
 		key, err := ParseResolveInstanceKey(token)
 		if err != nil {
 			return err
 		}
-		this.AddKey(*key)
+		keyMap.AddKey(*key)
 	}
 	return nil
 }

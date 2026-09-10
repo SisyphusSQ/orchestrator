@@ -41,7 +41,7 @@ var lifecycleMu sync.Mutex
 var runtimeCalls sync.WaitGroup
 var runtimeDone chan struct{}
 var leaderDone chan struct{}
-var raftSetupComplete int64
+var raftSetupComplete atomic.Int64
 var ThisHostname string
 
 var fatalRaftErrorChan = make(chan error, 1)
@@ -174,7 +174,7 @@ func Setup(applier CommandApplier, snapshotCreatorApplier SnapshotCreatorApplier
 		}
 	}()
 
-	atomic.StoreInt64(&raftSetupComplete, 1)
+	raftSetupComplete.Store(1)
 	return nil
 }
 
@@ -182,7 +182,7 @@ func Shutdown() error {
 	lifecycleMu.Lock()
 	defer lifecycleMu.Unlock()
 	runtimeMu.Lock()
-	atomic.StoreInt64(&raftSetupComplete, 0)
+	raftSetupComplete.Store(0)
 	if store == nil {
 		runtimeMu.Unlock()
 		return nil
@@ -199,7 +199,7 @@ func Shutdown() error {
 }
 
 func isRaftSetupComplete() bool {
-	return atomic.LoadInt64(&raftSetupComplete) == 1
+	return raftSetupComplete.Load() == 1
 }
 
 func normalizeRaftNode(node string) (string, error) {
@@ -396,7 +396,7 @@ func TransferLeadership(id, address string) error {
 	return store.TransferLeadership(id, address)
 }
 
-func PublishCommand(op string, value interface{}) (response interface{}, err error) {
+func PublishCommand(op string, value any) (response any, err error) {
 	store, release := acquireStore()
 	defer release()
 	if store == nil {

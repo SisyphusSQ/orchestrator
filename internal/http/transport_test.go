@@ -11,7 +11,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -286,36 +285,14 @@ func TestRouterAuthenticationFailurePrecedesGzip(t *testing.T) {
 	}
 }
 
-func TestRouterRendererPreservesJSONAndYieldLayout(t *testing.T) {
-	templateDir := t.TempDir()
-	writeTemplate(t, templateDir, "templates/layout.tmpl", `<html>{{current}}|{{yield}}</html>`)
-	writeTemplate(t, templateDir, "templates/page.tmpl", `<body>{{.Name}}</body>`)
-
-	router := mustRouter(t, RouterOptions{Templates: &TemplateOptions{
-		Directory:       templateDir,
-		Layout:          "templates/layout",
-		HTMLContentType: "text/html",
-	}})
-	router.Get("/page", func(_ Params, responder Responder) {
-		responder.HTML(nethttp.StatusOK, "templates/page", map[string]string{"Name": "Ada"})
-	})
+func TestRouterPreservesJSONAndRedirect(t *testing.T) {
+	router := mustRouter(t, RouterOptions{})
 	router.Get("/json", func(_ Params, responder Responder) {
 		responder.JSON(nethttp.StatusCreated, map[string]string{"result": "ok"})
 	})
 	router.Get("/redirect", func(_ Params, responder Responder) {
-		responder.Redirect("/page")
+		responder.Redirect("/json")
 	})
-
-	page := serveRequest(t, router, nethttp.MethodGet, "/page", nil)
-	if page.Code != nethttp.StatusOK {
-		t.Fatalf("HTML status = %d, want 200; body = %q", page.Code, page.Body.String())
-	}
-	if got, want := page.Header().Get("Content-Type"), "text/html; charset=UTF-8"; got != want {
-		t.Fatalf("HTML Content-Type = %q, want %q", got, want)
-	}
-	if got, want := page.Body.String(), `<html>templates/page|<body>Ada</body></html>`; got != want {
-		t.Fatalf("HTML body = %q, want %q", got, want)
-	}
 
 	jsonResponse := serveRequest(t, router, nethttp.MethodGet, "/json", nil)
 	if jsonResponse.Code != nethttp.StatusCreated {
@@ -332,44 +309,8 @@ func TestRouterRendererPreservesJSONAndYieldLayout(t *testing.T) {
 	if got, want := redirect.Code, nethttp.StatusFound; got != want {
 		t.Fatalf("redirect status = %d, want %d", got, want)
 	}
-	if got, want := redirect.Header().Get("Location"), "/page"; got != want {
+	if got, want := redirect.Header().Get("Location"), "/json"; got != want {
 		t.Fatalf("redirect Location = %q, want %q", got, want)
-	}
-}
-
-func TestProjectTemplatesLoadAndRender(t *testing.T) {
-	resources := filepath.Clean("../../resources")
-	router := mustRouter(t, RouterOptions{Templates: &TemplateOptions{
-		Directory:       resources,
-		Layout:          "templates/layout",
-		HTMLContentType: "text/html",
-	}})
-	router.Get("/about", func(_ Params, responder Responder) {
-		responder.HTML(nethttp.StatusOK, "templates/about", map[string]interface{}{
-			"title":  "About",
-			"prefix": "/orchestrator",
-		})
-	})
-
-	response := serveRequest(t, router, nethttp.MethodGet, "/about", nil)
-	if got, want := response.Code, nethttp.StatusOK; got != want {
-		t.Fatalf("project template status = %d, want %d; body = %q", got, want, response.Body.String())
-	}
-	for _, expected := range []string{"<title>Orchestrator - About</title>", "<strong>Orchestrator</strong>"} {
-		if !strings.Contains(response.Body.String(), expected) {
-			t.Fatalf("project template body does not contain %q", expected)
-		}
-	}
-}
-
-func writeTemplate(t *testing.T, root, name, contents string) {
-	t.Helper()
-	path := filepath.Join(root, filepath.FromSlash(name))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("create template directory: %v", err)
-	}
-	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
-		t.Fatalf("write template: %v", err)
 	}
 }
 

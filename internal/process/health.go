@@ -29,9 +29,9 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-var lastHealthCheckUnixNano int64
-var lastGoodHealthCheckUnixNano int64
-var LastContinousCheckHealthy int64
+var lastHealthCheckUnixNano atomic.Int64
+var lastGoodHealthCheckUnixNano atomic.Int64
+var LastContinousCheckHealthy atomic.Int64
 
 var lastHealthCheckCache = cache.New(config.HealthPollSeconds*time.Second, time.Second)
 
@@ -77,7 +77,7 @@ type HealthStatus struct {
 	IsActiveNode               bool
 	ActiveNode                 NodeHealth
 	Error                      error
-	AvailableNodes             [](*NodeHealth)
+	AvailableNodes             []*NodeHealth
 	RaftLeader                 string
 	RaftLeaderAddress          string
 	RaftNodeID                 string
@@ -96,8 +96,8 @@ type HealthStatus struct {
 type OrchestratorExecutionMode string
 
 const (
-	OrchestratorExecutionCliMode  OrchestratorExecutionMode = "CLIMode"
-	OrchestratorExecutionHttpMode                           = "HttpMode"
+	OrchestratorExecutionCliMode  = "CLIMode"
+	OrchestratorExecutionHttpMode = "HttpMode"
 )
 
 var continuousRegistrationOnce sync.Once
@@ -105,9 +105,9 @@ var continuousRegistrationOnce sync.Once
 func RegisterNode(nodeHealth *NodeHealth) (healthy bool, err error) {
 	nodeHealth.Update()
 	healthy, err = WriteRegisterNode(nodeHealth)
-	atomic.StoreInt64(&lastHealthCheckUnixNano, time.Now().UnixNano())
+	lastHealthCheckUnixNano.Store(time.Now().UnixNano())
 	if healthy {
-		atomic.StoreInt64(&lastGoodHealthCheckUnixNano, time.Now().UnixNano())
+		lastGoodHealthCheckUnixNano.Store(time.Now().UnixNano())
 	}
 	return healthy, err
 }
@@ -152,7 +152,7 @@ func HealthTest() (health *HealthStatus, err error) {
 }
 
 func SinceLastHealthCheck() time.Duration {
-	timeNano := atomic.LoadInt64(&lastHealthCheckUnixNano)
+	timeNano := lastHealthCheckUnixNano.Load()
 	if timeNano == 0 {
 		return 0
 	}
@@ -160,7 +160,7 @@ func SinceLastHealthCheck() time.Duration {
 }
 
 func SinceLastGoodHealthCheck() time.Duration {
-	timeNano := atomic.LoadInt64(&lastGoodHealthCheckUnixNano)
+	timeNano := lastGoodHealthCheckUnixNano.Load()
 	if timeNano == 0 {
 		return 0
 	}
@@ -179,9 +179,9 @@ func ContinuousRegistration(extraInfo string, command string) {
 				log.Errorf("ContinuousRegistration: RegisterNode failed: %+v", err)
 			}
 			if healthy {
-				atomic.StoreInt64(&LastContinousCheckHealthy, 1)
+				LastContinousCheckHealthy.Store(1)
 			} else {
-				atomic.StoreInt64(&LastContinousCheckHealthy, 0)
+				LastContinousCheckHealthy.Store(0)
 			}
 		}
 		// First one is synchronous

@@ -9,7 +9,6 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import type { Instance, InstanceKey } from "../api/types";
 import { instanceID, instanceState } from "../domain/instance";
@@ -97,19 +96,6 @@ export function InstanceLink({ value }: { value?: InstanceKey }) {
     </Link>
   ) : (
     <>—</>
-  );
-}
-export function RefreshButton({
-  onClick,
-  loading,
-}: {
-  onClick: () => void;
-  loading?: boolean;
-}) {
-  return (
-    <Button icon={<ReloadOutlined />} onClick={onClick} loading={loading}>
-      刷新
-    </Button>
   );
 }
 export function JsonDetails({ value }: { value: unknown }) {
