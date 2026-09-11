@@ -68,7 +68,7 @@ bin/orch --endpoint http://127.0.0.1:3000 clusters
 bin/orch --endpoint http://127.0.0.1:3000 topology --cluster db.example.com:3306
 ```
 
-Open `http://127.0.0.1:3000/web/clusters`. Check `/health/live`, `/health/ready`, and `/metrics` on the same node. Before production, continue with [Configuration](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration), [Raft operations](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Raft-Operations), [Security](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Security), and [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability).
+Open `http://127.0.0.1:3000/web/clusters`. Check `/health/live`, `/health/ready`, and `/metrics` on the same node. Before production, continue with [Production deployment](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Production-Deployment), [Configuration reference](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration-Reference), [Raft operations](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Raft-Operations), [Security](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Security), and [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability).
 
 ## Production preflight
 

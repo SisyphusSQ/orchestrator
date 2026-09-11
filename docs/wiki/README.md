@@ -21,7 +21,7 @@ This directory is the reviewable source for all current project documentation pu
 5. When README screenshots change, update the current Storybook story and run `make docs-screenshots`; do not capture an ad hoc live environment.
 6. Run `make test-docs` before committing.
 
-The validator checks the manifest, language pairs, counterpart links, local and repository targets, Wiki navigation reachability, maintained directory boundaries, and accidental reintroduction of legacy top-level documentation.
+The validator checks the manifest, language pairs, counterpart links, local and repository targets, Wiki navigation reachability, maintained directory boundaries, and accidental reintroduction of legacy top-level documentation. It also keeps the detailed references aligned with top-level configuration domains, all recovery-policy fields and Hook phases, the CLI catalog, Web routes/screenshots, and critical API families.
 
 ## Publish
 

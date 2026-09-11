@@ -8,9 +8,14 @@
 
 - [项目概览](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Overview)：架构、入口、能力边界和项目沿革。
 - [快速开始](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Getting-Started)：构建、单节点 bootstrap、发现和生产前置检查。
+- [生产部署](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Production-Deployment)与[备份恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Backup-and-Restore)：生产布局、启动验收、一致性域、节点替换与灾难处理。
 - [配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration)：Raft 身份、元数据库、发现、恢复策略、KV、日志和已移除字段。
+- [配置参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration-Reference)：全部顶层域、关键默认值、敏感字段和重启边界。
+- [拓扑发现](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Topology-Discovery)与[拓扑操作](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Topology-Operations)：发现身份、过滤/分类、重排选择、回读和停止条件。
 - [Raft 运维](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Raft-Operations)：建群、成员变更、节点替换、多数派、健康与备份边界。
 - [orch 命令行](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)、[Web 控制台](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Web-Console)和 [HTTP API](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-HTTP-API)：受支持的管理入口及失败语义。
+- [CLI 命令参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-CLI-Reference)与 [API 路由参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-API-Reference)：完整 CLI 命令索引和 HTTP 路由族契约。
+- [外部集成](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Integrations)与[故障排查](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Troubleshooting)：Consul、Hook、Agent、代理/遥测验收和症状驱动分诊。
 - [故障恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Failure-Recovery)、[计划切换](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Planned-Switchover)与[恢复配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Recovery-Configuration)：分析、候选选择、受控主库迁移、23 项页面策略、9 个 Hook 阶段和验收。
 - [可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)与[安全](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Security)：节点本地遥测、认证、TLS、凭据和权限边界。
 - [升级](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)、[开发](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Development)与[包职责指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Package-Guide)：不兼容变更台账、回滚、源码布局、package 归属、构建、测试和发布流程。

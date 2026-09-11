@@ -45,6 +45,8 @@ orch which-api
 
 Use `orch help <command>` for the exact flags registered by the current binary. `orch api PATH` is an escape hatch for a relative API path, but its side effects are treated as unknown and it must not be blindly retried.
 
+See the [CLI reference](https://github.com/SisyphusSQ/orchestrator/wiki/EN-CLI-Reference) for all 139 catalog commands and their read/write classification.
+
 ## Command catalog and migration
 
 The machine-readable [`catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) is the source for generated HTTP-backed commands, paths, query arguments, read/write classification, and output projections. Use the current binary's help as the operator contract; do not copy a static command table into automation.

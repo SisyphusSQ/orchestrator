@@ -27,3 +27,62 @@ The console follows the server's anonymous, Basic, multi, proxy, token, read-onl
 Use `make web-dev` for Vite hot reload and `make storybook` for isolated component/business-state scenarios. These development servers are loopback-only by default and are not deployment artifacts. See [Development](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Development) for prerequisites and verification boundaries.
 
 Set `ORCH_API_TARGET` for the Vite proxy and `ORCH_URL_PREFIX` when testing a prefixed deployment. Storybook uses MSW-only fixtures and cannot fall through to a real API. Browser fixtures prove UI behavior, not a real MySQL topology, production Raft, proxy authentication, or recovery outcome. Production acceptance should exercise discover → topology → detail → one controlled operation → API/MySQL/audit readback through the actual proxy and authentication path.
+
+## Page and route map
+
+Paths live under `<server.urlPrefix>/web`. Deep-link refresh must fall back unknown Web paths to the embedded entry without rewriting `/api`, `/health`, or `/metrics`.
+
+| Route | Page | Main reads/actions |
+| --- | --- | --- |
+| `/` | Default | redirects to `/clusters` |
+| `/clusters` | Overview | health, problem-first list, search, topology entry |
+| `/cluster/*` | Topology | graph/list, zoom/collapse, selection, proposals |
+| `/clusters-analysis` | Analysis | current analysis, candidate, block reason |
+| `/search/*` | Search | hostname/version/port query |
+| `/discover` | Discover | explicit discovery; changes orchestrator state |
+| `/cluster-pools/*` | Pools | mappings and heuristic candidates |
+| `/audit/*` | Audit | pages, instance filter, parameters, result |
+| `/audit-failure-detection/*` | Detection | history separate from recovery |
+| `/audit-recovery/*` | Recoveries | analysis, successor, errors, acknowledgement |
+| `/audit-recovery-steps/*` | Steps | execution by recovery UID |
+| `/agents`, `/agent/*` | Agent | status, disk/MySQL, remote actions when enabled |
+| `/seeds`, `/seed-details/*` | Seed/restore | history, detail, abort when enabled |
+| `/recovery-settings` | Settings | 23 policies, Hook profiles/assignments |
+| `/status` | Status | node, user, Raft, readiness, leader |
+| `/about`, `/home`, `/faq`, `/keep-calm` | Help | compatibility help routes |
+| `*` | 404 | unmatched Web route renders an in-app 404 |
+
+## UI examples
+
+These images are generated from current Storybook fixtures and validated as documentation assets. They show layout, not production data or live E2E.
+
+![Cluster overview](https://raw.githubusercontent.com/SisyphusSQ/orchestrator/main/docs/assets/screenshots/cluster-overview.png)
+
+![Topology detail](https://raw.githubusercontent.com/SisyphusSQ/orchestrator/main/docs/assets/screenshots/topology-detail.png)
+
+![Recovery settings](https://raw.githubusercontent.com/SisyphusSQ/orchestrator/main/docs/assets/screenshots/recovery-configuration.png)
+
+## Topology operation flow
+
+1. Check connection and update time, refresh, and resolve query errors.
+2. Confirm problem count, primary, and instance count before opening a cluster.
+3. Cross-check graph/list and inspect source/destination threads, lag, GTID/coordinates, read-only, semi-sync, tags, maintenance, and recovery.
+4. Read proposal and disabled reason. Browser validation never replaces server capability, candidate, and authorization checks.
+5. Record owner, reason, destination, and exact parameters; confirm once.
+6. Refresh topology, instance, audit, and recovery. Timeout/disconnect is unknown and must not replay.
+
+## Recovery, read-only, and concurrency
+
+Analysis explains the current problem; recovery history explains attempted work; detection records confirmation. Correlate steps, successor, errors, fingerprints, and external results by recovery UID. Acknowledge changes acknowledgement only.
+
+Header capability comes from `/api/web-config`. In-flight disabling does not prevent another browser or CLI writer. Settings use revision protection; topology operations require before/after reads. An enabled global switch still needs leader/quorum, filters, block windows, candidates, site rules, and effective policy.
+
+Startup connection, local query error, confirmed failure, and unknown result are distinct. Preserve request ID, node, time, and audit instead of refreshing and retrying.
+
+## Production browser acceptance
+
+- Use the real domain, proxy, TLS/mTLS, and authentication.
+- Refresh root and cluster/audit/recovery deep links; verify prefix/assets.
+- Prove read-only cannot write, then run one reversible isolated action with authorization.
+- Simulate disconnect and confirm no replay; recover outcome from API/audit.
+- Read Web, API, MySQL, Raft, and audit independently. Storybook does not cover them.

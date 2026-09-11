@@ -61,3 +61,5 @@ Clients may use a leader-aware proxy or healthy nodes that proxy supported busin
 Followers discover topology and can proxy supported requests. Only the leader performs recovery and coordinated writes. When quorum is lost, do not bypass Raft by writing directly to a metadata database.
 
 For a three-voter cluster quorum is two; for five voters it is three. Place voters so a single expected failure domain cannot retain an isolated minority as the service entry point. Raft protects orchestrator coordination, but application routing and MySQL fencing remain separate controls.
+
+For snapshot, metadata, single-member replacement, and lost-quorum procedures, continue with [Backup, restore, and disaster handling](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Backup-and-Restore). A successful `raft-snapshot` alone is never a complete restore plan.

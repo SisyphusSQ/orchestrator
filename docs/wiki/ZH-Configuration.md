@@ -36,6 +36,8 @@ server:
 
 仓库在 [`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf) 提供 MySQL 与 SQLite 示例。完整字段定义以 [`internal/config/model.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/model.go) 为准，默认值与校验逻辑位于 [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go)。
 
+逐字段默认值、风险和重启边界见[配置参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration-Reference)。
+
 ## 元数据库生命周期与 Schema
 
 兼容的 MySQL 协议后端包括 MySQL 5.7–8.0、TiDB 和 OceanBase MySQL 模式。凭据可直接配置，也可通过 `metadata.mysql.credentialsConfigFile` 提供；两类文件都需要限制访问，因为环境变量展开后密钥仍会进入进程内存。`metadata.mysql.maxAllowedPacket` 与 `topology.mysql.maxAllowedPacket` 分别作用于元数据库和被管理实例连接。

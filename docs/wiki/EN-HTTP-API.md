@@ -28,6 +28,8 @@ Content-Type: application/json
 
 The authoritative route registration is [`internal/http/routes.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/routes.go). The generated `orch` command catalog in [`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) documents the supported client mapping.
 
+See the [API route reference](https://github.com/SisyphusSQ/orchestrator/wiki/EN-API-Reference) for route families, explicit methods, proxy boundaries, and acceptance.
+
 ## Transport contract
 
 Gin v1.12.0 is isolated behind project-owned `Params`, `Responder`, `Principal`, `Handler`, and `Router` contracts. Application handlers do not depend on `gin.Context`. The standard and optional Agent listeners share the adapter while retaining distinct route and exposure boundaries.

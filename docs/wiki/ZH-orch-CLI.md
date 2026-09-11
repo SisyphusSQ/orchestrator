@@ -45,6 +45,8 @@ orch which-api
 
 使用 `orch help <command>` 查看当前二进制实际注册的参数。`orch api PATH` 可调用相对 API 路径，但客户端会把副作用视为未知，不能盲目重试。
 
+当前 139 个 catalog 命令的分组与读写分类见 [CLI 命令参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-CLI-Reference)。
+
 ## 命令目录与迁移
 
 机器可读的 [`catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) 是生成 HTTP 命令、路径、query 参数、读写分类和输出投影的权威。运维契约以当前二进制 help 为准，不要把静态命令表复制进自动化。
