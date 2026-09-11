@@ -452,6 +452,201 @@ func TestHTTPDoesNotDependOnPersistenceModels(t *testing.T) {
 	}
 }
 
+func TestLargePackageSubpackageBoundaries(t *testing.T) {
+	root := projectRoot(t)
+	for _, namespace := range []string{"internal/inst", "internal/inst/change", "internal/logic"} {
+		entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(namespace)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+				t.Fatalf("%s must only be a namespace; found %s", namespace, entry.Name())
+			}
+		}
+	}
+
+	httpRoot := filepath.Join(root, "internal", "http")
+	allowedHTTPRootFiles := map[string]bool{
+		"action_guard.go": true,
+		"routes.go":       true,
+	}
+	entries, err := os.ReadDir(httpRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		if !allowedHTTPRootFiles[entry.Name()] {
+			t.Fatalf("internal/http root must only compose routes; found %s", entry.Name())
+		}
+	}
+
+	var httpRootImportViolations []string
+	err = filepath.WalkDir(httpRoot, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || filepath.Dir(path) == httpRoot {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		for _, imported := range importsOf(t, path) {
+			if imported == modulePath+"/internal/http" {
+				httpRootImportViolations = append(httpRootImportViolations, fmt.Sprintf("%s imports %s", filepath.ToSlash(relative), imported))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(httpRootImportViolations) > 0 {
+		t.Fatalf("HTTP subpackages depend on the root composition package:\n%s", strings.Join(httpRootImportViolations, "\n"))
+	}
+
+	checks := []struct {
+		directory string
+		forbidden []string
+	}{
+		{
+			directory: "internal/http/transport",
+			forbidden: []string{
+				modulePath + "/internal/app",
+				modulePath + "/internal/http",
+				modulePath + "/internal/inst",
+				modulePath + "/internal/logic",
+				modulePath + "/internal/repository",
+			},
+		},
+		{
+			directory: "internal/inst",
+			forbidden: []string{
+				modulePath + "/internal/app",
+				modulePath + "/internal/http",
+				modulePath + "/internal/logic",
+			},
+		},
+		{
+			directory: "internal/inst/analysis",
+			forbidden: []string{
+				modulePath + "/internal/app",
+				modulePath + "/internal/http",
+				modulePath + "/internal/logic",
+			},
+		},
+		{
+			directory: "internal/inst/inventory",
+			forbidden: []string{
+				modulePath + "/internal/inst/change",
+				modulePath + "/internal/inst/discovery",
+			},
+		},
+		{
+			directory: "internal/inst/change/replication",
+			forbidden: []string{
+				modulePath + "/internal/inst/change/regroup",
+				modulePath + "/internal/inst/change/relocation",
+			},
+		},
+		{
+			directory: "internal/inst/change/relocation",
+			forbidden: []string{
+				modulePath + "/internal/inst/change/regroup",
+			},
+		},
+		{
+			directory: "internal/inst/topology",
+			forbidden: []string{
+				modulePath + "/internal/inst/change",
+			},
+		},
+		{
+			directory: "internal/logic/recovery",
+			forbidden: []string{
+				modulePath + "/internal/app",
+				modulePath + "/internal/http",
+				modulePath + "/internal/logic/discovery",
+				modulePath + "/internal/logic/raftstate",
+			},
+		},
+		{
+			directory: "internal/logic/discovery",
+			forbidden: []string{
+				modulePath + "/internal/app",
+				modulePath + "/internal/http",
+				modulePath + "/internal/logic/raftstate",
+			},
+		},
+		{
+			directory: "internal/logic/raftstate",
+			forbidden: []string{
+				modulePath + "/internal/app",
+				modulePath + "/internal/http",
+			},
+		},
+	}
+
+	var violations []string
+	for _, check := range checks {
+		directory := filepath.Join(root, filepath.FromSlash(check.directory))
+		err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			for _, imported := range importsOf(t, path) {
+				for _, prefix := range check.forbidden {
+					if imported == prefix || strings.HasPrefix(imported, prefix+"/") {
+						violations = append(violations, fmt.Sprintf("%s imports %s", filepath.ToSlash(relative), imported))
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, directory := range []string{"internal/inst/gtid", "internal/inst/mysql"} {
+		err := filepath.WalkDir(filepath.Join(root, filepath.FromSlash(directory)), func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			for _, imported := range importsOf(t, path) {
+				if strings.HasPrefix(imported, modulePath+"/internal/") {
+					violations = append(violations, fmt.Sprintf("%s imports %s", filepath.ToSlash(relative), imported))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(violations) > 0 {
+		t.Fatalf("large-package subpackage boundaries were violated:\n%s", strings.Join(violations, "\n"))
+	}
+}
+
 func TestDomainModelsStayIndependent(t *testing.T) {
 	root := projectRoot(t)
 	forbidden := []string{

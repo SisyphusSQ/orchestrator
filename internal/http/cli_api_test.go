@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"github.com/openark/orchestrator/internal/http/transport"
 	"net/http"
 	"os"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/openark/orchestrator/internal/config"
+	httpcli "github.com/openark/orchestrator/internal/http/cli"
 )
 
 // 将独立客户端的静态契约与实际注册路由对照，避免命令存在却调用不存在的 API。
@@ -21,8 +23,8 @@ func TestClientCatalogRoutesExist(t *testing.T) {
 	if err := json.Unmarshal(data, &specs); err != nil {
 		t.Fatal(err)
 	}
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{}
 	api.RegisterRequests(router)
 	placeholder := regexp.MustCompile(`\{([^}]+)\}`)
 	for _, spec := range specs {
@@ -41,7 +43,7 @@ func TestClientCatalogRoutesExist(t *testing.T) {
 		})
 		path = "/api/" + strings.TrimRight(path, "/")
 		found := false
-		for _, route := range router.logicalRoutes {
+		for _, route := range router.LogicalRoutes() {
 			if route.Method != method {
 				continue
 			}
@@ -60,9 +62,11 @@ func TestDiagnosticsRequireAuthorizationBeforeDatabaseAccess(t *testing.T) {
 	old := config.Config.Server.ReadOnly
 	config.Config.Server.ReadOnly = true
 	t.Cleanup(func() { config.Config.Server.ReadOnly = old })
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{}
-	api.registerCLIRequests(router)
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{}
+	httpcli.Register(func(path string, handler transport.Handler) {
+		api.registerAPIRequest(router, path, handler)
+	})
 	response := serveRequest(t, router, http.MethodGet, "/api/cli/rematch/db/3306", nil)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -73,8 +77,8 @@ func TestMigratedMutationsRejectReadOnlyBeforeDatabaseAccess(t *testing.T) {
 	old := config.Config.Server.ReadOnly
 	config.Config.Server.ReadOnly = true
 	t.Cleanup(func() { config.Config.Server.ReadOnly = old })
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{}
 	api.RegisterRequests(router)
 	for _, path := range []string{"tag/db/3306?tag=x=y", "untag/db/3306?tag=x", "untag-all?tag=x=y", "submit-masters-to-kv-stores", "snapshot-topologies"} {
 		response := serveRequest(t, router, http.MethodGet, "/api/"+path, nil)
@@ -85,8 +89,8 @@ func TestMigratedMutationsRejectReadOnlyBeforeDatabaseAccess(t *testing.T) {
 }
 
 func TestEncodedPathParameterRoundTrip(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	router.Get("/api/echo/:value", func(params Params, r Responder) { r.JSON(http.StatusOK, params["value"]) })
+	router := mustRouter(t, transport.RouterOptions{})
+	router.Get("/api/echo/:value", func(params transport.Params, r transport.Responder) { r.JSON(http.StatusOK, params["value"]) })
 	for _, path := range []string{"a%2Fb+%25%20%E4%B8%AD", "%252F"} {
 		response := serveRequest(t, router, http.MethodGet, "/api/echo/"+path, nil)
 		var got string

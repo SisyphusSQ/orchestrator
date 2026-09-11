@@ -28,9 +28,13 @@ import (
 	"github.com/openark/orchestrator/internal/agent"
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/http"
-	"github.com/openark/orchestrator/internal/inst"
+	httpagent "github.com/openark/orchestrator/internal/http/agent"
+	httpobservability "github.com/openark/orchestrator/internal/http/observability"
+	"github.com/openark/orchestrator/internal/http/transport"
+	httpweb "github.com/openark/orchestrator/internal/http/web"
+	instmaintenance "github.com/openark/orchestrator/internal/inst/maintenance"
 	"github.com/openark/orchestrator/internal/kv"
-	"github.com/openark/orchestrator/internal/logic"
+	"github.com/openark/orchestrator/internal/logic/discovery"
 	"github.com/openark/orchestrator/internal/process"
 	"github.com/openark/orchestrator/internal/ssl"
 	webassets "github.com/openark/orchestrator/web"
@@ -58,7 +62,7 @@ func Http(continuousDiscovery bool) (resultErr error) {
 		cancel()
 		resultErr = errors.Join(resultErr, CloseRaftRuntime())
 	}()
-	logic.AcceptSignals()
+	discovery.AcceptSignals()
 	promptForSSLPasswords()
 	closeMonitor := startHealthMonitor()
 	defer closeMonitor()
@@ -105,12 +109,12 @@ func standardHttp(ctx context.Context, continuousDiscovery bool, runtimeErrors c
 		return err
 	}
 
-	inst.SetMaintenanceOwner(process.ThisHostname)
+	instmaintenance.SetMaintenanceOwner(process.ThisHostname)
 
 	if continuousDiscovery {
 
 		log.Info("Starting Discovery")
-		go reportRuntimeError(runtimeErrors, "continuous discovery", func() error { return logic.ContinuousDiscovery(ctx) })
+		go reportRuntimeError(runtimeErrors, "continuous discovery", func() error { return discovery.ContinuousDiscovery(ctx) })
 	}
 
 	log.Info("Registering endpoints")
@@ -159,7 +163,7 @@ func agentsHttp() error {
 	log.Info("Starting agents listener")
 
 	agent.InitHttpClient()
-	go logic.ContinuousAgentsPoll()
+	go discovery.ContinuousAgentsPoll()
 
 	// Serve
 	if config.Config.Agents.TLS.Enabled {
@@ -185,14 +189,14 @@ func agentsHttp() error {
 	return nil
 }
 
-func newStandardHTTPRouter() (*http.Router, error) {
+func newStandardHTTPRouter() (*transport.Router, error) {
 	if strings.EqualFold(config.Config.Authentication.Method, "basic") && config.Config.Authentication.Basic.User == "" {
 		// Still allowed; may be disallowed in future versions.
 		log.Warning("authentication.method is configured as 'basic' but authentication.basic.user is undefined. Running without authentication.")
 	}
 
-	options := http.RouterOptions{
-		Authentication: http.AuthenticationOptions{
+	options := transport.RouterOptions{
+		Authentication: transport.AuthenticationOptions{
 			Method:   config.Config.Authentication.Method,
 			Username: config.Config.Authentication.Basic.User,
 			Password: config.Config.Authentication.Basic.Password,
@@ -203,7 +207,7 @@ func newStandardHTTPRouter() (*http.Router, error) {
 		options.VerifyRequest = ssl.VerifyOUs(config.Config.Server.TLS.ValidOUs)
 	}
 
-	router, err := http.NewRouter(options)
+	router, err := transport.NewRouter(options)
 	if err != nil {
 		return nil, err
 	}
@@ -213,24 +217,24 @@ func newStandardHTTPRouter() (*http.Router, error) {
 	}
 	router.StaticFS(config.Config.Server.URLPrefix+"/web/assets", nethttp.FS(assets))
 
-	http.API.URLPrefix = config.Config.Server.URLPrefix
-	http.Web.URLPrefix = config.Config.Server.URLPrefix
-	http.RegisterObservability(router, config.Config.Server.URLPrefix)
-	http.API.RegisterRequests(router)
-	http.Web.RegisterRequests(router)
+	api := http.Routes{URLPrefix: config.Config.Server.URLPrefix}
+	web := httpweb.New(config.Config.Server.URLPrefix, nil)
+	httpobservability.Register(router, config.Config.Server.URLPrefix)
+	api.RegisterRequests(router)
+	web.RegisterRequests(router)
 	return router, nil
 }
 
-func newAgentsHTTPRouter() (*http.Router, error) {
-	options := http.RouterOptions{EnableGzip: true}
+func newAgentsHTTPRouter() (*transport.Router, error) {
+	options := transport.RouterOptions{EnableGzip: true}
 	if config.Config.Agents.TLS.MutualTLS {
 		options.VerifyRequest = ssl.VerifyOUs(config.Config.Agents.TLS.ValidOUs)
 	}
-	router, err := http.NewRouter(options)
+	router, err := transport.NewRouter(options)
 	if err != nil {
 		return nil, err
 	}
-	http.AgentsAPI.URLPrefix = config.Config.Server.URLPrefix
-	http.AgentsAPI.RegisterRequests(router)
+	agentAPI := httpagent.RegistrationAPI{URLPrefix: config.Config.Server.URLPrefix}
+	agentAPI.RegisterRequests(router)
 	return router, nil
 }

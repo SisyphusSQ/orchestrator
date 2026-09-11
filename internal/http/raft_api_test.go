@@ -2,11 +2,13 @@ package http
 
 import (
 	"encoding/json"
+	"github.com/openark/orchestrator/internal/http/transport"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	httpraft "github.com/openark/orchestrator/internal/http/raft"
 	orcraft "github.com/openark/orchestrator/internal/raft"
 )
 
@@ -33,8 +35,8 @@ func serveHTTPRequest(t *testing.T, handler http.Handler, req *http.Request) *ht
 }
 
 func TestRaftHTTPErrorClassesBeforeInitialization(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{URLPrefix: ""}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{URLPrefix: ""}
 	api.RegisterRequests(router)
 
 	tests := []struct {
@@ -70,8 +72,8 @@ func TestRaftHTTPErrorClassesBeforeInitialization(t *testing.T) {
 }
 
 func TestRaftAddMemberRejectsInvalidJSON(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{URLPrefix: ""}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{URLPrefix: ""}
 	api.RegisterRequests(router)
 	req := newJSONRequest(t, http.MethodPost, "/api/raft/members", `{`)
 	resp := serveHTTPRequest(t, router, req)
@@ -81,8 +83,8 @@ func TestRaftAddMemberRejectsInvalidJSON(t *testing.T) {
 }
 
 func TestRaftMutationRejectsInvalidCASAndBodies(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{URLPrefix: ""}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{URLPrefix: ""}
 	api.RegisterRequests(router)
 
 	tests := []struct {
@@ -124,23 +126,23 @@ func TestRaftMutationRejectsInvalidCASAndBodies(t *testing.T) {
 func TestExpectedIndexFromRequestRejectsAmbiguity(t *testing.T) {
 	req := newJSONRequest(t, http.MethodDelete, "/api/raft/members/n2?expectedIndex=7", "")
 	bodyIndex := uint64(7)
-	if got, err := expectedIndexFromRequest(req, &bodyIndex); err != nil || got == nil || *got != 7 {
+	if got, err := httpraft.ExpectedIndexFromRequest(req, &bodyIndex); err != nil || got == nil || *got != 7 {
 		t.Fatalf("matching body/query index = %v, %v; want pointer to 7, nil", got, err)
 	}
 	bodyIndex = 8
-	if _, err := expectedIndexFromRequest(req, &bodyIndex); err == nil {
+	if _, err := httpraft.ExpectedIndexFromRequest(req, &bodyIndex); err == nil {
 		t.Fatal("conflicting body/query expectedIndex succeeded")
 	}
 
 	req = newJSONRequest(t, http.MethodDelete, "/api/raft/members/n2?expectedIndex=7&expectedIndex=8", "")
-	if _, err := expectedIndexFromRequest(req, nil); err == nil {
+	if _, err := httpraft.ExpectedIndexFromRequest(req, nil); err == nil {
 		t.Fatal("duplicate query expectedIndex succeeded")
 	}
 }
 
 func TestExpectedIndexFromRequestPreservesExplicitZero(t *testing.T) {
 	req := newJSONRequest(t, http.MethodDelete, "/api/raft/members/n2?expectedIndex=0", "")
-	got, err := expectedIndexFromRequest(req, nil)
+	got, err := httpraft.ExpectedIndexFromRequest(req, nil)
 	if err != nil {
 		t.Fatalf("expectedIndexFromRequest: %v", err)
 	}
