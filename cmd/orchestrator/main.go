@@ -25,8 +25,10 @@ import (
 	"github.com/openark/orchestrator/internal/app"
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
-	"github.com/openark/orchestrator/internal/inst"
-	"github.com/openark/orchestrator/internal/logic"
+	instaudit "github.com/openark/orchestrator/internal/inst/audit"
+	instinventory "github.com/openark/orchestrator/internal/inst/inventory"
+	instresolve "github.com/openark/orchestrator/internal/inst/resolve"
+	"github.com/openark/orchestrator/internal/logic/recovery"
 	"github.com/openark/orchestrator/internal/observability"
 	"github.com/openark/orchestrator/internal/process"
 	"github.com/openark/orchestrator/internal/repository"
@@ -46,7 +48,7 @@ var configurationExtensions = []string{".yaml", ".yml", ".json"}
 func main() {
 	log.RegisterCloseHook(app.CloseRaftRuntime)
 	log.RegisterCloseHook(app.CloseHealthMonitor)
-	registerProcessCloseHooks(log.RegisterCloseHook, inst.CloseAuditSyslog, repository.Close)
+	registerProcessCloseHooks(log.RegisterCloseHook, instaudit.CloseAuditSyslog, repository.Close)
 	exitCode := run()
 	if err := log.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "logger close failed: %v\n", err)
@@ -123,7 +125,7 @@ func runCommand(options *commandOptions, command string) error {
 		return err
 	}
 	if config.Config.Audit.ToSyslog {
-		if err := inst.EnableAuditSyslog(); err != nil {
+		if err := instaudit.EnableAuditSyslog(); err != nil {
 			return fmt.Errorf("initialize audit syslog: %w", err)
 		}
 	}
@@ -153,7 +155,7 @@ func runCommand(options *commandOptions, command string) error {
 		return repository.InitializeMetadata(context.Background())
 	case "redeploy-internal-db":
 		config.RuntimeCLIFlags.ConfiguredVersion = ""
-		_, err := inst.ReadClusters()
+		_, err := instinventory.ReadClusters()
 		return err
 	case "access-token":
 		token, err := process.GenerateAccessToken(options.owner)
@@ -163,22 +165,22 @@ func runCommand(options *commandOptions, command string) error {
 		fmt.Println(token)
 		return nil
 	case "suggest-promoted-replacement":
-		key, err := inst.ParseRawInstanceKey(options.instance)
+		key, err := instresolve.ParseRawInstanceKey(options.instance)
 		if err != nil {
 			return err
 		}
-		destination, err := inst.ParseRawInstanceKey(options.destination)
+		destination, err := instresolve.ParseRawInstanceKey(options.destination)
 		if err != nil {
 			return err
 		}
-		instance, found, err := inst.ReadInstance(destination)
+		instance, found, err := instinventory.ReadInstance(destination)
 		if err != nil {
 			return err
 		}
 		if !found || instance == nil {
 			return fmt.Errorf("destination not found")
 		}
-		result, _, err := logic.SuggestReplacementForPromotedReplica(&logic.TopologyRecovery{}, key, instance, nil)
+		result, _, err := recovery.SuggestReplacementForPromotedReplica(&recovery.TopologyRecovery{}, key, instance, nil)
 		if err != nil {
 			return err
 		}

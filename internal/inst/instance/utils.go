@@ -1,0 +1,284 @@
+/*
+   Copyright 2015 Shlomi Noach, courtesy Booking.com
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package instance
+
+import (
+	"net"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+var (
+	DowntimeLostInRecoveryMessage = "lost-in-recovery"
+)
+
+// majorVersionsSortedByCount sorts (major) versions:
+// - primary sort: by count appearances
+// - secondary sort: by version
+type majorVersionsSortedByCount struct {
+	versionsCount map[string]int
+	versions      []string
+}
+
+func NewMajorVersionsSortedByCount(versionsCount map[string]int) *majorVersionsSortedByCount {
+	versions := []string{}
+	for v := range versionsCount {
+		versions = append(versions, v)
+	}
+	return &majorVersionsSortedByCount{
+		versionsCount: versionsCount,
+		versions:      versions,
+	}
+}
+
+func (sorter *majorVersionsSortedByCount) Len() int { return len(sorter.versions) }
+func (sorter *majorVersionsSortedByCount) Swap(i, j int) {
+	sorter.versions[i], sorter.versions[j] = sorter.versions[j], sorter.versions[i]
+}
+func (sorter *majorVersionsSortedByCount) Less(i, j int) bool {
+	if sorter.versionsCount[sorter.versions[i]] == sorter.versionsCount[sorter.versions[j]] {
+		return sorter.versions[i] > sorter.versions[j]
+	}
+	return sorter.versionsCount[sorter.versions[i]] < sorter.versionsCount[sorter.versions[j]]
+}
+func (sorter *majorVersionsSortedByCount) First() string {
+	return sorter.versions[0]
+}
+
+// majorVersionsSortedByCount sorts (major) versions:
+// - primary sort: by count appearances
+// - secondary sort: by version
+type binlogFormatSortedByCount struct {
+	formatsCount map[string]int
+	formats      []string
+}
+
+func NewBinlogFormatSortedByCount(formatsCount map[string]int) *binlogFormatSortedByCount {
+	formats := []string{}
+	for v := range formatsCount {
+		formats = append(formats, v)
+	}
+	return &binlogFormatSortedByCount{
+		formatsCount: formatsCount,
+		formats:      formats,
+	}
+}
+
+func (sorter *binlogFormatSortedByCount) Len() int { return len(sorter.formats) }
+func (sorter *binlogFormatSortedByCount) Swap(i, j int) {
+	sorter.formats[i], sorter.formats[j] = sorter.formats[j], sorter.formats[i]
+}
+func (sorter *binlogFormatSortedByCount) Less(i, j int) bool {
+	if sorter.formatsCount[sorter.formats[i]] == sorter.formatsCount[sorter.formats[j]] {
+		return IsSmallerBinlogFormat(sorter.formats[j], sorter.formats[i])
+	}
+	return sorter.formatsCount[sorter.formats[i]] < sorter.formatsCount[sorter.formats[j]]
+}
+func (sorter *binlogFormatSortedByCount) First() string {
+	return sorter.formats[0]
+}
+
+// InstancesSorterByExec sorts instances by executed binlog coordinates
+type InstancesSorterByExec struct {
+	instances  []*Instance
+	dataCenter string
+}
+
+func NewInstancesSorterByExec(instances []*Instance, dataCenter string) *InstancesSorterByExec {
+	return &InstancesSorterByExec{
+		instances:  instances,
+		dataCenter: dataCenter,
+	}
+}
+
+func (sorter *InstancesSorterByExec) Len() int { return len(sorter.instances) }
+func (sorter *InstancesSorterByExec) Swap(i, j int) {
+	sorter.instances[i], sorter.instances[j] = sorter.instances[j], sorter.instances[i]
+}
+func (sorter *InstancesSorterByExec) Less(i, j int) bool {
+	// Returning "true" in this function means [i] is "smaller" than [j],
+	// which will lead to [j] be a better candidate for promotion
+
+	// Sh*t happens. We just might get nil while attempting to discover/recover
+	if sorter.instances[i] == nil {
+		return false
+	}
+	if sorter.instances[j] == nil {
+		return true
+	}
+	if sorter.instances[i].ExecBinlogCoordinates.Equals(&sorter.instances[j].ExecBinlogCoordinates) {
+		// Secondary sorting: "smaller" if not logging replica updates
+		if sorter.instances[j].LogReplicationUpdatesEnabled && !sorter.instances[i].LogReplicationUpdatesEnabled {
+			return true
+		}
+		// Next sorting: "smaller" if of higher version (this will be reversed eventually)
+		// Idea is that given 5.6 a& 5.7 both of the exact position, we will want to promote
+		// the 5.6 on top of 5.7, as the other way around is invalid
+		if sorter.instances[j].IsSmallerMajorVersion(sorter.instances[i]) {
+			return true
+		}
+		// Next sorting: "smaller" if of larger binlog-format (this will be reversed eventually)
+		// Idea is that given ROW & STATEMENT both of the exact position, we will want to promote
+		// the STATEMENT on top of ROW, as the other way around is invalid
+		if sorter.instances[j].IsSmallerBinlogFormat(sorter.instances[i]) {
+			return true
+		}
+		// Prefer local datacenter:
+		if sorter.instances[j].DataCenter == sorter.dataCenter && sorter.instances[i].DataCenter != sorter.dataCenter {
+			return true
+		}
+		// Prefer if not having errant GTID
+		if sorter.instances[j].GtidErrant == "" && sorter.instances[i].GtidErrant != "" {
+			return true
+		}
+		// Prefer candidates:
+		if sorter.instances[j].PromotionRule.BetterThan(sorter.instances[i].PromotionRule) {
+			return true
+		}
+	}
+	return sorter.instances[i].ExecBinlogCoordinates.SmallerThan(&sorter.instances[j].ExecBinlogCoordinates)
+}
+
+// filterInstancesByPattern will filter given array of instances according to regular expression pattern
+func FilterInstancesByPattern(instances []*Instance, pattern string) []*Instance {
+	if pattern == "" {
+		return instances
+	}
+	filtered := []*Instance{}
+	for _, instance := range instances {
+		if matched, _ := regexp.MatchString(pattern, instance.Key.DisplayString()); matched {
+			filtered = append(filtered, instance)
+		}
+	}
+	return filtered
+}
+
+// removeInstance will remove an instance from a list of instances
+func RemoveInstance(instances []*Instance, instanceKey *InstanceKey) []*Instance {
+	if instanceKey == nil {
+		return instances
+	}
+	for i, instance := range slices.Backward(instances) {
+		if instance.Key.Equals(instanceKey) {
+			instances = append(instances[:i], instances[i+1:]...)
+		}
+	}
+	return instances
+}
+
+// removeBinlogServerInstances will remove all binlog servers from given list
+func RemoveBinlogServerInstances(instances []*Instance) []*Instance {
+	for i, instance := range slices.Backward(instances) {
+		if instance.IsBinlogServer() {
+			instances = append(instances[:i], instances[i+1:]...)
+		}
+	}
+	return instances
+}
+
+// removeNilInstances
+func RemoveNilInstances(instances []*Instance) []*Instance {
+	for i, instance := range slices.Backward(instances) {
+		if instance == nil {
+			instances = append(instances[:i], instances[i+1:]...)
+		}
+	}
+	return instances
+}
+
+// SemicolonTerminated is a utility function that makes sure a statement is terminated with
+// a semicolon, if it isn't already
+func SemicolonTerminated(statement string) string {
+	statement = strings.TrimSpace(statement)
+	statement = strings.TrimRight(statement, ";")
+	statement = statement + ";"
+	return statement
+}
+
+// MajorVersion returns a MySQL major version number (e.g. given "5.5.36" it returns "5.5")
+func MajorVersion(version string) []string {
+	tokens := strings.Split(version, ".")
+	if len(tokens) < 2 {
+		return []string{"0", "0"}
+	}
+	return tokens[:2]
+}
+
+// IsSmallerMajorVersion tests two versions against another and returns true if
+// the former is a smaller "major" version than the latter.
+// e.g. 5.5.36 is NOT a smaller major version as comapred to 5.5.40, but IS as compared to 5.6.9
+func IsSmallerMajorVersion(version string, otherVersion string) bool {
+	thisMajorVersion := MajorVersion(version)
+	otherMajorVersion := MajorVersion(otherVersion)
+	for i := range thisMajorVersion {
+		thisToken, _ := strconv.Atoi(thisMajorVersion[i])
+		otherToken, _ := strconv.Atoi(otherMajorVersion[i])
+		if thisToken < otherToken {
+			return true
+		}
+		if thisToken > otherToken {
+			return false
+		}
+	}
+	return false
+}
+
+// IsSmallerBinlogFormat tests two binlog formats and sees if one is "smaller" than the other.
+// "smaller" binlog format means you can replicate from the smaller to the larger.
+func IsSmallerBinlogFormat(binlogFormat string, otherBinlogFormat string) bool {
+	if binlogFormat == "STATEMENT" {
+		return (otherBinlogFormat == "ROW" || otherBinlogFormat == "MIXED")
+	}
+	if binlogFormat == "MIXED" {
+		return otherBinlogFormat == "ROW"
+	}
+	return false
+}
+
+// FiltersMatchInstanceKey returns true if given instance key matches any one of given filters.
+// A filter could be:
+// - An IP address, in which case we compare exact value
+// - Any other string, in which case we compare via regular expression
+func FiltersMatchInstanceKey(instanceKey *InstanceKey, filters []string) bool {
+	for _, filter := range filters {
+		switch {
+		case net.ParseIP(filter) != nil:
+			// If the filter is an IP address, expect complete match.
+			// This is to avoid matching 10.0.0.3 with 10.0.0.38 if we
+			// were to compare via regexp
+			if filter == instanceKey.Hostname {
+				return true
+			}
+		default:
+			if matched, _ := regexp.MatchString(filter, instanceKey.StringCode()); matched {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func FiltersMatchReplicationIgnoreUsername(user string, filters []string) bool {
+	for _, filter := range filters {
+		if matched, _ := regexp.MatchString(filter, user); matched {
+			return true
+		}
+	}
+	return false
+}

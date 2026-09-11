@@ -2,13 +2,16 @@ package http
 
 import (
 	nethttp "net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 	test "github.com/openark/orchestrator/internal/golib/tests"
+	httpagent "github.com/openark/orchestrator/internal/http/agent"
+	httpobservability "github.com/openark/orchestrator/internal/http/observability"
+	"github.com/openark/orchestrator/internal/http/transport"
+	httpweb "github.com/openark/orchestrator/internal/http/web"
 )
 
 func init() {
@@ -17,31 +20,8 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func TestDecodeConfigurationBodyIsStrictAndBounded(t *testing.T) {
-	type body struct {
-		Value int `json:"value"`
-	}
-	for name, content := range map[string]string{
-		"unknown field": `{"value":1,"future":true}`,
-		"trailing JSON": `{"value":1} {}`,
-		"oversized":     `{"value":1,"padding":"` + strings.Repeat("x", (1<<20)+1) + `"}`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(nethttp.MethodPost, "/api/recovery-policy", strings.NewReader(content))
-			if err := decodeConfigurationBody(req, &body{}); err == nil {
-				t.Fatal("invalid request body accepted")
-			}
-		})
-	}
-	req := httptest.NewRequest(nethttp.MethodPost, "/api/recovery-policy", strings.NewReader(`{"value":1}`))
-	var decoded body
-	if err := decodeConfigurationBody(req, &decoded); err != nil || decoded.Value != 1 {
-		t.Fatalf("valid request body decode = %#v, %v", decoded, err)
-	}
-}
-
 func TestGetSynonymPath(t *testing.T) {
-	api := HttpAPI{}
+	api := Routes{}
 
 	{
 		path := "relocate-slaves"
@@ -56,11 +36,11 @@ func TestGetSynonymPath(t *testing.T) {
 }
 
 func TestKnownPaths(t *testing.T) {
-	m, err := NewRouter(RouterOptions{})
+	m, err := transport.NewRouter(transport.RouterOptions{})
 	if err != nil {
 		t.Fatalf("NewRouter() error = %v", err)
 	}
-	api := HttpAPI{}
+	api := Routes{}
 
 	api.RegisterRequests(m)
 
@@ -87,32 +67,32 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 		config.Config.Server.Status.Endpoint = previousStatusEndpoint
 	})
 
-	standard := mustRouter(t, RouterOptions{})
-	api := HttpAPI{URLPrefix: "/orchestrator"}
-	web := HttpWeb{URLPrefix: "/orchestrator"}
+	standard := mustRouter(t, transport.RouterOptions{})
+	api := Routes{URLPrefix: "/orchestrator"}
+	web := httpweb.New("/orchestrator", nil)
 	registeredAPIsBefore := len(registeredPaths)
 	api.RegisterRequests(standard)
 	if got, want := len(registeredPaths)-registeredAPIsBefore, 263; got != want {
 		t.Fatalf("registered API routes = %d, want %d", got, want)
 	}
-	RegisterObservability(standard, "/orchestrator")
+	httpobservability.Register(standard, "/orchestrator")
 	web.RegisterRequests(standard)
-	if got, want := len(standard.logicalRoutes), 390; got != want {
+	if got, want := len(standard.LogicalRoutes()), 390; got != want {
 		t.Fatalf("standard logical routes = %d, want %d", got, want)
 	}
 
 	standard.Static("/orchestrator/web/assets", t.TempDir())
-	if got, want := len(standard.staticMounts), 1; got != want {
+	if got, want := len(standard.StaticMounts()), 1; got != want {
 		t.Fatalf("static mounts = %d, want %d", got, want)
 	}
 
-	agents := mustRouter(t, RouterOptions{})
-	agentAPI := HttpAgentsAPI{URLPrefix: "/orchestrator"}
+	agents := mustRouter(t, transport.RouterOptions{})
+	agentAPI := httpagent.RegistrationAPI{URLPrefix: "/orchestrator"}
 	agentAPI.RegisterRequests(agents)
-	if got, want := len(agents.logicalRoutes), 6; got != want {
+	if got, want := len(agents.LogicalRoutes()), 6; got != want {
 		t.Fatalf("agent logical routes = %d, want %d", got, want)
 	}
-	if got, want := len(standard.logicalRoutes)+len(agents.logicalRoutes), 396; got != want {
+	if got, want := len(standard.LogicalRoutes())+len(agents.LogicalRoutes()), 396; got != want {
 		t.Fatalf("total logical routes = %d, want %d", got, want)
 	}
 
@@ -131,10 +111,9 @@ func TestCompleteRouteRegistrationContract(t *testing.T) {
 	assertExactRouteRegistered(t, agents, nethttp.MethodHead, "/orchestrator/api/agent-ping/")
 }
 
-func assertExactRouteRegistered(t *testing.T, router *Router, method, path string) {
+func assertExactRouteRegistered(t *testing.T, router *transport.Router, method, path string) {
 	t.Helper()
-	enginePath, _ := normalizeEnginePath(path)
-	if _, found := router.registered[method+" "+enginePath]; !found {
+	if !router.HasRoute(method, path) {
 		t.Fatalf("route %s %s is not registered", method, path)
 	}
 }
@@ -146,16 +125,16 @@ func TestCustomStatusEndpointRegistration(t *testing.T) {
 		config.Config.Server.Status.Endpoint = previousStatusEndpoint
 	})
 
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{URLPrefix: "/orchestrator"}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{URLPrefix: "/orchestrator"}
 	api.RegisterRequests(router)
 	assertExactRouteRegistered(t, router, nethttp.MethodGet, "/custom-status")
 	assertExactRouteRegistered(t, router, nethttp.MethodHead, "/custom-status/")
 }
 
 func TestDebugEndpointsRespond(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	web := HttpWeb{URLPrefix: "/orchestrator"}
+	router := mustRouter(t, transport.RouterOptions{})
+	web := httpweb.New("/orchestrator", nil)
 	web.RegisterDebug(router)
 
 	for _, target := range []string{

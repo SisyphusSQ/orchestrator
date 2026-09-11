@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"github.com/openark/orchestrator/internal/http/transport"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,13 +10,14 @@ import (
 	"testing/fstest"
 
 	"github.com/openark/orchestrator/internal/config"
+	httpweb "github.com/openark/orchestrator/internal/http/web"
 )
 
 func TestWebPageDeepLinksAndPrefix(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	web := HttpWeb{URLPrefix: "/orchestrator", assets: fstest.MapFS{
+	router := mustRouter(t, transport.RouterOptions{})
+	web := httpweb.New("/orchestrator", fstest.MapFS{
 		"index.html": {Data: []byte(`<head><!--ORCHESTRATOR_BASE--><script src="./assets/main.js"></script></head><div id="root"></div>`)},
-	}}
+	})
 	web.RegisterRequests(router)
 	for _, path := range []string{"/web/clusters", "/web/cluster/mysql%2Fteam%2Bblue%253A3306", "/web/cluster/alias/team%2Fblue", "/web/audit-recovery/uid/abc", "/web/seed-details/1"} {
 		response := serveRequest(t, router, http.MethodGet, "/orchestrator"+path, nil)
@@ -37,7 +39,7 @@ func TestWebPageDeepLinksAndPrefix(t *testing.T) {
 
 func TestEmbeddedStaticFilesWithoutWorkingDirectoryResources(t *testing.T) {
 	t.Chdir(t.TempDir())
-	router := mustRouter(t, RouterOptions{Authentication: AuthenticationOptions{Method: "basic", Username: "reader", Password: "fixture"}})
+	router := mustRouter(t, transport.RouterOptions{Authentication: transport.AuthenticationOptions{Method: "basic", Username: "reader", Password: "fixture"}})
 	router.StaticFS("/prefix/web/assets", http.FS(fstest.MapFS{
 		"main.js": {Data: []byte("console.log('embedded')")},
 	}))
@@ -75,7 +77,7 @@ func TestEmbeddedStaticFilesWithoutWorkingDirectoryResources(t *testing.T) {
 }
 
 func TestWebPageReportsMissingEmbeddedBuild(t *testing.T) {
-	web := HttpWeb{assets: fstest.MapFS{}}
+	web := httpweb.New("", fstest.MapFS{})
 	response := httptest.NewRecorder()
 	web.Page(response, httptest.NewRequest(http.MethodGet, "/web/clusters", nil))
 	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "make binary") {
@@ -91,11 +93,11 @@ func TestWebConfigPublishesOnlyUICapabilities(t *testing.T) {
 	config.Config.Topology.MySQL.Password = "never-publish-this"
 	config.Config.Server.Web.Message = "maintenance </script><script>alert(1)</script>"
 	t.Cleanup(func() { config.Config = previous })
-	router := mustRouter(t, RouterOptions{})
-	web := HttpWeb{URLPrefix: "/prefix"}
+	router := mustRouter(t, transport.RouterOptions{})
+	web := httpweb.New("/prefix", nil)
 	web.RegisterRequests(router)
 	response := serveRequest(t, router, http.MethodGet, "/prefix/api/web-config", nil)
-	var result webConfig
+	var result httpweb.Config
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
@@ -114,9 +116,9 @@ func TestWebPostActionsRejectCrossOriginAndReadonlyBeforeExecution(t *testing.T)
 	config.Config.Authentication.Method = ""
 	t.Cleanup(func() { config.Config = previous })
 	calls := 0
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{URLPrefix: "/prefix"}
-	api.registerSingleAPIRequest(router, "begin-maintenance/:host/:port/:owner/:reason", func(params Params, r Responder) {
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{URLPrefix: "/prefix"}
+	api.registerSingleAPIRequest(router, "begin-maintenance/:host/:port/:owner/:reason", func(params transport.Params, r transport.Responder) {
 		calls++
 		r.JSON(200, params["reason"])
 	}, false)
@@ -158,9 +160,9 @@ func TestRaftLeadershipTransferRejectsCrossSiteBeforeExecution(t *testing.T) {
 	config.Config.Server.ReadOnly = false
 	t.Cleanup(func() { config.Config = previous })
 	calls := 0
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{}
-	api.registerAPIMethod(router, http.MethodPost, "raft/leadership/transfer", func(_ Params, r Responder) {
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{}
+	api.registerAPIMethod(router, http.MethodPost, "raft/leadership/transfer", func(_ transport.Params, r transport.Responder) {
 		calls++
 		r.JSON(http.StatusOK, "transferred")
 	}, true)

@@ -21,14 +21,17 @@ import (
 	"fmt"
 
 	"github.com/openark/orchestrator/internal/golib/log"
-	"github.com/openark/orchestrator/internal/inst"
+	instaudit "github.com/openark/orchestrator/internal/inst/audit"
+	instrelocation "github.com/openark/orchestrator/internal/inst/change/relocation"
+	instreplication "github.com/openark/orchestrator/internal/inst/change/replication"
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 )
 
-func SyncReplicaRelayLogs(instance, otherInstance *inst.Instance) (*inst.Instance, error) {
+func SyncReplicaRelayLogs(instance, otherInstance *instmodel.Instance) (*instmodel.Instance, error) {
 	var err error
 	var found bool
-	var nextCoordinates *inst.BinlogCoordinates
+	var nextCoordinates *instmodel.BinlogCoordinates
 	var content string
 	onResponse := func(contentBytes []byte) {
 		json.Unmarshal(contentBytes, &content)
@@ -43,7 +46,7 @@ func SyncReplicaRelayLogs(instance, otherInstance *inst.Instance) (*inst.Instanc
 	}
 
 	log.Debugf("SyncReplicaRelayLogs: correlating coordinates of %+v on %+v", instance.Key, otherInstance.Key)
-	_, _, nextCoordinates, found, err = inst.CorrelateRelaylogCoordinates(instance, nil, otherInstance)
+	_, _, nextCoordinates, found, err = instrelocation.CorrelateRelaylogCoordinates(instance, nil, otherInstance)
 	if err != nil {
 		goto Cleanup
 	}
@@ -63,7 +66,7 @@ func SyncReplicaRelayLogs(instance, otherInstance *inst.Instance) (*inst.Instanc
 	}
 	log.Debugf("SyncReplicaRelayLogs: applied content (%d bytes)", len(content))
 
-	instance, err = inst.ChangeMasterTo(&instance.Key, &otherInstance.MasterKey, &otherInstance.ExecBinlogCoordinates, false, modeldomain.GTIDHintNeutral)
+	instance, err = instreplication.ChangeMasterTo(&instance.Key, &otherInstance.MasterKey, &otherInstance.ExecBinlogCoordinates, false, modeldomain.GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -73,7 +76,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	inst.AuditOperation("align-via-relaylogs", &instance.Key, fmt.Sprintf("aligned %+v by relaylogs from %+v", instance.Key, otherInstance.Key))
+	instaudit.AuditOperation("align-via-relaylogs", &instance.Key, fmt.Sprintf("aligned %+v by relaylogs from %+v", instance.Key, otherInstance.Key))
 
 	return instance, err
 }

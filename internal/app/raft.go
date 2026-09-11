@@ -7,7 +7,7 @@ import (
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
-	"github.com/openark/orchestrator/internal/logic"
+	"github.com/openark/orchestrator/internal/logic/raftstate"
 	"github.com/openark/orchestrator/internal/process"
 	orcraft "github.com/openark/orchestrator/internal/raft"
 	"github.com/openark/orchestrator/internal/repository"
@@ -18,7 +18,7 @@ func startRaftRuntime() error {
 	if err := repository.InitializeMetadata(context.Background()); err != nil {
 		return fmt.Errorf("open raft backend: %w", err)
 	}
-	if err := orcraft.Setup(logic.NewCommandApplier(), logic.NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
+	if err := orcraft.Setup(raftstate.NewCommandApplier(), raftstate.NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
 		return fmt.Errorf("set up raft runtime: %w", err)
 	}
 	config.LockRaftConfiguration()

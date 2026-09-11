@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	httpobservability "github.com/openark/orchestrator/internal/http/observability"
+	"github.com/openark/orchestrator/internal/http/transport"
+	httpweb "github.com/openark/orchestrator/internal/http/web"
 	"github.com/openark/orchestrator/internal/models/vo"
 	"github.com/openark/orchestrator/internal/observability"
 )
@@ -19,8 +22,8 @@ func TestObservabilityRoutesStayLocalAndAuthenticated(t *testing.T) {
 	}
 	runtime.Install()
 	t.Cleanup(func() { _ = runtime.Close() })
-	router := mustRouter(t, RouterOptions{EnableGzip: true, Authentication: AuthenticationOptions{Method: "basic", Username: "monitor", Password: "test"}})
-	RegisterObservability(router, "/orchestrator")
+	router := mustRouter(t, transport.RouterOptions{EnableGzip: true, Authentication: transport.AuthenticationOptions{Method: "basic", Username: "monitor", Password: "test"}})
+	httpobservability.Register(router, "/orchestrator")
 	server := httptest.NewServer(router)
 	defer server.Close()
 	req := httptest.NewRequest("GET", server.URL+"/orchestrator/metrics", nil)
@@ -73,10 +76,10 @@ func TestObservabilityRoutesStayLocalAndAuthenticated(t *testing.T) {
 }
 
 func TestRemovedMetricsEndpoints(t *testing.T) {
-	router := mustRouter(t, RouterOptions{})
-	api := HttpAPI{}
+	router := mustRouter(t, transport.RouterOptions{})
+	api := Routes{}
 	api.RegisterRequests(router)
-	web := HttpWeb{}
+	web := httpweb.New("", nil)
 	web.RegisterDebug(router)
 	for _, path := range []string{"/debug/metrics", "/api/discovery-metrics-raw/60", "/api/discovery-metrics-aggregated/60", "/api/discovery-queue-metrics-raw/DEFAULT/60", "/api/backend-query-metrics-aggregated/60", "/api/write-buffer-metrics-raw/60"} {
 		if w := serveRequest(t, router, http.MethodGet, path, nil); w.Code != 404 {

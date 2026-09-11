@@ -31,7 +31,9 @@ import (
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
-	"github.com/openark/orchestrator/internal/inst"
+	instaudit "github.com/openark/orchestrator/internal/inst/audit"
+	instdiscovery "github.com/openark/orchestrator/internal/inst/discovery"
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 	"github.com/openark/orchestrator/internal/repository/metadata"
 )
@@ -74,11 +76,11 @@ func httpPost(url string, bodyType string, content string) (resp *http.Response,
 
 // AuditAgentOperation creates and writes a new audit entry by given agent
 func auditAgentOperation(auditType string, agent *modeldomain.Agent, message string) error {
-	instanceKey := &inst.InstanceKey{}
+	instanceKey := &instmodel.InstanceKey{}
 	if agent != nil {
-		instanceKey = &inst.InstanceKey{Hostname: agent.Hostname, Port: int(agent.MySQLPort)}
+		instanceKey = &instmodel.InstanceKey{Hostname: agent.Hostname, Port: int(agent.MySQLPort)}
 	}
-	return inst.AuditOperation(auditType, instanceKey, message)
+	return instaudit.AuditOperation(auditType, instanceKey, message)
 }
 
 // readResponse returns the body of an HTTP response
@@ -121,8 +123,8 @@ func DiscoverAgentInstance(hostname string, port int) error {
 		return err
 	}
 
-	instanceKey := &inst.InstanceKey{Hostname: agent.Hostname, Port: int(agent.MySQLPort)}
-	instance, err := inst.ReadTopologyInstance(instanceKey)
+	instanceKey := &instmodel.InstanceKey{Hostname: agent.Hostname, Port: int(agent.MySQLPort)}
+	instance, err := instdiscovery.ReadTopologyInstance(instanceKey)
 	if err != nil {
 		log.Errorf("Failed to read topology for %v. err=%+v", instanceKey, err)
 		return err
@@ -727,7 +729,7 @@ func ReadSeedStates(seedId int64) ([]modeldomain.SeedOperationState, error) {
 	return res, err
 }
 
-func RelaylogContentsTail(hostname string, startCoordinates *inst.BinlogCoordinates, onResponse *func([]byte)) (modeldomain.Agent, error) {
+func RelaylogContentsTail(hostname string, startCoordinates *instmodel.BinlogCoordinates, onResponse *func([]byte)) (modeldomain.Agent, error) {
 	return executeAgentCommand(hostname, fmt.Sprintf("mysql-relaylog-contents-tail/%s/%d", startCoordinates.LogFile, startCoordinates.LogPos), onResponse)
 }
 
