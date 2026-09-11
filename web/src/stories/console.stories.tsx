@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { http, HttpResponse, delay } from "msw";
-import { expect, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 import { Application } from "../app/app";
-import { cluster, lagging, webConfig } from "./fixtures";
+import { cluster, lagging, primary, webConfig } from "./fixtures";
+import { recoverySettingsHandlers } from "./recovery-fixtures";
 
 const meta = {
   title: "控制台/集群总览",
@@ -19,6 +20,35 @@ export const Healthy: Story = {
       await within(canvasElement).findByRole("link", {
         name: "订单数据库",
       }),
+    ).toBeVisible();
+  },
+};
+export const TopologyDetail: Story = {
+  name: "拓扑详情",
+  parameters: {
+    route: `/cluster/${encodeURIComponent(primary.ClusterName)}`,
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText("订单数据库"),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(canvasElement.querySelectorAll(".database-node")).toHaveLength(3),
+    );
+  },
+};
+export const RecoveryConfiguration: Story = {
+  name: "恢复策略与 Hook",
+  parameters: {
+    route: "/recovery-settings",
+    msw: { handlers: recoverySettingsHandlers },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText("恢复策略与 Hook"),
+    ).toBeVisible();
+    await expect(
+      within(canvasElement).getByText("23 项策略 · 9 个 Hook 阶段"),
     ).toBeVisible();
   },
 };

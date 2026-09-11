@@ -19,6 +19,8 @@
 | `docs/verification/` | 不发布到 Wiki 的 Issue 验证证据 |
 | `script/`、`tests/` | 兼容构建脚本与测试集合 |
 
+[包职责指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Package-Guide)逐项说明当前所有 Go package 目录、依赖方向，以及新增模型、持久化、拓扑、恢复和 HTTP 代码的落点。仓库内的 [package 边界](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/architecture/package-boundaries.md)与 [repository/模型边界](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/architecture/repository-models.md)记录由测试强制执行的架构依据。
+
 ## 常用命令
 
 ```sh
@@ -31,6 +33,7 @@ make test-integration
 make test-docs
 make test-web
 make storybook
+make docs-screenshots
 ```
 
 `make binary` 先构建 Web、同步到 embed 源，再生成 `bin/orchestrator`；`make build` 还会生成 `bin/orch`。直接执行 `go build` 不会准备可用于生产的 Web 资源。
@@ -45,6 +48,7 @@ make storybook
 | `make test-docs` | Wiki 配对、导航、链接、Schema 索引和文档边界 |
 | `make test-web` | 前端类型检查与单元测试 |
 | `make test-storybook` | 隔离组件渲染与交互 |
+| `make docs-screenshots` | 重建 Storybook，并重新生成确定性的 README 截图 |
 | `pnpm --dir web test:e2e` | 基于测试 fixture 的浏览器行为 |
 | `make build` | 内嵌 Web 的服务端和独立客户端构建 |
 
@@ -58,7 +62,7 @@ make storybook
 ORCH_API_TARGET=http://127.0.0.1:3000 make web-dev
 ```
 
-使用 `make storybook` 查看隔离 UI 状态。Storybook/浏览器 fixture 只能证明界面行为，不能证明真实 MySQL 拓扑、生产 Raft、认证代理或恢复流程。
+使用 `make storybook` 查看隔离 UI 状态。README 展示的界面变化时，应先更新或增加 Storybook story，再运行 `make docs-screenshots`；Playwright 会把经过审查的截图写到 `docs/assets/screenshots/`。Storybook/浏览器 fixture 只能证明界面行为，不能证明真实 MySQL 拓扑、生产 Raft、认证代理或恢复流程。
 
 ## 文档工作流
 
@@ -66,4 +70,4 @@ ORCH_API_TARGET=http://127.0.0.1:3000 make web-dev
 
 贡献应同步运行契约与升级文档。交付报告需要区分构建成功、自动化测试、打包、Release 发布、部署和真实环境验收，不能相互替代。
 
-仓库不再在 `docs/wiki/` 之外维护第二套叙述性文档树。可长期维护的机器可读契约与责任方放在一起（`conf/`、`internal/`、`tools/orch-cli`、`resources/` 和 `docs/schema/`）；历史叙述由 Git 历史保留。
+Wiki 是用户、运维和贡献者指南的维护入口。长期架构决策、机器可读契约、生成截图和 Issue 验证记录分别跟随责任方保存在 `docs/architecture/`、`docs/schema/`、`docs/assets/` 与 `docs/verification/`；历史叙述由 Git 历史保留。

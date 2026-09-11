@@ -2,7 +2,7 @@
 
 **English** · [中文](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Reference) · [Wiki home](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-The bilingual Wiki is the complete maintained documentation set. Repository links below point to executable contracts or source artifacts, not to a second prose documentation tree.
+The bilingual Wiki is the maintained entry point for user, operator, and contributor guides. Repository links below point to executable contracts, architecture decisions, generated assets, or issue-specific evidence rather than a competing guide set.
 
 ## Documentation map
 
@@ -11,15 +11,16 @@ The bilingual Wiki is the complete maintained documentation set. Repository link
 - [Configuration](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration): Raft identity, backends, discovery, recovery policy, KV, logging, and removed settings.
 - [Raft operations](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Raft-Operations): cluster formation, membership, replacement, quorum, health, and backup boundaries.
 - [orch CLI](https://github.com/SisyphusSQ/orchestrator/wiki/EN-orch-CLI), [Web console](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Web-Console), and [HTTP API](https://github.com/SisyphusSQ/orchestrator/wiki/EN-HTTP-API): supported management interfaces and failure semantics.
-- [Failure recovery](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Failure-Recovery) and [Recovery settings](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Recovery-Configuration): analysis, 23 page-managed policies, nine hook phases, candidate selection, and acceptance.
+- [Failure recovery](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Failure-Recovery), [planned switchover](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Planned-Switchover), and [Recovery settings](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Recovery-Configuration): analysis, candidate selection, controlled primary moves, 23 page-managed policies, nine hook phases, and acceptance.
 - [Observability](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Observability) and [Security](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Security): node-local telemetry, authentication, TLS, credentials, and privilege boundaries.
-- [Upgrading](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Upgrading) and [Development](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Development): breaking-change ledger, rollback, source layout, build, test, and publication workflows.
+- [Upgrading](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Upgrading), [Development](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Development), and the [package guide](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Package-Guide): breaking-change ledger, rollback, source layout, package ownership, build, test, and publication workflows.
 
 ## Executable and machine-readable contracts
 
 - Configuration samples: [`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf); complete fields and validation: [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go).
 - Metadata schema: [`docs/schema/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/schema), including executable MySQL DDL, compatibility, and migration guidance.
-- HTTP route registration: [`internal/http/api.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/api.go); CLI catalog: [`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json).
+- HTTP route registration: [`internal/http/routes.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/routes.go); CLI catalog: [`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json).
+- Architecture decisions: [`docs/architecture/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/architecture); generated documentation screenshots: [`docs/assets/screenshots/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/assets/screenshots).
 - Web source and browser tests: [`web/`](https://github.com/SisyphusSQ/orchestrator/tree/main/web).
 - Metrics, dashboards, and alerts: [`resources/metrics/`](https://github.com/SisyphusSQ/orchestrator/tree/main/resources/metrics).
 - Build and validation entry points: [`Makefile`](https://github.com/SisyphusSQ/orchestrator/blob/main/Makefile), [`script/`](https://github.com/SisyphusSQ/orchestrator/tree/main/script), and [`tests/`](https://github.com/SisyphusSQ/orchestrator/tree/main/tests).

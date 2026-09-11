@@ -9,7 +9,8 @@ Current user, operator, and developer documentation is maintained bilingually in
 | Path / 路径 | Responsibility / 职责 |
 | --- | --- |
 | [`wiki/`](wiki/README.md) | Reviewable bilingual Wiki source and publication manifest / 可审查的双语 Wiki 源文件及发布清单 |
-| [`architecture/`](architecture/repository-models.md) | Internal dependency boundaries and model ownership / 内部依赖边界与模型归属 |
+| [`architecture/`](architecture/package-boundaries.md) | Internal dependency boundaries, package ownership, and model layers / 内部依赖边界、package 归属与模型分层 |
+| [`assets/screenshots/`](assets/screenshots/cluster-overview.png) | Deterministic screenshots generated from current Storybook fixtures / 从当前 Storybook fixture 确定性生成的截图 |
 | [`schema/`](schema/README.md) | Executable metadata schema, compatibility matrix, and migration guide / 可执行元数据库 Schema、兼容矩阵及迁移指南 |
 | [`verification/`](verification/README.md) | Issue-specific validation records not published as user documentation / 不作为用户文档发布的 Issue 验证记录 |
 
@@ -24,9 +25,11 @@ Project history, removed documentation, and superseded behavior remain available
 - Run `make test-docs` during development. It checks links, the Wiki manifest and bilingual pairing, maintained directory boundaries, and the absence of legacy top-level pages.
 - Publish a clean committed revision with `script/publish-wiki`. The script updates only managed pages and does not force-push.
 - Keep one-off acceptance evidence under `docs/verification/`; keep executable schema contracts under `docs/schema/`.
+- Update the matching Storybook fixture first, then run `make docs-screenshots` when README screenshots change.
 
 - 行为变化时同时更新 `EN-*.md` 与 `ZH-*.md`。
 - 保持 `docs/wiki/managed-pages.txt`、`Home.md`、`_Sidebar.md` 与发布页面集合一致。
 - 开发阶段运行 `make test-docs`，检查链接、Wiki 清单、双语配对、受维护目录边界和遗留顶层页面回归。
 - 使用 `script/publish-wiki` 发布干净且已提交的 revision；脚本只更新受管页面且不 force-push。
 - 一次性验收证据放入 `docs/verification/`，可执行 Schema 契约放入 `docs/schema/`。
+- README 截图变化时先更新对应 Storybook fixture，再运行 `make docs-screenshots`。

@@ -15,3 +15,8 @@ Current runtime / 当前运行形态：
 - Standalone HTTP client `orch` / 独立 HTTP 客户端 `orch`
 - Embedded React + Ant Design console / 内嵌 React + Ant Design 控制台
 - Prometheus metrics and OpenTelemetry traces / Prometheus 指标与 OpenTelemetry traces
+
+Focused guides / 专题指南：
+
+- [Planned switchover](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Planned-Switchover) / [计划切换](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Planned-Switchover)
+- [Package guide](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Package-Guide) / [包职责指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Package-Guide)

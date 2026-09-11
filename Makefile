@@ -106,7 +106,7 @@ else
 	rsync -qa --delete --exclude=.keep web/dist/ web/assets/
 endif
 
-.PHONY: storybook storybook-build test-storybook
+.PHONY: storybook storybook-build test-storybook docs-screenshots
 storybook: ## 启动组件与业务状态预览
 	$(PNPM) --dir web storybook
 
@@ -115,6 +115,9 @@ storybook-build: ## 构建可独立部署的 Storybook 静态站点
 
 test-storybook: ## 浏览器验证全部 Storybook 场景与交互
 	$(PNPM) --dir web test:storybook
+
+docs-screenshots: storybook-build ## 从固定 Storybook 场景生成 README/Wiki 截图
+	$(PNPM) --dir web docs:screenshots
 
 web-dev: ## 启动回环地址的 Vite 前端开发服务
 	$(PNPM) --dir web dev

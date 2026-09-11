@@ -64,6 +64,21 @@ Zap text output is `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`; update parsers. 
 
 Built-in ZooKeeper publishing and `ZkAddress` are removed. Migrate consumers to Consul or an external recovery hook before upgrade. Consul now uses the official SDK, sends ACL tokens only in `X-Consul-Token`, verifies HTTPS by default, and fails startup on client/TLS construction errors. Configure trusted CAs, server name, and paired mTLS files before replacing a build that relied on skipped verification. Cross-datacenter writes may partially succeed and are not rolled back; timed-out writes are not replayed automatically. Consul settings require restart.
 
+## Deployment cutover checklist
+
+Use this sequence after completing the change-ledger-specific preparation above:
+
+1. Freeze configuration, binaries, service definitions, `orch`, dashboards/rules, and hook versions as one revisioned deployment set. Record checksums and the exact rollback set.
+2. Stop or fence every old discovery/recovery writer that could act on the same topology. Confirm one intended Raft cluster, stable member identities, and the expected node-local metadata backend for each node.
+3. Apply any required stopped-writer metadata migration exactly once per independent backend, then read back its schema marker and table invariants before starting application nodes.
+4. Start or replace one intended member at a time. For every node, read back process health, readiness, Raft identity, advertised address, membership, metadata connectivity, and logs before proceeding.
+5. Confirm a single Leader and quorum, then exercise discovery and representative read-only API/Web paths. Keep business mutations and automated recovery fenced until policy, authentication, proxy, metrics, and hook configuration are read back.
+6. Enable one controlled write path and verify the resulting metadata and Raft state. Enable discovery/recovery only after ownership is unambiguous; never overlap old and new recovery systems.
+7. Switch client/proxy traffic, verify leader-aware routing and real authentication/TLS, then check every node's metrics, traces, logs, dashboards, and alerts.
+8. Hold the rollback window until a representative topology operation, application read/write, and restart or failover rehearsal meet the declared acceptance criteria.
+
+Abort when identity, quorum, schema state, credentials, routing ownership, or write results are ambiguous. A client timeout is not proof of rollback: read back state before repeating a mutation. If the deployment change also includes a MySQL primary move, run it separately with the [planned switchover](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Planned-Switchover) procedure.
+
 ## Rollout and rollback
 
 Do not create multiple Raft clusters from the same logical deployment or allow old and new systems to recover the same topology concurrently. Existing Raft members reuse their state and are not bootstrapped again. Do not assume arbitrary mixed-version membership is safe; use the compatibility boundary documented for the specific revisions.

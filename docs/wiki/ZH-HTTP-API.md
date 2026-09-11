@@ -26,7 +26,7 @@ Content-Type: application/json
 {"id":"node-2","address":"node-2:10008","suffrage":"voter"}
 ```
 
-权威路由注册位于 [`internal/http/api.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/api.go)；[`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) 记录了生成 `orch` 命令的当前映射。
+权威路由注册位于 [`internal/http/routes.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/routes.go)；[`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) 记录了生成 `orch` 命令的当前映射。
 
 ## Transport 契约
 
