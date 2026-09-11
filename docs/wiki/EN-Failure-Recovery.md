@@ -37,7 +37,17 @@ Then use a specific recovery command only after reviewing the current state:
 orch recover --instance failed-primary.example.com:3306
 ```
 
-Planned maintenance should use maintenance/downtime markers and, where appropriate, graceful takeover instead of simulating a crash. A forced failover intentionally discards the current primary and has a larger blast radius.
+Planned maintenance should use maintenance/downtime markers and, where appropriate, graceful takeover instead of simulating a crash. Follow the [planned primary switchover](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Planned-Switchover) runbook for candidate checks, the exact execution sequence, application fencing, readback, and partial-failure handling. A forced failover intentionally discards the current primary and has a larger blast radius.
+
+For a controlled switch to a named direct replica:
+
+```sh
+orch graceful-master-takeover \
+  --cluster production \
+  --destination candidate.example.com:3306
+```
+
+The non-auto command repoints the old primary but leaves its replication stopped. The `graceful-master-takeover-auto` variant can choose a candidate and attempts to start the old primary after repointing; those are additional automation semantics, not merely a shorter command name.
 
 Maintenance suppresses automated actions around an intentional instance operation; downtime changes how known problems are surfaced. Neither changes MySQL state by itself. Recovery acknowledgements close operator attention records but do not repair topology. Anti-flapping blocks, active recovery records, and postponed operations must be inspected before forcing another attempt.
 

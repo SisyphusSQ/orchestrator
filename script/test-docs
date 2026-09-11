@@ -77,11 +77,25 @@ while IFS=$'\t' read -r source target; do
   [[ -n "$source" && -n "$target" ]] || continue
   check_target "$source" "$target"
 done < <(
-  find README.md docs -type f -name '*.md' -print0 |
+  find README.md README.zh-CN.md docs -type f -name '*.md' -print0 |
     while IFS= read -r -d '' file; do
       perl -0777 -ne 's/```.*?```//gs; s/~~~.*?~~~//gs; s/`[^`\n]*`//g; while (/!?\[[^]]*\]\(([^)\n]+)\)/g) { print "$ARGV\t$1\n" }' "$file"
     done
 )
+
+echo "# Validating bilingual README and generated screenshots"
+[[ -f README.md ]] || fail "English README.md is missing"
+[[ -f README.zh-CN.md ]] || fail "Chinese README.zh-CN.md is missing"
+grep -Fq '(README.zh-CN.md)' README.md ||
+  fail "README.md does not link to README.zh-CN.md"
+grep -Fq '(README.md)' README.zh-CN.md ||
+  fail "README.zh-CN.md does not link to README.md"
+for screenshot in cluster-overview.png topology-detail.png recovery-configuration.png; do
+  screenshot_path="docs/assets/screenshots/$screenshot"
+  [[ -f "$screenshot_path" ]] || fail "generated documentation screenshot is missing: $screenshot_path"
+  grep -Fq "($screenshot_path)" README.md || fail "README.md does not use $screenshot_path"
+  grep -Fq "($screenshot_path)" README.zh-CN.md || fail "README.zh-CN.md does not use $screenshot_path"
+done
 
 wiki_dir="docs/wiki"
 manifest="$wiki_dir/managed-pages.txt"
@@ -151,6 +165,23 @@ done
 
 [[ "$manifest_count" -eq "$source_count" ]] ||
   fail "Wiki manifest count $manifest_count does not match managed source count $source_count"
+
+echo "# Validating package guide coverage"
+for package_guide in "$wiki_dir/EN-Package-Guide.md" "$wiki_dir/ZH-Package-Guide.md"; do
+  [[ -f "$package_guide" ]] || {
+    fail "package guide is missing: $package_guide"
+    continue
+  }
+  while IFS= read -r package_dir; do
+    [[ -n "$package_dir" ]] || continue
+    grep -Fq "\`$package_dir\`" "$package_guide" ||
+      fail "$package_guide does not document Go package directory: $package_dir"
+  done < <(
+    git ls-files -- '*.go' |
+      while IFS= read -r go_file; do dirname "$go_file"; done |
+      sort -u
+  )
+done
 
 echo "# Checking documentation boundaries"
 while IFS= read -r legacy_page; do

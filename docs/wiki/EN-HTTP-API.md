@@ -26,7 +26,7 @@ Content-Type: application/json
 {"id":"node-2","address":"node-2:10008","suffrage":"voter"}
 ```
 
-The authoritative route registration is [`internal/http/api.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/api.go). The generated `orch` command catalog in [`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) documents the supported client mapping.
+The authoritative route registration is [`internal/http/routes.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/routes.go). The generated `orch` command catalog in [`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) documents the supported client mapping.
 
 ## Transport contract
 

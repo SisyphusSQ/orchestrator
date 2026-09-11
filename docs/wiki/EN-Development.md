@@ -19,6 +19,8 @@ The repository uses one root Go module for the server and a nested module under 
 | `docs/verification/` | issue-specific evidence excluded from Wiki publication |
 | `script/`, `tests/` | build compatibility scripts and test suites |
 
+The [package guide](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Package-Guide) describes all current Go package directories, their dependency direction, and where new models, persistence, topology, recovery, and HTTP code should go. The checked-in [package boundaries](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/architecture/package-boundaries.md) and [repository/model boundaries](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/architecture/repository-models.md) provide the executable architecture rationale enforced by tests.
+
 ## Common commands
 
 ```sh
@@ -31,6 +33,7 @@ make test-integration
 make test-docs
 make test-web
 make storybook
+make docs-screenshots
 ```
 
 `make binary` builds the Web app, synchronizes its output into the embed source, and builds `bin/orchestrator`. `make build` also builds `bin/orch`. A direct `go build` does not prepare production Web assets.
@@ -45,6 +48,7 @@ make storybook
 | `make test-docs` | Wiki pairing, navigation, links, schema index, and docs boundaries |
 | `make test-web` | frontend type checking and unit tests |
 | `make test-storybook` | isolated component rendering and interactions |
+| `make docs-screenshots` | rebuild Storybook and regenerate deterministic README screenshots |
 | `pnpm --dir web test:e2e` | browser behavior against test fixtures |
 | `make build` | embedded server and standalone client build |
 
@@ -58,7 +62,7 @@ For frontend hot reload:
 ORCH_API_TARGET=http://127.0.0.1:3000 make web-dev
 ```
 
-For isolated UI states, run `make storybook`. Mocked Storybook/browser fixtures prove UI behavior only; they do not prove a real MySQL topology, production Raft, authentication proxy, or recovery.
+For isolated UI states, run `make storybook`. When an interface shown in the README changes, update or add its Storybook story and run `make docs-screenshots`; the Playwright capture writes reviewed assets under `docs/assets/screenshots/`. Mocked Storybook/browser fixtures prove UI behavior only; they do not prove a real MySQL topology, production Raft, authentication proxy, or recovery.
 
 ## Documentation workflow
 
@@ -66,4 +70,4 @@ Edit both `EN-*.md` and `ZH-*.md`, keep `managed-pages.txt` and navigation synch
 
 Contributions should keep runtime contracts and upgrade documentation synchronized. Separate build success, automated tests, packaging, release publication, deployment, and real environment acceptance in delivery reports.
 
-The repository intentionally has no prose documentation tree outside `docs/wiki/`. Durable machine-readable contracts stay next to their owners (`conf/`, `internal/`, `tools/orch-cli`, `resources/`, and `docs/schema/`); historical prose remains available through Git history.
+The Wiki is the maintained home for user, operator, and contributor guides. Durable architecture decisions, machine-readable contracts, generated screenshots, and issue-specific verification stay next to their owners under `docs/architecture/`, `docs/schema/`, `docs/assets/`, and `docs/verification/`; historical prose remains available through Git history.

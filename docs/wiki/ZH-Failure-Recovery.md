@@ -37,7 +37,17 @@ orch topology --cluster production
 orch recover --instance failed-primary.example.com:3306
 ```
 
-计划内维护应使用 maintenance/downtime 标记，并在适用时做 graceful takeover，而不是模拟崩溃。强制故障转移会主动放弃当前主库，影响范围更大。
+计划内维护应使用 maintenance/downtime 标记，并在适用时做 graceful takeover，而不是模拟崩溃。候选检查、真实执行顺序、应用 fencing、回读和部分失败处置见[计划内主库切换](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Planned-Switchover)。强制故障转移会主动放弃当前主库，影响范围更大。
+
+受控切到指定直属副本时执行：
+
+```sh
+orch graceful-master-takeover \
+  --cluster production \
+  --destination candidate.example.com:3306
+```
+
+非 auto 命令会 repoint 旧主库，但保持其复制停止。`graceful-master-takeover-auto` 既可以自动选择候选，也会在 repoint 后尝试启动旧主库复制；这是额外自动化语义，不只是更短的命令名称。
 
 maintenance 用于抑制计划操作期间的自动动作；downtime 改变已知问题的展示方式，两者本身都不会修改 MySQL 状态。恢复确认只关闭运维关注记录，不会修复拓扑。再次强制恢复前，需要检查 anti-flapping 阻塞、活动恢复记录和 postponed 操作。
 

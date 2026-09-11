@@ -64,6 +64,21 @@ Zap 文本格式为 `time<TAB>[LEVEL]<TAB>[caller]<TAB>message`，日志解析�
 
 内建 ZooKeeper 发布与 `ZkAddress` 已删除，升级前必须把消费者迁到 Consul 或外部恢复 hook。Consul 改用官方 SDK，只通过 `X-Consul-Token` 发送 ACL token，默认校验 HTTPS，并在 client/TLS 构造失败时阻止启动。若旧部署依赖跳过校验，替换前必须配置可信 CA、server name 和成对 mTLS 文件。跨机房写入可能部分成功且不会回滚；超时写入不会自动重放。Consul 设置变化后需要重启。
 
+## 部署切换检查单
+
+完成上方各变更台账的专项准备后，按以下顺序切换：
+
+1. 把配置、二进制、服务定义、`orch`、大盘/规则和 hook 版本冻结为一套带 revision 的部署集合，记录 checksum 与准确回退集合。
+2. 停止或 fence 所有可能作用于同一拓扑的旧 discovery/recovery writer。确认只有一个预期 Raft 集群、成员身份稳定，并逐节点核对其独立元数据库。
+3. 需要停写的元数据库迁移对每个独立 backend 只执行一次；启动应用节点前回读 Schema marker 与表结构不变量。
+4. 每次只启动或替换一个预期成员。继续下一节点前，回读当前节点的进程健康、readiness、Raft 身份、advertise 地址、成员关系、元数据库连接和日志。
+5. 确认唯一 Leader 与多数派后，验证 discovery 和代表性只读 API/Web 路径。在回读恢复策略、认证、代理、指标与 hook 配置前，继续 fence 业务写入与自动恢复。
+6. 只开放一条受控写路径，并回读对应元数据和 Raft 状态。责任归属唯一后再启用 discovery/recovery，禁止新旧恢复系统重叠运行。
+7. 切换客户端/代理流量，验证 Leader-aware 路由以及真实认证/TLS，再逐节点检查指标、traces、日志、大盘和告警。
+8. 代表性拓扑操作、应用读写以及重启或故障转移演练满足已声明验收标准后，才能结束回退窗口。
+
+身份、多数派、Schema 状态、凭据、路由归属或写入结果存在歧义时应终止推进。客户端超时不能证明服务端已经回滚，重复写操作前必须回读。如果部署变更还包含 MySQL 主库迁移，应拆成独立步骤并遵循[计划切换](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Planned-Switchover)流程。
+
 ## 发布与回滚
 
 不得从同一逻辑部署建立多个 Raft 集群，也不得让新旧系统同时对同一拓扑执行恢复。现有 Raft 成员复用原状态，不能再次 bootstrap。不要假设任意混合版本成员都安全，应按跨越版本的具体兼容边界执行。

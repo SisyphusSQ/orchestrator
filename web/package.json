@@ -17,6 +17,7 @@
     "storybook": "storybook dev --host 127.0.0.1 --port 6006 --ci --disable-telemetry",
     "build-storybook": "storybook build --disable-telemetry",
     "test:storybook": "playwright test --config playwright.storybook.config.ts",
+    "docs:screenshots": "playwright test --config playwright.docs.config.ts",
     "preview-storybook": "vite preview --config .storybook/vite.config.ts --outDir storybook-static --host 127.0.0.1 --port 6006 --strictPort"
   },
   "dependencies": {

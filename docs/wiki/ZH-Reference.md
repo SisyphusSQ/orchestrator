@@ -2,7 +2,7 @@
 
 [English](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Reference) · **中文** · [Wiki 首页](https://github.com/SisyphusSQ/orchestrator/wiki/Home)
 
-双语 Wiki 是完整的当前维护文档集合。以下仓库链接只指向可执行契约或源码资产，不再维护第二套叙述性文档树。
+双语 Wiki 是用户、运维和贡献者指南的维护入口。以下仓库链接指向可执行契约、架构决策、生成资产或 Issue 验证证据，而不是另一套相互竞争的指南。
 
 ## 文档地图
 
@@ -11,15 +11,16 @@
 - [配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration)：Raft 身份、元数据库、发现、恢复策略、KV、日志和已移除字段。
 - [Raft 运维](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Raft-Operations)：建群、成员变更、节点替换、多数派、健康与备份边界。
 - [orch 命令行](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-orch-CLI)、[Web 控制台](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Web-Console)和 [HTTP API](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-HTTP-API)：受支持的管理入口及失败语义。
-- [故障恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Failure-Recovery)与[恢复配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Recovery-Configuration)：分析、23 项页面策略、9 个 Hook 阶段、候选选择和验收。
+- [故障恢复](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Failure-Recovery)、[计划切换](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Planned-Switchover)与[恢复配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Recovery-Configuration)：分析、候选选择、受控主库迁移、23 项页面策略、9 个 Hook 阶段和验收。
 - [可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)与[安全](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Security)：节点本地遥测、认证、TLS、凭据和权限边界。
-- [升级](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)与[开发](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Development)：不兼容变更台账、回滚、源码布局、构建、测试和发布流程。
+- [升级](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Upgrading)、[开发](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Development)与[包职责指南](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Package-Guide)：不兼容变更台账、回滚、源码布局、package 归属、构建、测试和发布流程。
 
 ## 可执行与机器可读契约
 
 - 配置样例：[`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf)；完整字段与校验：[`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go)。
 - 元数据库 Schema：[`docs/schema/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/schema)，包括可执行 MySQL DDL、兼容性与迁移说明。
-- HTTP 路由注册：[`internal/http/api.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/api.go)；CLI catalog：[`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json)。
+- HTTP 路由注册：[`internal/http/routes.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/routes.go)；CLI catalog：[`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json)。
+- 架构决策：[`docs/architecture/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/architecture)；生成的文档截图：[`docs/assets/screenshots/`](https://github.com/SisyphusSQ/orchestrator/tree/main/docs/assets/screenshots)。
 - Web 源码与浏览器测试：[`web/`](https://github.com/SisyphusSQ/orchestrator/tree/main/web)。
 - 指标、大盘与告警：[`resources/metrics/`](https://github.com/SisyphusSQ/orchestrator/tree/main/resources/metrics)。
 - 构建和验证入口：[`Makefile`](https://github.com/SisyphusSQ/orchestrator/blob/main/Makefile)、[`script/`](https://github.com/SisyphusSQ/orchestrator/tree/main/script)与 [`tests/`](https://github.com/SisyphusSQ/orchestrator/tree/main/tests)。
