@@ -183,6 +183,70 @@ for package_guide in "$wiki_dir/EN-Package-Guide.md" "$wiki_dir/ZH-Package-Guide
   )
 done
 
+echo "# Validating detailed Wiki reference coverage"
+for config_reference in "$wiki_dir/EN-Configuration-Reference.md" "$wiki_dir/ZH-Configuration-Reference.md"; do
+  while IFS= read -r config_domain; do
+    [[ -n "$config_domain" ]] || continue
+    grep -Fq "\`$config_domain\`" "$config_reference" ||
+      fail "$config_reference does not document top-level configuration domain: $config_domain"
+  done < <(
+    sed -n '/^type Configuration struct {/,/^}/p' internal/config/model.go |
+      sed -n 's/.*json:"\([^"]*\)".*/\1/p'
+  )
+done
+
+for recovery_reference in "$wiki_dir/EN-Recovery-Configuration.md" "$wiki_dir/ZH-Recovery-Configuration.md"; do
+  while IFS= read -r policy_field; do
+    [[ -n "$policy_field" ]] || continue
+    grep -Fq "\`$policy_field\`" "$recovery_reference" ||
+      fail "$recovery_reference does not document recovery policy field: $policy_field"
+  done < <(
+    sed -n '/^type RecoveryPolicy struct {/,/^}/p' internal/models/domain/recovery_policy.go |
+      sed -n 's/.*json:"\([^"]*\)".*/\1/p'
+  )
+
+  while IFS= read -r hook_phase; do
+    [[ -n "$hook_phase" ]] || continue
+    grep -Fq "\`$hook_phase\`" "$recovery_reference" ||
+      fail "$recovery_reference does not document recovery hook phase: $hook_phase"
+  done < <(
+    sed -n '/^var RecoveryHookPhases = /,/^}/p' internal/models/domain/recovery_policy.go |
+      grep -Eo '"[a-z_]+"' |
+      tr -d '"'
+  )
+done
+
+for cli_reference in "$wiki_dir/EN-CLI-Reference.md" "$wiki_dir/ZH-CLI-Reference.md"; do
+  while IFS= read -r command_name; do
+    [[ -n "$command_name" ]] || continue
+    grep -Fq "\`$command_name\`" "$cli_reference" ||
+      fail "$cli_reference does not index CLI command: $command_name"
+  done < <(sed -n 's/^[[:space:]]*"name":[[:space:]]*"\([^"]*\)".*/\1/p' tools/orch-cli/internal/cmd/catalog.json)
+done
+
+for web_reference in "$wiki_dir/EN-Web-Console.md" "$wiki_dir/ZH-Web-Console.md"; do
+  while IFS= read -r web_route; do
+    [[ -n "$web_route" ]] || continue
+    grep -Fq "\`$web_route\`" "$web_reference" ||
+      fail "$web_reference does not document Web route: $web_route"
+  done < <(sed -n 's/.*path="\([^"]*\)".*/\1/p' web/src/app/app.tsx | sort -u)
+  for help_route in about home faq keep-calm; do
+    grep -Fq "\`/$help_route\`" "$web_reference" ||
+      fail "$web_reference does not document generated help route: /$help_route"
+  done
+  for screenshot in cluster-overview.png topology-detail.png recovery-configuration.png; do
+    grep -Fq "/$screenshot" "$web_reference" ||
+      fail "$web_reference does not embed documentation screenshot: $screenshot"
+  done
+done
+
+for api_reference in "$wiki_dir/EN-API-Reference.md" "$wiki_dir/ZH-API-Reference.md"; do
+  for route_family in raft/ recovery-policy recovery-hook replication-analysis audit-recovery discover cluster/ relocate move-below-gtid match-replicas begin-maintenance begin-downtime tag/ submit-masters-to-kv-stores; do
+    grep -Fq "$route_family" "$api_reference" ||
+      fail "$api_reference does not document API route family: $route_family"
+  done
+done
+
 echo "# Checking documentation boundaries"
 while IFS= read -r legacy_page; do
   fail "legacy top-level documentation must be migrated to the Wiki or a durable asset directory: $legacy_page"

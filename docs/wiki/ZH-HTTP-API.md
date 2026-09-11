@@ -28,6 +28,8 @@ Content-Type: application/json
 
 权威路由注册位于 [`internal/http/routes.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/routes.go)；[`tools/orch-cli/internal/cmd/catalog.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/tools/orch-cli/internal/cmd/catalog.json) 记录了生成 `orch` 命令的当前映射。
 
+路由族、明确 HTTP method、代理边界和调用验收见 [API 路由参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-API-Reference)。
+
 ## Transport 契约
 
 Gin v1.12.0 被隔离在项目自有的 `Params`、`Responder`、`Principal`、`Handler` 与 `Router` 契约后，业务 handler 不依赖 `gin.Context`。标准 listener 与可选 Agent listener 共用 adapter，但保留不同的路由和暴露边界。

@@ -36,6 +36,8 @@ Configure `topology.mysql.user` and its password or credentials file on every no
 
 Use the checked-in MySQL and SQLite samples under [`conf/`](https://github.com/SisyphusSQ/orchestrator/tree/main/conf). The complete field definition is in [`internal/config/model.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/model.go); defaults and validation remain in [`internal/config/config.go`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/config/config.go).
 
+See [Configuration reference](https://github.com/SisyphusSQ/orchestrator/wiki/EN-Configuration-Reference) for field defaults, risks, and restart boundaries.
+
 ## Backend lifecycle and schema
 
 MySQL-compatible backends include MySQL 5.7–8.0, TiDB, and OceanBase MySQL mode. Credentials may be supplied directly or through `metadata.mysql.credentialsConfigFile`; restrict both files because environment expansion can still materialize secrets in process memory. `metadata.mysql.maxAllowedPacket` and `topology.mysql.maxAllowedPacket` apply independently to backend and managed-instance connections.

@@ -68,7 +68,7 @@ bin/orch --endpoint http://127.0.0.1:3000 clusters
 bin/orch --endpoint http://127.0.0.1:3000 topology --cluster db.example.com:3306
 ```
 
-打开 `http://127.0.0.1:3000/web/clusters`，并检查同一节点的 `/health/live`、`/health/ready` 和 `/metrics`。进入生产前，请继续阅读[配置](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration)、[Raft 运维](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Raft-Operations)、[安全](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Security)和[可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)。
+打开 `http://127.0.0.1:3000/web/clusters`，并检查同一节点的 `/health/live`、`/health/ready` 和 `/metrics`。进入生产前，请继续阅读[生产部署](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Production-Deployment)、[配置参考](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Configuration-Reference)、[Raft 运维](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Raft-Operations)、[安全](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Security)和[可观测性](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Observability)。
 
 ## 生产前置检查
 

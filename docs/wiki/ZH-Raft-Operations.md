@@ -61,3 +61,5 @@
 Follower 参与拓扑发现，并可转发受支持的请求；只有 Leader 执行恢复和受协调写入。失去多数派时，不得绕过 Raft 直接写元数据库。
 
 三 voter 集群的多数派为二，五 voter 集群的多数派为三。投票节点布局应确保单个预期故障域不能把隔离少数派继续暴露为服务入口。Raft 保护 orchestrator 协调，但应用流量路由和 MySQL fencing 仍是独立控制面。
+
+snapshot、元数据库、单节点替换和多数派丢失的完整流程见[备份、恢复与灾难处理](https://github.com/SisyphusSQ/orchestrator/wiki/ZH-Backup-and-Restore)。一次成功的 `raft-snapshot` 绝不等于完整恢复方案。
