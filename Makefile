@@ -128,7 +128,7 @@ test-web: ## 执行前端类型检查与单元测试
 
 test-build: build ## 验证构建入口
 
-test-unit: check-go ## 运行全部 Go 包单元测试
+test-unit: check-go test-api-contract ## 运行全部 Go 包单元测试
 	$(GO) test $(RACE_FLAG) -mod=readonly ./...
 	$(MAKE) test-cli
 
@@ -250,3 +250,10 @@ cli-platforms: check-go ## 交叉构建 Linux/macOS/Windows 客户端
 .PHONY: test-cli-e2e
 test-cli-e2e: build ## 临时回环 MySQL 主从的 HTTP CLI 验收；需要已有 mysqld
 	ORCH_E2E=1 $(GO) test -mod=readonly -count=1 -v -timeout=5m ./tests/cli
+
+.PHONY: api-contract test-api-contract
+api-contract: ## 从统一契约生成 CLI 目录、Web 类型和接口文档
+	python3 script/generate-api-contract.py
+
+test-api-contract: ## 只读检查统一契约的生成产物
+	python3 script/generate-api-contract.py --check

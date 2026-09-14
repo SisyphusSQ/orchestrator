@@ -68,3 +68,7 @@ Durations accept non-negative values with `s`, `m`, `h`, `d`, or `w`. Owners, re
 ## Failure semantics
 
 Exit code 0 means confirmed success; 1 is an HTTP, authentication, server-business, or rendering failure; 2 is invalid local usage/configuration; 3 means a mutating result is unknown and requires readback; 4 means a batch partially succeeded before a confirmed failure. HTTP 200 with API `Code=ERROR` is still a failure. Cancellation or timeout does not prove the server rolled back an operation.
+
+## Catalog maintenance
+
+`tools/orch-cli/internal/cmd/catalog.json` is generated from the shared API contract. Add or change commands in `internal/http/contract/spec.json` and run `make api-contract`; do not edit generated files directly. The CLI remains an independent Go module with no server dependency.

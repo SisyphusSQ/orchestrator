@@ -66,3 +66,7 @@ Consul KV 继续通过官方 SDK 支持。必须配置 `consul.address`；HTTPS 
 旧平铺配置不再兼容，例如 `RaftNodeID`、`BackendDB`、`MySQLTopologyUser` 和 `ConsulAddress` 必须分别迁移为 `raft.nodeID`、`metadata.type`、`topology.mysql.user` 和 `consul.address`。配置解析是严格模式，未迁移字段会直接报错。已移除字段同样会被拒绝；请用 `topology.replication.lagQuery` 替换 `SlaveLagQuery`，恢复策略的旧字段则按恢复配置文档迁移。
 
 `OAuthClientId`、`OAuthClientSecret`、`OAuthScopes`、`ExpectFailureAnalysisConcensus`、`SeedAcceptableBytesDiff` 和 `MasterFailoverLostInstancesDowntimeMinutes` 没有替代项，应直接删除。OAuth 认证已不受支持；`authentication.method` 只接受 `basic`、`multi`、`proxy`、`token` 或空值。`RaftEnabled`、`ZkAddress`、Graphite 配置、旧内存指标保留配置，以及当前 `Configuration` 定义中不存在的其他字段也必须删除。
+
+## 运行时配置快照
+
+运行中仅允许热更新 `server.readOnly`、`server.web` 和 `osc`。其他字段（包括发现过滤器、周期、认证、连接池和 Raft 参数）发生变化会明确报错，整份候选配置不发布；须重启进程。重载先在私有副本中解析、校验，再原子发布；在途请求/恢复保留已取得的快照，后续请求读取新配置。切换 readOnly 不会撤销已开始的拓扑写入。

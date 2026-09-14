@@ -39,10 +39,10 @@ func WriteRegisterNode(nodeHealth *NodeHealth) (bool, error) {
 		return true, nil
 	}
 
-	if config.Config.IsSQLite() {
-		row.DBBackend = config.Config.Metadata.SQLite.DataFile
+	if config.Current().IsSQLite() {
+		row.DBBackend = config.Current().Metadata.SQLite.DataFile
 	} else {
-		row.DBBackend = fmt.Sprintf("%s:%d", config.Config.Metadata.MySQL.Host, config.Config.Metadata.MySQL.Port)
+		row.DBBackend = fmt.Sprintf("%s:%d", config.Current().Metadata.MySQL.Host, config.Current().Metadata.MySQL.Port)
 	}
 	inserted, err := metadata.InsertNodeHealth(
 		context.Background(), row, reportedSecondsAgo, nodeHealth.ExtraInfo, nodeHealth.Command,
@@ -63,7 +63,7 @@ func ExpireAvailableNodes() {
 
 // ExpireNodesHistory removes old node history rows.
 func ExpireNodesHistory() error {
-	err := metadata.ExpireNodesHistory(context.Background(), config.Config.Topology.Discovery.UnseenForgetHours)
+	err := metadata.ExpireNodesHistory(context.Background(), config.Current().Topology.Discovery.UnseenForgetHours)
 	return log.Errore(err)
 }
 

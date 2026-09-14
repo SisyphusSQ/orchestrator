@@ -45,7 +45,7 @@ var SeededAgents = make(chan *modeldomain.Agent)
 var httpClient *http.Client
 var httpClientMutex sync.Mutex
 
-// InitHttpClient gets called once, and initializes httpClient according to config.Config
+// InitHttpClient gets called once, and initializes httpClient according to config.Current()
 func InitHttpClient() {
 	httpClientMutex.Lock()
 	defer httpClientMutex.Unlock()
@@ -57,7 +57,7 @@ func InitHttpClient() {
 	httpTimeout := time.Duration(time.Duration(config.AgentHttpTimeoutSeconds) * time.Second)
 	dialer := &net.Dialer{Timeout: httpTimeout}
 	httpTransport := &http.Transport{
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: config.Config.Agents.TLS.SkipVerify},
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: config.Current().Agents.TLS.SkipVerify},
 		DialContext:           dialer.DialContext,
 		ResponseHeaderTimeout: httpTimeout,
 	}
@@ -139,12 +139,12 @@ func DiscoverAgentInstance(hostname string, port int) error {
 
 // ForgetLongUnseenAgents will remove entries of all agents that have long since been last seen.
 func ForgetLongUnseenAgents() error {
-	return metadata.ForgetLongUnseenAgents(context.Background(), config.Config.Agents.UnseenForgetHours)
+	return metadata.ForgetLongUnseenAgents(context.Background(), config.Current().Agents.UnseenForgetHours)
 }
 
 // ReadOutdatedAgentsHosts returns agents that need to be updated
 func ReadOutdatedAgentsHosts() ([]string, error) {
-	res, err := metadata.ReadOutdatedAgentHostnames(context.Background(), config.Config.Agents.PollMinutes)
+	res, err := metadata.ReadOutdatedAgentHostnames(context.Background(), config.Current().Agents.PollMinutes)
 	if err != nil {
 		log.Errore(err)
 	}
@@ -205,7 +205,7 @@ func UpdateAgentInfo(hostname string, agent modeldomain.Agent) error {
 // baseAgentUri returns the base URI for accessing an agent
 func baseAgentUri(agentHostname string, agentPort int) string {
 	protocol := "http"
-	if config.Config.Agents.TLS.Enabled {
+	if config.Current().Agents.TLS.Enabled {
 		protocol = "https"
 	}
 	uri := fmt.Sprintf("%s://%s:%d/api", protocol, agentHostname, agentPort)
@@ -510,7 +510,7 @@ func updateSeedStateEntry(seedStateId int64, reason error) error {
 
 // FailStaleSeeds marks as failed seeds where no progress have been seen recently
 func FailStaleSeeds() error {
-	return metadata.FailStaleSeeds(context.Background(), config.Config.Agents.StaleSeedFailMinutes)
+	return metadata.FailStaleSeeds(context.Background(), config.Current().Agents.StaleSeedFailMinutes)
 }
 
 // executeSeed is *the* function for taking a seed. It is a complex operation of testing, preparing, re-testing
@@ -589,8 +589,8 @@ func executeSeed(seedId int64, targetHostname string, sourceHostname string) err
 	recordSeedState(fmt.Sprintf("%s will now receive data in background", targetHostname))
 	ReceiveMySQLSeedData(targetHostname, seedId)
 
-	recordSeedState(fmt.Sprintf("Waiting %d seconds for %s to start listening for incoming data", config.Config.Agents.SeedWaitSecondsBeforeSend, targetHostname))
-	time.Sleep(time.Duration(config.Config.Agents.SeedWaitSecondsBeforeSend) * time.Second)
+	recordSeedState(fmt.Sprintf("Waiting %d seconds for %s to start listening for incoming data", config.Current().Agents.SeedWaitSecondsBeforeSend, targetHostname))
+	time.Sleep(time.Duration(config.Current().Agents.SeedWaitSecondsBeforeSend) * time.Second)
 
 	recordSeedState(fmt.Sprintf("%s will now send data to %s in background", sourceHostname, targetHostname))
 	SendMySQLSeedData(sourceHostname, targetHostname, seedId)

@@ -35,32 +35,32 @@ const (
 
 func newOrchestratorMySQLConfig(database string) *mysql.Config {
 	cfg := mysql.NewConfig()
-	cfg.User = config.Config.Metadata.MySQL.User
-	cfg.Passwd = config.Config.Metadata.MySQL.Password
+	cfg.User = config.Current().Metadata.MySQL.User
+	cfg.Passwd = config.Current().Metadata.MySQL.Password
 	cfg.Net = "tcp"
-	cfg.Addr = net.JoinHostPort(config.Config.Metadata.MySQL.Host, strconv.FormatUint(uint64(config.Config.Metadata.MySQL.Port), 10))
+	cfg.Addr = net.JoinHostPort(config.Current().Metadata.MySQL.Host, strconv.FormatUint(uint64(config.Current().Metadata.MySQL.Port), 10))
 	cfg.DBName = database
-	cfg.Timeout = time.Duration(config.Config.MySQL.ConnectTimeoutSeconds) * time.Second
-	cfg.ReadTimeout = time.Duration(config.Config.Metadata.MySQL.ReadTimeoutSeconds) * time.Second
+	cfg.Timeout = time.Duration(config.Current().MySQL.ConnectTimeoutSeconds) * time.Second
+	cfg.ReadTimeout = time.Duration(config.Current().Metadata.MySQL.ReadTimeoutSeconds) * time.Second
 	cfg.InterpolateParams = true
-	cfg.RejectReadOnly = database != "" && config.Config.Metadata.MySQL.RejectReadOnly
-	if config.Config.Metadata.MySQL.MaxAllowedPacket >= 0 {
-		cfg.MaxAllowedPacket = int(config.Config.Metadata.MySQL.MaxAllowedPacket)
+	cfg.RejectReadOnly = database != "" && config.Current().Metadata.MySQL.RejectReadOnly
+	if config.Current().Metadata.MySQL.MaxAllowedPacket >= 0 {
+		cfg.MaxAllowedPacket = int(config.Current().Metadata.MySQL.MaxAllowedPacket)
 	}
 	return cfg
 }
 
 func newTopologyMySQLConfig(host string, port int, readTimeout time.Duration) *mysql.Config {
 	cfg := mysql.NewConfig()
-	cfg.User = config.Config.Topology.MySQL.User
-	cfg.Passwd = config.Config.Topology.MySQL.Password
+	cfg.User = config.Current().Topology.MySQL.User
+	cfg.Passwd = config.Current().Topology.MySQL.Password
 	cfg.Net = "tcp"
 	cfg.Addr = net.JoinHostPort(host, strconv.Itoa(port))
-	cfg.Timeout = time.Duration(config.Config.MySQL.ConnectTimeoutSeconds) * time.Second
+	cfg.Timeout = time.Duration(config.Current().MySQL.ConnectTimeoutSeconds) * time.Second
 	cfg.ReadTimeout = readTimeout
 	cfg.InterpolateParams = true
-	if config.Config.Topology.MySQL.MaxAllowedPacket >= 0 {
-		cfg.MaxAllowedPacket = int(config.Config.Topology.MySQL.MaxAllowedPacket)
+	if config.Current().Topology.MySQL.MaxAllowedPacket >= 0 {
+		cfg.MaxAllowedPacket = int(config.Current().Topology.MySQL.MaxAllowedPacket)
 	}
 	return cfg
 }
@@ -268,7 +268,7 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 		"orchestrator",
 		func() (*sql.DB, error) {
 			if IsSQLite() {
-				database, err := runtime.openSQLite(config.Config.Metadata.SQLite.DataFile)
+				database, err := runtime.openSQLite(config.Current().Metadata.SQLite.DataFile)
 				if err != nil {
 					return nil, fmt.Errorf("open SQLite backend: %w", err)
 				}
@@ -279,7 +279,7 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 			if err := runtime.ensureMySQLBackendDatabase(ctx); err != nil {
 				return nil, err
 			}
-			cfg := newOrchestratorMySQLConfig(config.Config.Metadata.MySQL.Database)
+			cfg := newOrchestratorMySQLConfig(config.Current().Metadata.MySQL.Database)
 			if err := configureOrchestratorTLS(cfg); err != nil {
 				return nil, err
 			}
@@ -294,7 +294,7 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 			if err := database.PingContext(ctx); err != nil {
 				return fmt.Errorf("ping orchestrator backend: %w", err)
 			}
-			if config.Config.Metadata.Schema.SkipUpdate {
+			if config.Current().Metadata.Schema.SkipUpdate {
 				return nil
 			}
 			if err := initOrchestratorDBContext(ctx, database); err != nil {
@@ -308,17 +308,17 @@ func (runtime *databaseRuntime) openBackend(ctx context.Context) (*sql.DB, error
 	}
 	if !cached {
 		if IsSQLite() {
-			log.Debugf("Connected to orchestrator backend: sqlite on %v", config.Config.Metadata.SQLite.DataFile)
+			log.Debugf("Connected to orchestrator backend: sqlite on %v", config.Current().Metadata.SQLite.DataFile)
 		} else {
 			log.Debugf("Connected to orchestrator backend: mysql on %s:%d/%s",
-				config.Config.Metadata.MySQL.Host,
-				config.Config.Metadata.MySQL.Port,
-				config.Config.Metadata.MySQL.Database)
-			maxIdleConns := max(config.Config.Metadata.MySQL.MaxPoolConnections*25/100, 10)
+				config.Current().Metadata.MySQL.Host,
+				config.Current().Metadata.MySQL.Port,
+				config.Current().Metadata.MySQL.Database)
+			maxIdleConns := max(config.Current().Metadata.MySQL.MaxPoolConnections*25/100, 10)
 			log.Infof("Connecting to backend %s:%d: maxConnections: %d, maxIdleConns: %d",
-				config.Config.Metadata.MySQL.Host,
-				config.Config.Metadata.MySQL.Port,
-				config.Config.Metadata.MySQL.MaxPoolConnections,
+				config.Current().Metadata.MySQL.Host,
+				config.Current().Metadata.MySQL.Port,
+				config.Current().Metadata.MySQL.MaxPoolConnections,
 				maxIdleConns)
 		}
 	}
@@ -368,7 +368,7 @@ func (runtime *databaseRuntime) ensureMySQLBackendDatabase(ctx context.Context) 
 	if err := database.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping orchestrator bootstrap connection: %w", err)
 	}
-	databaseName := "`" + strings.ReplaceAll(config.Config.Metadata.MySQL.Database, "`", "``") + "`"
+	databaseName := "`" + strings.ReplaceAll(config.Current().Metadata.MySQL.Database, "`", "``") + "`"
 	query := fmt.Sprintf(
 		"create database if not exists %s default character set utf8mb4 collate utf8mb4_general_ci",
 		databaseName,
@@ -380,13 +380,13 @@ func (runtime *databaseRuntime) ensureMySQLBackendDatabase(ctx context.Context) 
 }
 
 func configureBackendPool(database *sql.DB) {
-	if config.Config.Metadata.MySQL.MaxPoolConnections > 0 {
-		database.SetMaxOpenConns(config.Config.Metadata.MySQL.MaxPoolConnections)
+	if config.Current().Metadata.MySQL.MaxPoolConnections > 0 {
+		database.SetMaxOpenConns(config.Current().Metadata.MySQL.MaxPoolConnections)
 	}
-	if config.Config.MySQL.ConnectionLifetimeSeconds > 0 {
-		database.SetConnMaxLifetime(time.Duration(config.Config.MySQL.ConnectionLifetimeSeconds) * time.Second)
+	if config.Current().MySQL.ConnectionLifetimeSeconds > 0 {
+		database.SetConnMaxLifetime(time.Duration(config.Current().MySQL.ConnectionLifetimeSeconds) * time.Second)
 	}
-	maxIdleConns := max(config.Config.Metadata.MySQL.MaxPoolConnections*25/100, 10)
+	maxIdleConns := max(config.Current().Metadata.MySQL.MaxPoolConnections*25/100, 10)
 	database.SetMaxIdleConns(maxIdleConns)
 }
 
@@ -401,8 +401,8 @@ func (runtime *databaseRuntime) openTopologyPool(
 		if err != nil {
 			return nil, err
 		}
-		if config.Config.MySQL.ConnectionLifetimeSeconds > 0 {
-			database.SetConnMaxLifetime(time.Duration(config.Config.MySQL.ConnectionLifetimeSeconds) * time.Second)
+		if config.Current().MySQL.ConnectionLifetimeSeconds > 0 {
+			database.SetConnMaxLifetime(time.Duration(config.Current().MySQL.ConnectionLifetimeSeconds) * time.Second)
 		}
 		database.SetMaxOpenConns(config.MySQLTopologyMaxPoolConnections)
 		database.SetMaxIdleConns(config.MySQLTopologyMaxPoolConnections)

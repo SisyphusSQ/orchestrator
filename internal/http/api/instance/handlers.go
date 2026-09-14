@@ -12,13 +12,13 @@ import (
 	"github.com/openark/orchestrator/internal/http/request"
 	"github.com/openark/orchestrator/internal/http/transport"
 	instreplication "github.com/openark/orchestrator/internal/inst/change/replication"
-	instdiscovery "github.com/openark/orchestrator/internal/inst/discovery"
 	instinventory "github.com/openark/orchestrator/internal/inst/inventory"
+	"github.com/openark/orchestrator/internal/logic/discovery"
 	orcraft "github.com/openark/orchestrator/internal/raft"
 )
 
 // API contains instance discovery and lifecycle handlers.
-type API struct{}
+type API struct{ Manual *discovery.Manual }
 
 // Replicas lists all replicas of an instance.
 func (api *API) Replicas(params transport.Params, r transport.Responder, req *http.Request) {
@@ -27,7 +27,7 @@ func (api *API) Replicas(params transport.Params, r transport.Responder, req *ht
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	replicas, err := instinventory.ReadReplicaInstances(&instanceKey)
+	replicas, err := instinventory.ReadReplicaInstancesContext(req.Context(), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
@@ -61,7 +61,14 @@ func (api *API) AsyncDiscover(params transport.Params, r transport.Responder, re
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	go api.Discover(params, r, req, user)
+	if api.Manual == nil {
+		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: "Asynchronous discovery is unavailable"})
+		return
+	}
+	if err := api.Manual.Submit(instanceKey); err != nil {
+		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error()})
+		return
+	}
 	presenter.Respond(r, &contract.Response{Code: contract.OK, Message: fmt.Sprintf("Asynchronous discovery initiated for Instance: %+v", instanceKey)})
 }
 
@@ -76,13 +83,9 @@ func (api *API) Discover(params transport.Params, r transport.Responder, req *ht
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instdiscovery.ReadTopologyInstanceContext(req.Context(), &instanceKey)
+	instance, err := discovery.DiscoverAndPublish(req.Context(), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
-		return
-	}
-	if _, err := orcraft.PublishCommand("discover", instanceKey); err != nil {
-		httpraft.Respond(r, err, "", nil)
 		return
 	}
 	if instance != nil {
@@ -153,7 +156,7 @@ func (api *API) Resolve(params transport.Params, r transport.Responder, req *htt
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	if conn, err := net.Dial("tcp", instanceKey.DisplayString()); err == nil {
+	if conn, err := (&net.Dialer{}).DialContext(req.Context(), "tcp", instanceKey.DisplayString()); err == nil {
 		_ = conn.Close()
 	} else {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})

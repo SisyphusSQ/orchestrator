@@ -121,33 +121,35 @@ func buildConsulTestServerWithObserver(t *testing.T, testOps []consulTestServerO
 func configureConsulTest(t *testing.T, address string, crossDataCenterDistribution bool) {
 	t.Helper()
 
-	original := *config.Config
+	original := *config.Current()
 	t.Cleanup(func() {
-		*config.Config = original
+		config.TestUpdate(func(cfg *config.Configuration) { *cfg = original })
 	})
 
-	config.Config.Consul.Address = address
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Address = address })
 	if strings.HasPrefix(address, "https://") {
-		config.Config.Consul.Scheme = "https"
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Scheme = "https" })
 	} else {
-		config.Config.Consul.Scheme = "http"
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Scheme = "http" })
 	}
-	config.Config.Consul.ACLToken = ""
-	config.Config.Consul.Datacenter = ""
-	config.Config.Consul.TLS.CAFile = ""
-	config.Config.Consul.TLS.CAPath = ""
-	config.Config.Consul.TLS.CertFile = ""
-	config.Config.Consul.TLS.PrivateKeyFile = ""
-	config.Config.Consul.TLS.ServerName = ""
-	config.Config.Consul.TLS.SkipVerify = false
-	config.Config.Consul.HTTPTimeoutSeconds = 60
-	config.Config.Consul.KV.CrossDataCenterDistribution = crossDataCenterDistribution
-	config.Config.Consul.KV.Provider = "consul"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.ACLToken = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Datacenter = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.CAFile = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.CAPath = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.CertFile = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.PrivateKeyFile = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.ServerName = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.SkipVerify = false })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.HTTPTimeoutSeconds = 60 })
+	config.TestUpdate(func(cfg *config.Configuration) {
+		cfg.Consul.KV.CrossDataCenterDistribution = crossDataCenterDistribution
+	})
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.Provider = "consul" })
 }
 
 func mustConsulClient(t *testing.T) *consulapi.Client {
 	t.Helper()
-	client, err := newConsulClientFromConfig(config.Config)
+	client, err := newConsulClientFromConfig(config.Current())
 	if err != nil {
 		t.Fatalf("create consul client: %v", err)
 	}
@@ -481,7 +483,7 @@ func TestConsulTokenSentAsHeaderNotQuery(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.Consul.ACLToken = "secret-token"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.ACLToken = "secret-token" })
 
 	store := newTestConsulStore(t)
 	if err := store.PutKeyValue("mysql/master/cluster", "mysql.example.com:3306"); err != nil {
@@ -519,7 +521,7 @@ func TestConsulJSONTokenWinsOverEnv(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.Consul.ACLToken = "json-token"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.ACLToken = "json-token" })
 
 	store := newTestConsulStore(t)
 	if err := store.PutKeyValue("mysql/master/cluster", "v"); err != nil {
@@ -573,7 +575,7 @@ func TestConsulDatacenterQueryParameter(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, false)
-	config.Config.Consul.Datacenter = "east"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Datacenter = "east" })
 
 	store := newTestConsulStore(t)
 	if err := store.PutKeyValue("mysql/master/cluster", "v"); err != nil {

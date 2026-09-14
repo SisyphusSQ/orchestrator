@@ -711,3 +711,28 @@ func TestProjectContainsNoTypeAliases(t *testing.T) {
 		t.Fatalf("type aliases are not allowed; depend on the canonical model directly:\n%s", strings.Join(violations, "\n"))
 	}
 }
+
+// Configuration mutation belongs to the config publisher; test fixtures may use
+// TestUpdate but production packages must not bypass reload validation.
+func TestProductionDoesNotUseConfigurationTestPublisher(t *testing.T) {
+	for _, path := range productionGoFiles(t) {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if selector.Sel.Name == "TestUpdate" {
+				t.Errorf("test configuration publisher used by production file %s", path)
+			}
+			return true
+		})
+	}
+}

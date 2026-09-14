@@ -56,3 +56,9 @@ orch --endpoint https://orchestrator.example topology --cluster production
 ```
 
 成功标准不是 discover 返回 200，而是实例身份唯一、复制边正确、集群/别名/位置/候选规则符合预期，并且下一个轮询周期后仍保持一致。持续关注发现队列、最后成功检查时间、问题实例、解析缓存和 filter log。发现状态过旧时先停止变更与自动恢复，再处理根因。
+
+## 手动发现的生命周期
+
+同步 `discover` 的连接及拓扑 SQL 使用请求 Context；请求取消会终止尚未提交的读取。`async-discover` 接收后只响应一次，由 HTTP 服务持有任务，客户端断连不取消任务，也不会再写原 HTTP 响应。并发上限沿用 `topology.discovery.maxConcurrency`，达到上限明确拒绝；单任务读取期限为连接超时加 discovery read timeout（至少 1 秒）。任务完成/失败通过 `async-discover` 审计与错误日志记录。服务退出会取消并等待任务。
+
+任务开始 Raft 发布后沿用 Raft 自身的结果语义；超时或断连不代表已提交动作回滚，不应自动重放。异步接收成功不等于实例已发现，需回读实例状态和审计。

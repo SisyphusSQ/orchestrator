@@ -11,15 +11,17 @@ import (
 )
 
 func TestAuditOperationReturnsFileWriteFailure(t *testing.T) {
-	previousAuditLogFile := config.Config.Audit.LogFile
-	previousAuditToBackendDB := config.Config.Audit.ToBackend
+	previousAuditLogFile := config.Current().Audit.LogFile
+	previousAuditToBackendDB := config.Current().Audit.ToBackend
 	previousSyslogWriter := syslogWriter
-	config.Config.Audit.LogFile = filepath.Join(t.TempDir(), "missing", "audit.log")
-	config.Config.Audit.ToBackend = false
+	config.TestUpdate(func(cfg *config.Configuration) {
+		cfg.Audit.LogFile = filepath.Join(t.TempDir(), "missing", "audit.log")
+	})
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.ToBackend = false })
 	syslogWriter = nil
 	t.Cleanup(func() {
-		config.Config.Audit.LogFile = previousAuditLogFile
-		config.Config.Audit.ToBackend = previousAuditToBackendDB
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.LogFile = previousAuditLogFile })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.ToBackend = previousAuditToBackendDB })
 		syslogWriter = previousSyslogWriter
 	})
 
@@ -29,15 +31,15 @@ func TestAuditOperationReturnsFileWriteFailure(t *testing.T) {
 }
 
 func TestAuditOperationWaitsForSyslogWrite(t *testing.T) {
-	previousAuditLogFile := config.Config.Audit.LogFile
-	previousAuditToBackendDB := config.Config.Audit.ToBackend
+	previousAuditLogFile := config.Current().Audit.LogFile
+	previousAuditToBackendDB := config.Current().Audit.ToBackend
 	sink := newBlockingAuditSyslogSink()
 	previousSyslogWriter := swapAuditSyslogWriter(sink)
-	config.Config.Audit.LogFile = ""
-	config.Config.Audit.ToBackend = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.LogFile = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.ToBackend = false })
 	t.Cleanup(func() {
-		config.Config.Audit.LogFile = previousAuditLogFile
-		config.Config.Audit.ToBackend = previousAuditToBackendDB
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.LogFile = previousAuditLogFile })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.ToBackend = previousAuditToBackendDB })
 		swapAuditSyslogWriter(previousSyslogWriter)
 	})
 
@@ -69,15 +71,15 @@ func TestAuditOperationWaitsForSyslogWrite(t *testing.T) {
 }
 
 func TestAuditOperationReturnsSyslogWriteFailure(t *testing.T) {
-	previousAuditLogFile := config.Config.Audit.LogFile
-	previousAuditToBackendDB := config.Config.Audit.ToBackend
+	previousAuditLogFile := config.Current().Audit.LogFile
+	previousAuditToBackendDB := config.Current().Audit.ToBackend
 	expectedErr := errors.New("syslog unavailable")
 	previousSyslogWriter := swapAuditSyslogWriter(errorAuditSyslogSink{err: expectedErr})
-	config.Config.Audit.LogFile = ""
-	config.Config.Audit.ToBackend = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.LogFile = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.ToBackend = false })
 	t.Cleanup(func() {
-		config.Config.Audit.LogFile = previousAuditLogFile
-		config.Config.Audit.ToBackend = previousAuditToBackendDB
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.LogFile = previousAuditLogFile })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Audit.ToBackend = previousAuditToBackendDB })
 		swapAuditSyslogWriter(previousSyslogWriter)
 	})
 

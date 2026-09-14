@@ -17,6 +17,7 @@
 package regroup
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -52,19 +53,19 @@ func getReplicasForSorting(masterKey *instmodel.InstanceKey, includeBinlogServer
 	return replicas, err
 }
 
-func sortedReplicas(replicas []*instmodel.Instance, stopReplicationMethod instreplication.StopReplicationMethod) []*instmodel.Instance {
-	return sortedReplicasDataCenterHint(replicas, stopReplicationMethod, "")
+func sortedReplicas(ctx context.Context, replicas []*instmodel.Instance, stopReplicationMethod instreplication.StopReplicationMethod) []*instmodel.Instance {
+	return sortedReplicasDataCenterHint(ctx, replicas, stopReplicationMethod, "")
 }
 
 // sortedReplicas returns the list of replicas of some master, sorted by exec coordinates
 // (most up-to-date replica first).
 // This function assumes given `replicas` argument is indeed a list of instances all replicating
 // from the same master (the result of `getReplicasForSorting()` is appropriate)
-func sortedReplicasDataCenterHint(replicas []*instmodel.Instance, stopReplicationMethod instreplication.StopReplicationMethod, dataCenterHint string) []*instmodel.Instance {
+func sortedReplicasDataCenterHint(ctx context.Context, replicas []*instmodel.Instance, stopReplicationMethod instreplication.StopReplicationMethod, dataCenterHint string) []*instmodel.Instance {
 	if len(replicas) <= 1 {
 		return replicas
 	}
-	replicas = instreplication.StopReplicas(replicas, stopReplicationMethod, time.Duration(config.Config.Topology.Operations.BulkWaitTimeoutSeconds)*time.Second)
+	replicas = instreplication.StopReplicas(ctx, replicas, stopReplicationMethod, time.Duration(config.Current().Topology.Operations.BulkWaitTimeoutSeconds)*time.Second)
 	replicas = instmodel.RemoveNilInstances(replicas)
 
 	sortInstancesDataCenterHint(replicas, dataCenterHint)
@@ -77,11 +78,11 @@ func sortedReplicasDataCenterHint(replicas []*instmodel.Instance, stopReplicatio
 
 // GetSortedReplicas reads list of replicas of a given master, and returns them sorted by exec coordinates
 // (most up-to-date replica first).
-func GetSortedReplicas(masterKey *instmodel.InstanceKey, stopReplicationMethod instreplication.StopReplicationMethod) (replicas []*instmodel.Instance, err error) {
+func GetSortedReplicas(ctx context.Context, masterKey *instmodel.InstanceKey, stopReplicationMethod instreplication.StopReplicationMethod) (replicas []*instmodel.Instance, err error) {
 	if replicas, err = getReplicasForSorting(masterKey, false); err != nil {
 		return replicas, err
 	}
-	replicas = sortedReplicas(replicas, stopReplicationMethod)
+	replicas = sortedReplicas(ctx, replicas, stopReplicationMethod)
 	if len(replicas) == 0 {
 		return replicas, fmt.Errorf("no replicas found for %+v", *masterKey)
 	}
@@ -137,8 +138,8 @@ func isValidAsCandidateMasterInBinlogServerTopology(replica *instmodel.Instance)
 	return true
 }
 
-func IsBannedFromBeingCandidateReplica(replica *instmodel.Instance) bool {
-	return isBannedFromBeingCandidateReplica(replica, recoverypolicy.Current(replica.ClusterName).PromotionIgnoreHostnameFilters)
+func IsBannedFromBeingCandidateReplica(ctx context.Context, replica *instmodel.Instance) bool {
+	return isBannedFromBeingCandidateReplica(replica, recoverypolicy.FromContext(ctx, replica.ClusterName).PromotionIgnoreHostnameFilters)
 }
 
 func isBannedFromBeingCandidateReplica(replica *instmodel.Instance, promotionIgnoreHostnameFilters []string) bool {
@@ -191,7 +192,7 @@ func getPriorityBinlogFormatForCandidate(replicas []*instmodel.Instance) (priori
 }
 
 // chooseCandidateReplica
-func chooseCandidateReplica(replicas []*instmodel.Instance) (candidateReplica *instmodel.Instance, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas []*instmodel.Instance, err error) {
+func chooseCandidateReplica(ctx context.Context, replicas []*instmodel.Instance) (candidateReplica *instmodel.Instance, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas []*instmodel.Instance, err error) {
 	if len(replicas) == 0 {
 		return candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, fmt.Errorf("no replicas found given in chooseCandidateReplica")
 	}
@@ -200,7 +201,7 @@ func chooseCandidateReplica(replicas []*instmodel.Instance) (candidateReplica *i
 
 	for _, replica := range replicas {
 		if isGenerallyValidAsCandidateReplica(replica) &&
-			!IsBannedFromBeingCandidateReplica(replica) &&
+			!IsBannedFromBeingCandidateReplica(ctx, replica) &&
 			!instmodel.IsSmallerMajorVersion(priorityMajorVersion, replica.MajorVersionString()) &&
 			!instmodel.IsSmallerBinlogFormat(priorityBinlogFormat, replica.Binlog_format) {
 			// this is the one
@@ -212,7 +213,7 @@ func chooseCandidateReplica(replicas []*instmodel.Instance) (candidateReplica *i
 		// Unable to find a candidate that will master others.
 		// Instead, pick a (single) replica which is not banned.
 		for _, replica := range replicas {
-			if !IsBannedFromBeingCandidateReplica(replica) {
+			if !IsBannedFromBeingCandidateReplica(ctx, replica) {
 				// this is the one
 				candidateReplica = replica
 				break
@@ -225,7 +226,7 @@ func chooseCandidateReplica(replicas []*instmodel.Instance) (candidateReplica *i
 	}
 	replicas = instmodel.RemoveInstance(replicas, &candidateReplica.Key)
 	for _, replica := range replicas {
-		if canReplicate, err := replica.CanReplicateFromEx(candidateReplica, "chooseCandidateReplica()"); !canReplicate {
+		if canReplicate, err := replica.CanReplicateFromEx(ctx, candidateReplica, "chooseCandidateReplica()"); !canReplicate {
 			// lost due to inability to replicate
 			cannotReplicateReplicas = append(cannotReplicateReplicas, replica)
 			if err != nil {
@@ -244,7 +245,7 @@ func chooseCandidateReplica(replicas []*instmodel.Instance) (candidateReplica *i
 }
 
 // GetCandidateReplica chooses the best replica to promote given a (possibly dead) master
-func GetCandidateReplica(masterKey *instmodel.InstanceKey, forRematchPurposes bool) (*instmodel.Instance, []*instmodel.Instance, []*instmodel.Instance, []*instmodel.Instance, []*instmodel.Instance, error) {
+func GetCandidateReplica(ctx context.Context, masterKey *instmodel.InstanceKey, forRematchPurposes bool) (*instmodel.Instance, []*instmodel.Instance, []*instmodel.Instance, []*instmodel.Instance, []*instmodel.Instance, error) {
 	var candidateReplica *instmodel.Instance
 	aheadReplicas := []*instmodel.Instance{}
 	equalReplicas := []*instmodel.Instance{}
@@ -263,11 +264,11 @@ func GetCandidateReplica(masterKey *instmodel.InstanceKey, forRematchPurposes bo
 	if forRematchPurposes {
 		stopReplicationMethod = instreplication.StopReplicationNice
 	}
-	replicas = sortedReplicasDataCenterHint(replicas, stopReplicationMethod, dataCenterHint)
+	replicas = sortedReplicasDataCenterHint(ctx, replicas, stopReplicationMethod, dataCenterHint)
 	if len(replicas) == 0 {
 		return candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, fmt.Errorf("no replicas found for %+v", *masterKey)
 	}
-	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err = chooseCandidateReplica(replicas)
+	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err = chooseCandidateReplica(ctx, replicas)
 	if err != nil {
 		return candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err
 	}
@@ -282,12 +283,12 @@ func GetCandidateReplica(masterKey *instmodel.InstanceKey, forRematchPurposes bo
 }
 
 // GetCandidateReplicaOfBinlogServerTopology chooses the best replica to promote given a (possibly dead) master
-func GetCandidateReplicaOfBinlogServerTopology(masterKey *instmodel.InstanceKey) (candidateReplica *instmodel.Instance, err error) {
+func GetCandidateReplicaOfBinlogServerTopology(ctx context.Context, masterKey *instmodel.InstanceKey) (candidateReplica *instmodel.Instance, err error) {
 	replicas, err := getReplicasForSorting(masterKey, true)
 	if err != nil {
 		return candidateReplica, err
 	}
-	replicas = sortedReplicas(replicas, instreplication.NoStopReplication)
+	replicas = sortedReplicas(ctx, replicas, instreplication.NoStopReplication)
 	if len(replicas) == 0 {
 		return candidateReplica, fmt.Errorf("no replicas found for %+v", *masterKey)
 	}
@@ -295,7 +296,7 @@ func GetCandidateReplicaOfBinlogServerTopology(masterKey *instmodel.InstanceKey)
 		if candidateReplica != nil {
 			break
 		}
-		if isValidAsCandidateMasterInBinlogServerTopology(replica) && !IsBannedFromBeingCandidateReplica(replica) {
+		if isValidAsCandidateMasterInBinlogServerTopology(replica) && !IsBannedFromBeingCandidateReplica(ctx, replica) {
 			// this is the one
 			candidateReplica = replica
 		}
@@ -309,7 +310,7 @@ func GetCandidateReplicaOfBinlogServerTopology(masterKey *instmodel.InstanceKey)
 }
 
 // RegroupReplicasPseudoGTID will choose a candidate replica of a given instance, and take its siblings using pseudo-gtid
-func RegroupReplicasPseudoGTID(
+func RegroupReplicasPseudoGTID(ctx context.Context,
 	masterKey *instmodel.InstanceKey,
 	returnReplicaEvenOnFailureToRegroup bool,
 	onCandidateReplicaChosen func(*instmodel.Instance),
@@ -323,7 +324,7 @@ func RegroupReplicasPseudoGTID(
 	candidateReplica *instmodel.Instance,
 	err error,
 ) {
-	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err = GetCandidateReplica(masterKey, true)
+	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err = GetCandidateReplica(ctx, masterKey, true)
 	if err != nil {
 		if !returnReplicaEvenOnFailureToRegroup {
 			candidateReplica = nil
@@ -331,7 +332,7 @@ func RegroupReplicasPseudoGTID(
 		return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, err
 	}
 
-	if config.Config.PseudoGTID.Pattern == "" {
+	if config.Current().PseudoGTID.Pattern == "" {
 		return aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, candidateReplica, fmt.Errorf("PseudoGTIDPattern not configured; cannot use Pseudo-GTID")
 	}
 
@@ -358,7 +359,7 @@ func RegroupReplicasPseudoGTID(
 
 		log.Debugf("RegroupReplicas: multi matching %d later replicas", len(laterReplicas))
 		// As for the laterReplicas, we'll have to apply pseudo GTID
-		laterReplicas, candidateReplica, _, err = instrelocation.MultiMatchBelow(laterReplicas, &candidateReplica.Key, postponedFunctionsContainer)
+		laterReplicas, candidateReplica, _, err = instrelocation.MultiMatchBelow(ctx, laterReplicas, &candidateReplica.Key, postponedFunctionsContainer)
 
 		operatedReplicas := append(equalReplicas, candidateReplica)
 		operatedReplicas = append(operatedReplicas, laterReplicas...)
@@ -368,7 +369,7 @@ func RegroupReplicasPseudoGTID(
 			go func() {
 				defer func() { barrier <- &candidateReplica.Key }()
 				instreplication.ExecuteOnTopology(func() {
-					instreplication.StartReplication(&replica.Key)
+					instreplication.StartReplication(ctx, &replica.Key)
 				})
 			}()
 		}
@@ -408,7 +409,7 @@ func getMostUpToDateActiveBinlogServer(masterKey *instmodel.InstanceKey) (mostAd
 // RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers uses Pseugo-GTID to regroup replicas
 // of given instance. The function also drill in to replicas of binlog servers that are replicating from given instance,
 // and other recursive binlog servers, as long as they're in the same binlog-server-family.
-func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
+func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(ctx context.Context,
 	masterKey *instmodel.InstanceKey,
 	returnReplicaEvenOnFailureToRegroup bool,
 	onCandidateReplicaChosen func(*instmodel.Instance),
@@ -438,7 +439,7 @@ func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
 		log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: most up to date binlog server of %+v: %+v", *masterKey, mostUpToDateBinlogServer.Key)
 
 		// Find the most up to date candidate replica:
-		candidateReplica, _, _, _, _, err := GetCandidateReplica(masterKey, true)
+		candidateReplica, _, _, _, _, err := GetCandidateReplica(ctx, masterKey, true)
 		if err != nil {
 			return log.Errore(err)
 		}
@@ -452,18 +453,18 @@ func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
 		if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateBinlogServer.ExecBinlogCoordinates) {
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: candidate replica %+v coordinates smaller than binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
 			// Need to align under binlog server...
-			candidateReplica, err = instrelocation.Repoint(&candidateReplica.Key, &mostUpToDateBinlogServer.Key, modeldomain.GTIDHintDeny)
+			candidateReplica, err = instrelocation.Repoint(ctx, &candidateReplica.Key, &mostUpToDateBinlogServer.Key, modeldomain.GTIDHintDeny)
 			if err != nil {
 				return log.Errore(err)
 			}
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: repointed candidate replica %+v under binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
-			candidateReplica, err = instreplication.StartReplicationUntilMasterCoordinates(&candidateReplica.Key, &mostUpToDateBinlogServer.ExecBinlogCoordinates)
+			candidateReplica, err = instreplication.StartReplicationUntilMasterCoordinates(ctx, &candidateReplica.Key, &mostUpToDateBinlogServer.ExecBinlogCoordinates)
 			if err != nil {
 				return log.Errore(err)
 			}
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: aligned candidate replica %+v under binlog server %+v", candidateReplica.Key, mostUpToDateBinlogServer.Key)
 			// and move back
-			candidateReplica, err = instrelocation.Repoint(&candidateReplica.Key, masterKey, modeldomain.GTIDHintDeny)
+			candidateReplica, err = instrelocation.Repoint(ctx, &candidateReplica.Key, masterKey, modeldomain.GTIDHintDeny)
 			if err != nil {
 				return log.Errore(err)
 			}
@@ -476,7 +477,7 @@ func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: matching replicas of binlog server %+v below %+v", binlogServer.Key, candidateReplica.Key)
 			// Right now sequentially.
 			// At this point just do what you can, don't return an error
-			instrelocation.MultiMatchReplicas(&binlogServer.Key, &candidateReplica.Key, "")
+			instrelocation.MultiMatchReplicas(ctx, &binlogServer.Key, &candidateReplica.Key, "")
 			log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: done matching replicas of binlog server %+v below %+v", binlogServer.Key, candidateReplica.Key)
 		}
 		log.Debugf("RegroupReplicasIncludingSubReplicasOfBinlogServers: done handling binlog regrouping for %+v; will proceed with normal RegroupReplicas", *masterKey)
@@ -484,11 +485,11 @@ func RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(
 		return nil
 	}()
 	// Proceed to normal regroup:
-	return RegroupReplicasPseudoGTID(masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, postponeAllMatchOperations)
+	return RegroupReplicasPseudoGTID(ctx, masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, postponeAllMatchOperations)
 }
 
 // RegroupReplicasGTID will choose a candidate replica of a given instance, and take its siblings using GTID
-func RegroupReplicasGTID(
+func RegroupReplicasGTID(ctx context.Context,
 	masterKey *instmodel.InstanceKey,
 	returnReplicaEvenOnFailureToRegroup bool,
 	startReplicationOnCandidate bool,
@@ -504,7 +505,7 @@ func RegroupReplicasGTID(
 ) {
 	var emptyReplicas []*instmodel.Instance
 	var unmovedReplicas []*instmodel.Instance
-	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := GetCandidateReplica(masterKey, true)
+	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := GetCandidateReplica(ctx, masterKey, true)
 	if err != nil {
 		if !returnReplicaEvenOnFailureToRegroup {
 			candidateReplica = nil
@@ -527,7 +528,7 @@ func RegroupReplicasGTID(
 	moveGTIDFunc := func() error {
 		log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
 
-		movedReplicas, unmovedReplicas, _, err = instrelocation.MoveReplicasViaGTID(replicasToMove, candidateReplica, postponedFunctionsContainer)
+		movedReplicas, unmovedReplicas, _, err = instrelocation.MoveReplicasViaGTID(ctx, replicasToMove, candidateReplica, postponedFunctionsContainer)
 		unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
 		return log.Errore(err)
 	}
@@ -538,7 +539,7 @@ func RegroupReplicasGTID(
 	}
 
 	if startReplicationOnCandidate {
-		instreplication.StartReplication(&candidateReplica.Key)
+		instreplication.StartReplication(ctx, &candidateReplica.Key)
 	}
 
 	log.Debugf("RegroupReplicasGTID: done")
@@ -548,7 +549,7 @@ func RegroupReplicasGTID(
 
 // RegroupReplicasBinlogServers works on a binlog-servers topology. It picks the most up-to-date BLS and repoints all other
 // BLS below it
-func RegroupReplicasBinlogServers(masterKey *instmodel.InstanceKey, returnReplicaEvenOnFailureToRegroup bool) (repointedBinlogServers []*instmodel.Instance, promotedBinlogServer *instmodel.Instance, err error) {
+func RegroupReplicasBinlogServers(ctx context.Context, masterKey *instmodel.InstanceKey, returnReplicaEvenOnFailureToRegroup bool) (repointedBinlogServers []*instmodel.Instance, promotedBinlogServer *instmodel.Instance, err error) {
 	var binlogServerReplicas []*instmodel.Instance
 	promotedBinlogServer, binlogServerReplicas, err = getMostUpToDateActiveBinlogServer(masterKey)
 
@@ -563,7 +564,7 @@ func RegroupReplicasBinlogServers(masterKey *instmodel.InstanceKey, returnReplic
 		return resultOnError(err)
 	}
 
-	repointedBinlogServers, _, err = instrelocation.RepointTo(binlogServerReplicas, &promotedBinlogServer.Key)
+	repointedBinlogServers, _, err = instrelocation.RepointTo(ctx, binlogServerReplicas, &promotedBinlogServer.Key)
 
 	if err != nil {
 		return resultOnError(err)
@@ -574,7 +575,7 @@ func RegroupReplicasBinlogServers(masterKey *instmodel.InstanceKey, returnReplic
 
 // RegroupReplicas is a "smart" method of promoting one replica over the others ("promoting" it on top of its siblings)
 // This method decides which strategy to use: GTID, Pseudo-GTID, Binlog Servers.
-func RegroupReplicas(masterKey *instmodel.InstanceKey, returnReplicaEvenOnFailureToRegroup bool,
+func RegroupReplicas(ctx context.Context, masterKey *instmodel.InstanceKey, returnReplicaEvenOnFailureToRegroup bool,
 	onCandidateReplicaChosen func(*instmodel.Instance),
 	postponedFunctionsContainer *instrelocation.PostponedFunctionsContainer) (
 
@@ -614,19 +615,19 @@ func RegroupReplicas(masterKey *instmodel.InstanceKey, returnReplicaEvenOnFailur
 	}
 	if allGTID {
 		log.Debugf("RegroupReplicas: using GTID to regroup replicas of %+v", *masterKey)
-		unmovedReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err := RegroupReplicasGTID(masterKey, returnReplicaEvenOnFailureToRegroup, true, onCandidateReplicaChosen, nil, nil)
+		unmovedReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err := RegroupReplicasGTID(ctx, masterKey, returnReplicaEvenOnFailureToRegroup, true, onCandidateReplicaChosen, nil, nil)
 		return unmovedReplicas, emptyReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err
 	}
 	if allBinlogServers {
 		log.Debugf("RegroupReplicas: using binlog servers to regroup replicas of %+v", *masterKey)
-		movedReplicas, candidateReplica, err := RegroupReplicasBinlogServers(masterKey, returnReplicaEvenOnFailureToRegroup)
+		movedReplicas, candidateReplica, err := RegroupReplicasBinlogServers(ctx, masterKey, returnReplicaEvenOnFailureToRegroup)
 		return emptyReplicas, emptyReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err
 	}
 	if allPseudoGTID {
 		log.Debugf("RegroupReplicas: using Pseudo-GTID to regroup replicas of %+v", *masterKey)
-		return RegroupReplicasPseudoGTID(masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
+		return RegroupReplicasPseudoGTID(ctx, masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
 	}
 	// And, as last resort, we do PseudoGTID & binlog servers
 	log.Warningf("RegroupReplicas: unsure what method to invoke for %+v; trying Pseudo-GTID+Binlog Servers", *masterKey)
-	return RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
+	return RegroupReplicasPseudoGTIDIncludingSubReplicasOfBinlogServers(ctx, masterKey, returnReplicaEvenOnFailureToRegroup, onCandidateReplicaChosen, postponedFunctionsContainer, nil)
 }

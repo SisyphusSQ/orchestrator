@@ -51,3 +51,9 @@ Raft Follower 可以把受支持的业务请求代理到 Leader。节点本地�
 使用 TLS、认证和最小化网络暴露，不要把凭据放进 URL。使用 proxy 认证时，边缘代理必须先删除用户提供的身份头，并且只在认证成功后写入可信头。除非集成必须直接使用 API，否则优先使用 `orch`，因为它已经实现业务响应检查和“结果未知”的显式退出码。
 
 API 验收应覆盖代表性读写、两种尾斜杠、HEAD、认证、gzip、mTLS 拒绝、URL prefix、Follower 代理终止，以及部署实际选择的 HTTP/HTTPS/Unix listener。路由单测不能证明真实证书、代理、Raft、MySQL、浏览器或恢复行为。
+
+## 机器可读契约
+
+统一定义位于 [`internal/http/contract/spec.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/contract/spec.json)，包含方法、路径参数、读写属性、响应模型和可选错误分类。`make api-contract` 生成独立 CLI 命令目录、Web 类型/路由元数据及[接口表](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/architecture/api-contract.md)。服务端测试对比实际路由与响应 VO 序列化；Web 操作测试使用生成元数据，不再正则扫描 Go 源码。
+
+历史接口保留各自 HTTP 方法和响应格式；`legacy` 或空 schema 表示动态返回内容，不能据此声称所有历史字段已经类型化。GET 不代表只读。

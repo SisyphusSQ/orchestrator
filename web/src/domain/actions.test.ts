@@ -1,32 +1,9 @@
-import { readFileSync } from "node:fs";
+import endpoints from "../api/endpoints.json";
 import { expect, it } from "vitest";
 import { actions, type Values } from "./actions";
 
 it("every Web operation resolves to a registered Go route with a POST alias", () => {
-  const api = readFileSync("../internal/http/routes.go", "utf8");
-  const aliases = readFileSync("../internal/http/action_guard.go", "utf8");
-  const synonymsBlock = api.match(/var apiSynonyms[\s\S]*?\n\}/)?.[0] || "";
-  const synonyms = new Map(
-    [...synonymsBlock.matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map((match) => [
-      match[1],
-      match[2],
-    ]),
-  );
-  const paths = [
-    ...api.matchAll(/registerAPIRequest(?:NoProxy)?\(m, "([^"]+)"/g),
-  ].flatMap((match) => {
-    const parts = match[1].split("/");
-    return synonyms.has(parts[0])
-      ? [match[1], [synonyms.get(parts[0]), ...parts.slice(1)].join("/")]
-      : [match[1]];
-  });
-  const explicitPosts = [
-    ...api.matchAll(/registerAPIMethod\(m, http\.MethodPost, "([^"]+)"/g),
-  ].map((match) => match[1]);
-  paths.push(...explicitPosts);
-  const allowed = new Set(
-    [...aliases.matchAll(/"([^"]+)":\s*true/g)].map((match) => match[1]),
-  );
+  const paths = endpoints.filter((entry) => entry.method === "POST" && !entry.readOnly).map((entry) => entry.path.slice("/api/".length));
   for (const action of actions) {
     const values: Values = Object.fromEntries(
       action.fields.map((field) => [
@@ -47,10 +24,6 @@ it("every Web operation resolves to a registered Go route with a POST alias", ()
       )
       .split("?")[0]
       .slice(1);
-    expect(
-      allowed.has(path.split("/")[0]) || explicitPosts.includes(path),
-      `${action.id} must have a POST alias`,
-    ).toBe(true);
     expect(
       paths.some((pattern) =>
         new RegExp(

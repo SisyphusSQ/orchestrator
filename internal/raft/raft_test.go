@@ -11,7 +11,7 @@ import (
 )
 
 func TestRuntimeShutdownWhileServingStatusAndCommands(t *testing.T) {
-	previous := config.Config
+	previous := config.Current()
 	cfg := *previous
 	cfg.Raft.NodeID = "runtime-test"
 	cfg.Raft.DataDir = t.TempDir()
@@ -19,8 +19,8 @@ func TestRuntimeShutdownWhileServingStatusAndCommands(t *testing.T) {
 	cfg.Raft.Advertise = cfg.Raft.Bind
 	cfg.Server.HTTPAdvertise = "http://127.0.0.1:3000"
 	cfg.Server.TLS.Enabled = false
-	config.Config = &cfg
-	t.Cleanup(func() { _ = Shutdown(); config.Config = previous })
+	config.TestUpdate(func(target *config.Configuration) { *target = cfg })
+	t.Cleanup(func() { _ = Shutdown(); config.TestUpdate(func(target *config.Configuration) { *target = *previous }) })
 	app := &memoryApp{}
 	if err := Setup(app, app, "localhost"); err != nil {
 		t.Fatal(err)
@@ -93,15 +93,15 @@ func TestEnqueueFatalRaftErrorKeepsFirstErrorWithoutBlocking(t *testing.T) {
 }
 
 func TestComputeLeaderURIHandlesIPv6(t *testing.T) {
-	originalConfig := config.Config
-	testConfig := *config.Config
-	config.Config = &testConfig
-	t.Cleanup(func() { config.Config = originalConfig })
+	originalConfig := config.Current()
+	testConfig := *config.Current()
+	config.TestUpdate(func(target *config.Configuration) { *target = testConfig })
+	t.Cleanup(func() { config.TestUpdate(func(target *config.Configuration) { *target = *originalConfig }) })
 
-	config.Config.Server.HTTPAdvertise = ""
-	config.Config.Server.TLS.Enabled = false
-	config.Config.Raft.Advertise = "[::1]:10008"
-	config.Config.Server.Listen.Address = "[::]:3000"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.HTTPAdvertise = "" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.Enabled = false })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Raft.Advertise = "[::1]:10008" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Listen.Address = "[::]:3000" })
 
 	got, err := computeLeaderURI()
 	if err != nil {
@@ -111,7 +111,7 @@ func TestComputeLeaderURIHandlesIPv6(t *testing.T) {
 		t.Fatalf("computeLeaderURI = %q, want %q", got, want)
 	}
 
-	config.Config.Server.Listen.Address = "3000"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Listen.Address = "3000" })
 	if _, err := computeLeaderURI(); err == nil {
 		t.Fatal("computeLeaderURI accepted a listen address without host:port syntax")
 	}

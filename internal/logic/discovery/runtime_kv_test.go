@@ -10,15 +10,15 @@ import (
 )
 
 func TestContinuousDiscoveryReturnsKVInitError(t *testing.T) {
-	previous := *config.Config
+	previous := *config.Current()
 	t.Cleanup(func() {
-		*config.Config = previous
+		config.TestUpdate(func(cfg *config.Configuration) { *cfg = previous })
 		kv.ResetKVStoresForTest()
 	})
 	kv.ResetKVStoresForTest()
-	config.Config.Consul.Address = "https://127.0.0.1:8501"
-	config.Config.Consul.Scheme = "https"
-	config.Config.Consul.TLS.CAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Address = "https://127.0.0.1:8501" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.Scheme = "https" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.TLS.CAFile = filepath.Join(t.TempDir(), "missing-ca.pem") })
 
 	err := ContinuousDiscovery(t.Context())
 	if err == nil {

@@ -17,14 +17,14 @@ This is the operator index for [`internal/config/model.go`](https://github.com/S
 | --- | --- | --- | --- |
 | `observability` | `tracing.endpoint`, `sampleRatio` | cost and endpoint sensitivity | restart |
 | `logging` | `debug`, `syslog.enabled` | sink startup failure | verify restart |
-| `server` | listen, advertise, prefix, readOnly, TLS, status, web, identity | exposure and authorization | listener/TLS/prefix restart |
+| `server` | listen, advertise, prefix, readOnly, TLS, status, web, identity | exposure and authorization | readOnly/web reload; otherwise restart |
 | `raft` | nodeID, bind, advertise, dataDir, defaultPort | durable identity and quorum | restart; never casually change identity |
 | `mysql` | connect timeout, lifetime | base pool behavior | pool restart |
 | `metadata` | type, sqlite, schema, mysql | metadata consistency/schema | restart; migration is separate |
-| `topology` | mysql, replication, discovery, buffer, compatibility, snapshot, hostname, candidate, classification, pools, analysis, operations | discovery and real MySQL writes | pool/identity restart; verify other reloads |
+| `topology` | mysql, replication, discovery, buffer, compatibility, snapshot, hostname, candidate, classification, pools, analysis, operations | discovery and real MySQL writes | restart all fields |
 | `authentication` | method, basic, proxy, power, configurationAdmins, accessToken | spoofing and privilege | restart and re-accept |
-| `agents` | listener, polling, seed, TLS | extra management listener | listener/TLS restart |
-| `pseudoGTID` | marker, query, chunks, skips | relocation capability/cost | verify on every relevant primary |
+| `agents` | listener, polling, seed, TLS | extra management listener | restart all fields |
+| `pseudoGTID` | marker, query, chunks, skips | relocation capability/cost | restart; verify on every relevant primary |
 | `hooks` | `shellCommand` | external process identity | restart and safe test |
 | `osc` | hostname ignores | OSC candidate filtering | read after reload |
 | `audit` | file, syslog, backend, purge | evidence loss/sensitive output | restart sink verification |
@@ -103,3 +103,7 @@ Audit supports file, syslog, backend, and purge days; sink failures must remain 
 3. Strict-parse, then roll one follower.
 4. Read health, Raft, pools, discovery, authentication, telemetry/audit, and integrations.
 5. Keep recovery disabled until classification, candidates, policy, and Hooks are reconfirmed.
+
+## Runtime configuration snapshots
+
+Only `server.readOnly`, `server.web`, and `osc` support runtime reload. Changes to every other field, including discovery filters/cadence, authentication, pools, and Raft settings, return an error without publishing any part of the candidate; restart the process. Reload parses and validates a private copy before atomic publication. In-flight requests/recoveries retain their captured snapshot; later requests see the new configuration. Changing readOnly does not undo topology writes already started.

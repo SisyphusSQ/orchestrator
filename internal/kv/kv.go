@@ -62,12 +62,12 @@ func initKVStores() error {
 	defer kvMutex.Unlock()
 
 	stores := []KVStore{NewInternalKVStore()}
-	client, err := newConsulClientFromConfig(config.Config)
+	client, err := newConsulClientFromConfig(config.Current())
 	if err != nil {
 		return err
 	}
 	if client != nil {
-		provider, err := config.NormalizeConsulKVStoreProvider(config.Config.Consul.KV.Provider)
+		provider, err := config.NormalizeConsulKVStoreProvider(config.Current().Consul.KV.Provider)
 		if err != nil {
 			return err
 		}

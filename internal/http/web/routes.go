@@ -64,12 +64,12 @@ func (web *API) Bootstrap(_ transport.Params, r transport.Responder, req *http.R
 		UserID:                        authz.UserID(req, user),
 		AuthorizedForAction:           authz.ForAction(req, user),
 		AuthorizedForConfiguration:    authz.ForConfiguration(req, user),
-		AgentsEnabled:                 config.Config.Agents.ServeHTTP,
-		PseudoGTIDEnabled:             config.Config.PseudoGTID.Pattern != "",
-		RemoveTextFromHostnameDisplay: config.Config.Server.Web.RemoveTextFromHostname,
-		WebMessage:                    config.Config.Server.Web.Message,
+		AgentsEnabled:                 config.FromContext(req.Context()).Agents.ServeHTTP,
+		PseudoGTIDEnabled:             config.FromContext(req.Context()).PseudoGTID.Pattern != "",
+		RemoveTextFromHostnameDisplay: config.FromContext(req.Context()).Server.Web.RemoveTextFromHostname,
+		WebMessage:                    config.FromContext(req.Context()).Server.Web.Message,
 		AuditPageSize:                 config.AuditPageSize,
-		AuditEnabled:                  config.Config.Audit.ToBackend,
+		AuditEnabled:                  config.FromContext(req.Context()).Audit.ToBackend,
 	})
 }
 

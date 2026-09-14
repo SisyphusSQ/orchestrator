@@ -33,3 +33,5 @@ Project history, removed documentation, and superseded behavior remain available
 - 使用 `script/publish-wiki` 发布干净且已提交的 revision；脚本只更新受管页面且不 force-push。
 - 一次性验收证据放入 `docs/verification/`，可执行 Schema 契约放入 `docs/schema/`。
 - README 截图变化时先更新对应 Storybook fixture，再运行 `make docs-screenshots`。
+
+- [HTTP 接口契约](architecture/api-contract.md)：由服务端统一定义生成的 API、CLI 与 Web 维护入口。

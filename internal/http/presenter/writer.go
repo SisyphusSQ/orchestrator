@@ -27,7 +27,7 @@ func RespondStatus(r transport.Responder, status int, response *contract.Respons
 // SetupMessagePrefix resolves the configured orchestrator identity once route
 // registration has completed.
 func SetupMessagePrefix() {
-	mode := config.Config.Server.ResponseIdentity.Mode
+	mode := config.Current().Server.ResponseIdentity.Mode
 	if mode == "" || mode == "none" {
 		return
 	}
@@ -55,8 +55,8 @@ func SetupMessagePrefix() {
 			fallbackActive = true
 		}
 	}
-	if (fallbackActive || mode == "custom") && config.Config.Server.ResponseIdentity.Custom != "" {
-		hostname = config.Config.Server.ResponseIdentity.Custom
+	if (fallbackActive || mode == "custom") && config.Current().Server.ResponseIdentity.Custom != "" {
+		hostname = config.Current().Server.ResponseIdentity.Custom
 	}
 	if hostname != "" {
 		messagePrefix = fmt.Sprintf("Orchestrator %+v says: ", hostname)

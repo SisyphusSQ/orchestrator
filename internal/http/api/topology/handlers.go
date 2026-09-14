@@ -1,6 +1,7 @@
 package topology
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -36,7 +37,7 @@ func (api *API) MoveUp(params transport.Params, r transport.Responder, req *http
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.MoveUp(&instanceKey)
+	instance, err := instrelocation.MoveUp(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -57,7 +58,7 @@ func (api *API) MoveUpReplicas(params transport.Params, r transport.Responder, r
 		return
 	}
 
-	replicas, newMaster, errs, err := instrelocation.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, newMaster, errs, err := instrelocation.MoveUpReplicas(context.WithoutCancel(req.Context()), &instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -88,7 +89,7 @@ func (api *API) Repoint(params transport.Params, r transport.Responder, req *htt
 		belowKey = &key
 	}
 
-	instance, err := instrelocation.Repoint(&instanceKey, belowKey, domain.GTIDHintNeutral)
+	instance, err := instrelocation.Repoint(context.WithoutCancel(req.Context()), &instanceKey, belowKey, domain.GTIDHintNeutral)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -117,7 +118,7 @@ func (api *API) RepointReplicas(params transport.Params, r transport.Responder, 
 			return
 		}
 	}
-	replicas, _, err := instrelocation.RepointReplicasTo(&instanceKey, req.URL.Query().Get("pattern"), destination)
+	replicas, _, err := instrelocation.RepointReplicasTo(context.WithoutCancel(req.Context()), &instanceKey, req.URL.Query().Get("pattern"), destination)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -138,7 +139,7 @@ func (api *API) MakeCoMaster(params transport.Params, r transport.Responder, req
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.MakeCoMaster(&instanceKey)
+	instance, err := instrelocation.MakeCoMaster(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -159,7 +160,7 @@ func (api *API) ResetReplication(params transport.Params, r transport.Responder,
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.ResetReplicationOperation(&instanceKey)
+	instance, err := instrelocation.ResetReplicationOperation(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -208,7 +209,7 @@ func (api *API) DetachReplicaMasterHost(params transport.Params, r transport.Res
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.DetachReplicaMasterHost(&instanceKey)
+	instance, err := instrelocation.DetachReplicaMasterHost(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -230,7 +231,7 @@ func (api *API) ReattachReplicaMasterHost(params transport.Params, r transport.R
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.ReattachReplicaMasterHost(&instanceKey)
+	instance, err := instrelocation.ReattachReplicaMasterHost(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -251,7 +252,7 @@ func (api *API) EnableGTID(params transport.Params, r transport.Responder, req *
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.EnableGTID(&instanceKey)
+	instance, err := instrelocation.EnableGTID(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -272,7 +273,7 @@ func (api *API) DisableGTID(params transport.Params, r transport.Responder, req 
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.DisableGTID(&instanceKey)
+	instance, err := instrelocation.DisableGTID(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -309,7 +310,7 @@ func (api *API) ErrantGTIDResetMaster(params transport.Params, r transport.Respo
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instrelocation.ErrantGTIDResetMaster(&instanceKey)
+	instance, err := instrelocation.ErrantGTIDResetMaster(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -356,7 +357,7 @@ func (api *API) MoveBelow(params transport.Params, r transport.Responder, req *h
 		return
 	}
 
-	instance, err := instrelocation.MoveBelow(&instanceKey, &siblingKey)
+	instance, err := instrelocation.MoveBelow(context.WithoutCancel(req.Context()), &instanceKey, &siblingKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -382,7 +383,7 @@ func (api *API) MoveBelowGTID(params transport.Params, r transport.Responder, re
 		return
 	}
 
-	instance, err := instrelocation.MoveBelowGTID(&instanceKey, &belowKey)
+	instance, err := instrelocation.MoveBelowGTID(context.WithoutCancel(req.Context()), &instanceKey, &belowKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -408,7 +409,7 @@ func (api *API) MoveReplicasGTID(params transport.Params, r transport.Responder,
 		return
 	}
 
-	movedReplicas, _, errs, err := instrelocation.MoveReplicasGTID(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	movedReplicas, _, errs, err := instrelocation.MoveReplicasGTID(context.WithoutCancel(req.Context()), &instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -429,7 +430,7 @@ func (api *API) TakeSiblings(params transport.Params, r transport.Responder, req
 		return
 	}
 
-	instance, count, err := instrelocation.TakeSiblings(&instanceKey)
+	instance, count, err := instrelocation.TakeSiblings(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -450,7 +451,7 @@ func (api *API) TakeMaster(params transport.Params, r transport.Responder, req *
 		return
 	}
 
-	instance, err := instrelocation.TakeMaster(&instanceKey, false)
+	instance, err := instrelocation.TakeMaster(context.WithoutCancel(req.Context()), &instanceKey, false)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -477,7 +478,7 @@ func (api *API) RelocateBelow(params transport.Params, r transport.Responder, re
 		return
 	}
 
-	instance, err := instrelocation.RelocateBelow(&instanceKey, &belowKey)
+	instance, err := instrelocation.RelocateBelow(context.WithoutCancel(req.Context()), &instanceKey, &belowKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -503,7 +504,7 @@ func (api *API) RelocateReplicas(params transport.Params, r transport.Responder,
 		return
 	}
 
-	replicas, _, errs, err := instrelocation.RelocateReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	replicas, _, errs, err := instrelocation.RelocateReplicas(context.WithoutCancel(req.Context()), &instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -529,7 +530,7 @@ func (api *API) MoveEquivalent(params transport.Params, r transport.Responder, r
 		return
 	}
 
-	instance, err := instrelocation.MoveEquivalent(&instanceKey, &belowKey)
+	instance, err := instrelocation.MoveEquivalent(context.WithoutCancel(req.Context()), &instanceKey, &belowKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -590,7 +591,7 @@ func (api *API) MatchBelow(params transport.Params, r transport.Responder, req *
 		return
 	}
 
-	instance, matchedCoordinates, err := instrelocation.MatchBelow(&instanceKey, &belowKey, true)
+	instance, matchedCoordinates, err := instrelocation.MatchBelow(context.WithoutCancel(req.Context()), &instanceKey, &belowKey, true)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -611,7 +612,7 @@ func (api *API) MatchUp(params transport.Params, r transport.Responder, req *htt
 		return
 	}
 
-	instance, matchedCoordinates, err := instrelocation.MatchUp(&instanceKey, true)
+	instance, matchedCoordinates, err := instrelocation.MatchUp(context.WithoutCancel(req.Context()), &instanceKey, true)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -637,7 +638,7 @@ func (api *API) MultiMatchReplicas(params transport.Params, r transport.Responde
 		return
 	}
 
-	replicas, newMaster, errs, err := instrelocation.MultiMatchReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	replicas, newMaster, errs, err := instrelocation.MultiMatchReplicas(context.WithoutCancel(req.Context()), &instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -658,7 +659,7 @@ func (api *API) MatchUpReplicas(params transport.Params, r transport.Responder, 
 		return
 	}
 
-	replicas, newMaster, errs, err := instrelocation.MatchUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, newMaster, errs, err := instrelocation.MatchUpReplicas(context.WithoutCancel(req.Context()), &instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -680,7 +681,7 @@ func (api *API) RegroupReplicas(params transport.Params, r transport.Responder, 
 		return
 	}
 
-	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := instregroup.RegroupReplicas(&instanceKey, false, nil, nil)
+	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := instregroup.RegroupReplicas(context.WithoutCancel(req.Context()), &instanceKey, false, nil, nil)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
@@ -704,7 +705,7 @@ func (api *API) RegroupReplicasPseudoGTID(params transport.Params, r transport.R
 		return
 	}
 
-	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := instregroup.RegroupReplicasPseudoGTID(&instanceKey, false, nil, nil, nil)
+	lostReplicas, equalReplicas, aheadReplicas, cannotReplicateReplicas, promotedReplica, err := instregroup.RegroupReplicasPseudoGTID(context.WithoutCancel(req.Context()), &instanceKey, false, nil, nil, nil)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 	if err != nil {
@@ -728,7 +729,7 @@ func (api *API) RegroupReplicasGTID(params transport.Params, r transport.Respond
 		return
 	}
 
-	lostReplicas, movedReplicas, cannotReplicateReplicas, promotedReplica, err := instregroup.RegroupReplicasGTID(&instanceKey, false, true, nil, nil, nil)
+	lostReplicas, movedReplicas, cannotReplicateReplicas, promotedReplica, err := instregroup.RegroupReplicasGTID(context.WithoutCancel(req.Context()), &instanceKey, false, true, nil, nil, nil)
 	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 	if err != nil {
@@ -752,7 +753,7 @@ func (api *API) RegroupReplicasBinlogServers(params transport.Params, r transpor
 		return
 	}
 
-	_, promotedBinlogServer, err := instregroup.RegroupReplicasBinlogServers(&instanceKey, false)
+	_, promotedBinlogServer, err := instregroup.RegroupReplicasBinlogServers(context.WithoutCancel(req.Context()), &instanceKey, false)
 
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
@@ -775,7 +776,7 @@ func (api *API) MakeMaster(params transport.Params, r transport.Responder, req *
 		return
 	}
 
-	instance, err := instrelocation.MakeMaster(&instanceKey)
+	instance, err := instrelocation.MakeMaster(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -797,7 +798,7 @@ func (api *API) MakeLocalMaster(params transport.Params, r transport.Responder, 
 		return
 	}
 
-	instance, err := instrelocation.MakeLocalMaster(&instanceKey)
+	instance, err := instrelocation.MakeLocalMaster(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -818,7 +819,7 @@ func (api *API) SkipQuery(params transport.Params, r transport.Responder, req *h
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instreplication.SkipQuery(&instanceKey)
+	instance, err := instreplication.SkipQuery(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -839,7 +840,7 @@ func (api *API) StartReplication(params transport.Params, r transport.Responder,
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instreplication.StartReplication(&instanceKey)
+	instance, err := instreplication.StartReplication(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -860,7 +861,7 @@ func (api *API) RestartReplication(params transport.Params, r transport.Responde
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instreplication.RestartReplication(&instanceKey)
+	instance, err := instreplication.RestartReplication(context.WithoutCancel(req.Context()), &instanceKey)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -902,7 +903,7 @@ func (api *API) StopReplicationNicely(params transport.Params, r transport.Respo
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	instance, err := instreplication.StopReplicationNicely(&instanceKey, 0)
+	instance, err := instreplication.StopReplicationNicely(context.WithoutCancel(req.Context()), &instanceKey, 0)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -1045,7 +1046,7 @@ func (api *API) CanReplicateFrom(params transport.Params, r transport.Responder,
 		return
 	}
 
-	canReplicate, err := instance.CanReplicateFromEx(belowInstance, "CanReplicateFrom()")
+	canReplicate, err := instance.CanReplicateFromEx(context.WithoutCancel(req.Context()), belowInstance, "CanReplicateFrom()")
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -1077,7 +1078,7 @@ func (api *API) CanReplicateFromGTID(params transport.Params, r transport.Respon
 		return
 	}
 
-	canReplicate, err := instance.CanReplicateFromEx(belowInstance, "CanReplicateFromGTID()")
+	canReplicate, err := instance.CanReplicateFromEx(context.WithoutCancel(req.Context()), belowInstance, "CanReplicateFromGTID()")
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return

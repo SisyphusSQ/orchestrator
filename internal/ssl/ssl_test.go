@@ -60,17 +60,17 @@ func TestNewTLSConfig(t *testing.T) {
 
 func TestStatus(t *testing.T) {
 	var validOUs []string
-	url := fmt.Sprintf("http://example.com%s", config.Config.Server.Status.Endpoint)
+	url := fmt.Sprintf("http://example.com%s", config.Current().Server.Status.Endpoint)
 
 	req, err := nethttp.NewRequest("GET", url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.Config.Server.Status.VerifyOU = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Status.VerifyOU = false })
 	if err := ssl.Verify(req, validOUs); err != nil {
 		t.Errorf("Failed even with verification off")
 	}
-	config.Config.Server.Status.VerifyOU = true
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Status.VerifyOU = true })
 	if err := ssl.Verify(req, validOUs); err == nil {
 		t.Errorf("Did not fail on with bad verification")
 	}

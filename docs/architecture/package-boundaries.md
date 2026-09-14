@@ -101,3 +101,9 @@ inst/{cluster,audit,candidate,maintenance,downtime,tag,pool,equivalence}
 - HTTP 子 package 不得反向导入根 `internal/http`，根目录生产文件仅允许路由组合与 action guard；
 - `logic/recovery` 不反向依赖 `logic/discovery`、`logic/raftstate`、HTTP 或 app；
 - 仓库内不以 type alias 维持旧 package API。
+
+## Runtime consistency / 运行时一致性
+
+Configuration is atomically published and immutable to consumers. Recovery captures effective policy and Hooks in one metadata transaction and carries them through Context. Manual async discovery belongs to the HTTP service lifecycle. The shared [API contract](api-contract.md) generates CLI/Web artifacts and is checked against registered routes.
+
+配置由 config 包原子发布，消费者不得修改快照。恢复使用单次元数据库事务取得策略与 Hook，通过 Context 沿执行链传递。手动异步发现由 HTTP 服务管理生命周期。统一接口定义生成 CLI/Web 产物，并通过实际路由和响应序列化测试校验。

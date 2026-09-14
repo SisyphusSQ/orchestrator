@@ -71,3 +71,9 @@ ORCH_API_TARGET=http://127.0.0.1:3000 make web-dev
 贡献应同步运行契约与升级文档。交付报告需要区分构建成功、自动化测试、打包、Release 发布、部署和真实环境验收，不能相互替代。
 
 Wiki 是用户、运维和贡献者指南的维护入口。长期架构决策、机器可读契约、生成截图和 Issue 验证记录分别跟随责任方保存在 `docs/architecture/`、`docs/schema/`、`docs/assets/` 与 `docs/verification/`；历史叙述由 Git 历史保留。
+
+## 契约与快照维护
+
+修改 API 时先同步 `internal/http/contract/spec.json`，执行 `make api-contract`，并提交生成的 CLI catalog、Web types/endpoints 和接口表。`make test-api-contract` 只读检查漂移，已纳入 `make test-unit`。服务端 VO 和路由仍由实际 Go 实现；共享契约测试发现遗漏和字段类型漂移。
+
+生产配置只通过 `config.Current()` 或 `config.FromContext(ctx)` 读取，不得修改返回值及其 map/slice。发布由 config 包完成；`TestUpdate` 仅供测试，架构测试禁止生产调用。恢复文件按模型、候选、主库/副本恢复、接管、semi-sync、Hook 与存储分工，均保留在 `internal/logic/recovery` 同一包。

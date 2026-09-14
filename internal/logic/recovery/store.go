@@ -29,7 +29,7 @@ import (
 	instresolve "github.com/openark/orchestrator/internal/inst/resolve"
 	modeldomain "github.com/openark/orchestrator/internal/models/domain"
 	"github.com/openark/orchestrator/internal/process"
-	"github.com/openark/orchestrator/internal/raft"
+	orcraft "github.com/openark/orchestrator/internal/raft"
 	"github.com/openark/orchestrator/internal/recoverypolicy"
 	"github.com/openark/orchestrator/internal/repository/metadata"
 	"github.com/openark/orchestrator/internal/util"
@@ -125,8 +125,8 @@ func AttemptFailureDetectionRegistration(analysisEntry *analysis.ReplicationAnal
 
 // ClearActiveFailureDetections clears the "in_active_period" flag for old-enough detections, thereby allowing for
 // further detections on cleared instances.
-func ClearActiveFailureDetections() error {
-	err := metadata.ClearActiveFailureDetections(context.Background(), recoverypolicy.Current("").FailureDetectionPeriodBlockMinutes)
+func ClearActiveFailureDetections(ctx context.Context) error {
+	err := metadata.ClearActiveFailureDetections(ctx, recoverypolicy.FromContext(ctx, "").FailureDetectionPeriodBlockMinutes)
 	return log.Errore(err)
 }
 
@@ -167,7 +167,12 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 }
 
 // AttemptRecoveryRegistration tries to add a recovery entry; if this fails that means recovery is already in place.
-func AttemptRecoveryRegistration(analysisEntry *analysis.ReplicationAnalysis, failIfFailedInstanceInActiveRecovery bool, failIfClusterInActiveRecovery bool) (*TopologyRecovery, error) {
+func AttemptRecoveryRegistration(ctx context.Context, analysisEntry *analysis.ReplicationAnalysis, failIfFailedInstanceInActiveRecovery bool, failIfClusterInActiveRecovery bool) (*TopologyRecovery, error) {
+	snapshot := recoverypolicy.SnapshotFromContext(ctx)
+	if snapshot == nil {
+		return nil, fmt.Errorf("recovery registration requires an execution snapshot")
+	}
+
 	if failIfFailedInstanceInActiveRecovery {
 		// Let's check if this instance has just been promoted recently and is still in active period.
 		// If so, we reject recovery registration to avoid flapping.
@@ -198,8 +203,9 @@ func AttemptRecoveryRegistration(analysisEntry *analysis.ReplicationAnalysis, fa
 		// The fact we only acknowledge a completed recovery solves the possible case of two DBAs simultaneously
 		// trying to recover the same instance at the same time
 	}
-
 	topologyRecovery := NewTopologyRecovery(*analysisEntry)
+	topologyRecovery.PolicyRevision = snapshot.PolicyRevision
+	topologyRecovery.HookAssignmentRevision = snapshot.HookRevision
 
 	topologyRecovery, err := writeTopologyRecovery(topologyRecovery)
 	if err != nil {
@@ -215,8 +221,8 @@ func AttemptRecoveryRegistration(analysisEntry *analysis.ReplicationAnalysis, fa
 
 // ClearActiveRecoveries clears the "in_active_period" flag for old-enough recoveries, thereby allowing for
 // further recoveries on cleared instances.
-func ClearActiveRecoveries() error {
-	err := metadata.ClearActiveRecoveries(context.Background(), recoverypolicy.Current("").RecoveryPeriodBlockSeconds)
+func ClearActiveRecoveries(ctx context.Context) error {
+	err := metadata.ClearActiveRecoveries(ctx, recoverypolicy.FromContext(ctx, "").RecoveryPeriodBlockSeconds)
 	return log.Errore(err)
 }
 
@@ -486,15 +492,15 @@ func ReadTopologyRecoverySteps(recoveryUID string) ([]TopologyRecoveryStep, erro
 
 // ExpireFailureDetectionHistory removes old rows from the topology_failure_detection table
 func ExpireFailureDetectionHistory() error {
-	return metadata.ExpireFailureDetectionHistory(context.Background(), config.Config.Audit.PurgeDays)
+	return metadata.ExpireFailureDetectionHistory(context.Background(), config.Current().Audit.PurgeDays)
 }
 
 // ExpireTopologyRecoveryHistory removes old rows from the topology_failure_detection table
 func ExpireTopologyRecoveryHistory() error {
-	return metadata.ExpireTopologyRecoveryHistory(context.Background(), config.Config.Audit.PurgeDays)
+	return metadata.ExpireTopologyRecoveryHistory(context.Background(), config.Current().Audit.PurgeDays)
 }
 
 // ExpireTopologyRecoveryStepsHistory removes old rows from the topology_failure_detection table
 func ExpireTopologyRecoveryStepsHistory() error {
-	return metadata.ExpireTopologyRecoveryStepsHistory(context.Background(), config.Config.Audit.PurgeDays)
+	return metadata.ExpireTopologyRecoveryStepsHistory(context.Background(), config.Current().Audit.PurgeDays)
 }

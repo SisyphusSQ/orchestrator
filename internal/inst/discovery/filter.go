@@ -70,12 +70,12 @@ func (f *deadInstancesFilter) RegisterInstance(instanceKey *instmodel.InstanceKe
 
 	instance, exists := f.deadInstances[*instanceKey]
 	if exists {
-		delayFactor = config.Config.Topology.Discovery.DeadPollSecondsFactor * instance.DelayFactor
+		delayFactor = config.Current().Topology.Discovery.DeadPollSecondsFactor * instance.DelayFactor
 		previousTry = instance.TryCnt
 	}
 
-	maxDelay := time.Duration(config.Config.Topology.Discovery.DeadPollMaxSeconds) * time.Second
-	currentDelay := time.Duration(delayFactor*float32(config.Config.Topology.Discovery.PollSeconds)) * time.Second
+	maxDelay := time.Duration(config.Current().Topology.Discovery.DeadPollMaxSeconds) * time.Second
+	currentDelay := time.Duration(delayFactor*float32(config.Current().Topology.Discovery.PollSeconds)) * time.Second
 
 	// needed only for the debug log below
 	delayFactorTmp := delayFactor
@@ -94,7 +94,7 @@ func (f *deadInstancesFilter) RegisterInstance(instanceKey *instmodel.InstanceKe
 	}
 	f.deadInstances[*instanceKey] = instance
 
-	if config.Config.Topology.Discovery.DeadLogsEnabled {
+	if config.Current().Topology.Discovery.DeadLogsEnabled {
 		log.Debugf("Dead instance registered %v:%v. Iteration: %v. Current delay factor: %v (next check in %v (on %v))",
 			instanceKey.Hostname, instanceKey.Port, instance.TryCnt, delayFactorTmp, currentDelay, instance.NextCheckTime)
 	}
@@ -107,7 +107,7 @@ func (f *deadInstancesFilter) UnregisterInstance(instanceKey *instmodel.Instance
 
 	instance, exists := f.deadInstances[*instanceKey]
 	if exists {
-		if config.Config.Topology.Discovery.DeadLogsEnabled {
+		if config.Current().Topology.Discovery.DeadLogsEnabled {
 			log.Debugf("Dead instance unregistered: %v:%v after iteration: %v",
 				instanceKey.Hostname, instanceKey.Port, instance.TryCnt)
 		}
@@ -135,7 +135,7 @@ func (f *deadInstancesFilter) InstanceRecheckNeeded(instanceKey *instmodel.Insta
 		return exists, false
 	}
 
-	if config.Config.Topology.Discovery.DeadLogsEnabled {
+	if config.Current().Topology.Discovery.DeadLogsEnabled {
 		log.Debugf("Dead instance recheck: %v:%v. Iteration: %v",
 			instanceKey.Hostname, instanceKey.Port, instance.TryCnt)
 	}

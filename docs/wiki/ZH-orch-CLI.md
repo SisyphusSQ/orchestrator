@@ -68,3 +68,7 @@ orch which-api
 ## 失败语义
 
 退出码 0 表示确认成功；1 表示 HTTP、认证、服务端业务或输出失败；2 表示本地参数/配置错误；3 表示写操作结果未知，必须回读；4 表示批量操作部分成功后出现明确失败。HTTP 200 但 API `Code=ERROR` 仍是失败。取消等待或客户端超时不代表服务端已经回滚。
+
+## 命令目录维护
+
+`tools/orch-cli/internal/cmd/catalog.json` 由共享 API 契约生成。新增或修改命令需更新 `internal/http/contract/spec.json` 的 commands，并运行 `make api-contract`；不要直接改生成文件。客户端仍是独立 Go module，不引入服务端依赖。

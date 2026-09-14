@@ -31,7 +31,7 @@ func LegacyPatchStatements() []string {
 }
 
 func translate(statement string) (string, error) {
-	if config.Config.IsSQLite() {
+	if config.Current().IsSQLite() {
 		statement = ToSQLiteDialect(statement)
 	}
 	return statement, nil
@@ -83,7 +83,7 @@ func DetectLayout(ctx context.Context, database *sql.DB) (Layout, error) {
 	tableNameColumn := "table_name"
 	tableSource := "information_schema.tables"
 	tableFilter := "table_schema = DATABASE()"
-	if config.Config.IsSQLite() {
+	if config.Current().IsSQLite() {
 		tableNameColumn = "name"
 		tableSource = "sqlite_master"
 		tableFilter = "type = 'table'"
@@ -156,7 +156,7 @@ func isDuplicateIndexError(err error) bool {
 	if mysqlError, ok := errors.AsType[*mysql.MySQLError](err); ok {
 		return mysqlError.Number == 1061
 	}
-	return config.Config.IsSQLite() && strings.Contains(strings.ToLower(err.Error()), "already exists")
+	return config.Current().IsSQLite() && strings.Contains(strings.ToLower(err.Error()), "already exists")
 }
 
 func deployStatementsWithPolicyContext(ctx context.Context, database *sql.DB, queries []string, legacyCompatibilityMode bool) error {
@@ -166,7 +166,7 @@ func deployStatementsWithPolicyContext(ctx context.Context, database *sql.DB, qu
 	}
 	defer tx.Rollback()
 	originalSQLMode := ""
-	if config.Config.IsMySQL() && legacyCompatibilityMode {
+	if config.Current().IsMySQL() && legacyCompatibilityMode {
 		if err := tx.QueryRowContext(ctx, `select @@session.sql_mode`).Scan(&originalSQLMode); err != nil {
 			return fmt.Errorf("read SQL mode before orchestrator deployment: %w", err)
 		}
@@ -204,7 +204,7 @@ func deployStatementsWithPolicyContext(ctx context.Context, database *sql.DB, qu
 			}
 		}
 	}
-	if config.Config.IsMySQL() && legacyCompatibilityMode {
+	if config.Current().IsMySQL() && legacyCompatibilityMode {
 		if _, err := tx.ExecContext(ctx, `set session sql_mode=?`, originalSQLMode); err != nil {
 			return fmt.Errorf("restore SQL mode after orchestrator deployment: %w", err)
 		}
@@ -257,7 +257,7 @@ func Initialize(ctx context.Context, database *sql.DB) error {
 	if layout == LayoutCanonical && versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && deploymentErr == nil {
 		return nil
 	}
-	if config.Config.Metadata.Schema.PanicOnDifferentDeployment && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
+	if config.Current().Metadata.Schema.PanicOnDifferentDeployment && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
 		return fmt.Errorf("PanicIfDifferentDatabaseDeploy is set: configured version %s is not present in the database", config.RuntimeCLIFlags.ConfiguredVersion)
 	}
 	switch layout {
@@ -281,7 +281,7 @@ func Initialize(ctx context.Context, database *sql.DB) error {
 	if err := registerDeploymentContext(ctx, database); err != nil {
 		return err
 	}
-	if config.Config.IsSQLite() {
+	if config.Current().IsSQLite() {
 		if _, err := execContext(ctx, database, `PRAGMA journal_mode = WAL`); err != nil {
 			return fmt.Errorf("enable SQLite WAL mode: %w", err)
 		}

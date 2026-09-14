@@ -18,6 +18,7 @@ package equivalence
 
 import (
 	"context"
+
 	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
 	"github.com/openark/orchestrator/internal/config"
@@ -81,7 +82,7 @@ func GetEquivalentBinlogCoordinatesFor(instanceCoordinates *InstanceBinlogCoordi
 // ExpireMasterPositionEquivalence expires old master_position_equivalence
 func ExpireMasterPositionEquivalence() error {
 	writeFunc := func() error {
-		err := metadata.ExpireMasterPositionEquivalence(context.Background(), config.Config.Topology.Discovery.UnseenForgetHours)
+		err := metadata.ExpireMasterPositionEquivalence(context.Background(), config.Current().Topology.Discovery.UnseenForgetHours)
 		return log.Errore(err)
 	}
 	return metadata.ExecuteWrite(context.Background(), writeFunc)

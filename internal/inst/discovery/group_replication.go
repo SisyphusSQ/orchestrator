@@ -1,8 +1,6 @@
 package discovery
 
 import (
-	"context"
-
 	"github.com/openark/orchestrator/internal/golib/log"
 	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	instinventory "github.com/openark/orchestrator/internal/inst/inventory"
@@ -12,7 +10,7 @@ import (
 
 // PopulateGroupReplicationInformation obtains member information for one replication group.
 func PopulateGroupReplicationInformation(instance *instmodel.Instance, db *topology.Client) error {
-	members, rowErrors, supported, err := db.ReadGroupReplicationMembers(context.Background())
+	members, rowErrors, supported, err := db.ReadGroupReplicationMembers(db.Context())
 	if err != nil {
 		return log.Errorf("There was an error trying to check group replication information for instance "+
 			"%+v: %+v", instance.Key, err)

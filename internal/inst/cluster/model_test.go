@@ -29,8 +29,8 @@ import (
 var masterKey = instmodel.InstanceKey{Hostname: "host1", Port: 3306}
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
-	config.Config.Consul.KV.ClusterMasterPrefix = "test/master/"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = "test/master/" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

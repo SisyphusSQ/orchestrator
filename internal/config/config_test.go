@@ -16,7 +16,7 @@ const (
 )
 
 func init() {
-	Config.Topology.Hostname.ResolveMethod = "none"
+	TestUpdate(func(cfg *Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	log.SetLevel(log.ERROR)
 }
 
@@ -239,18 +239,18 @@ func TestRepositoryConfigurationFilesDecode(t *testing.T) {
 }
 
 func TestRunningRaftRejectsIdentityReloadWithoutPartialChanges(t *testing.T) {
-	previous, locked := *Config, raftConfigurationLocked
-	t.Cleanup(func() { *Config = previous; raftConfigurationLocked = locked })
-	Config.Raft.NodeID = "existing-node"
-	Config.Raft.DataDir = t.TempDir()
-	if err := Config.ValidateRaft(); err != nil {
+	previous, locked := *Current(), raftConfigurationLocked
+	t.Cleanup(func() { TestUpdate(func(cfg *Configuration) { *cfg = previous }); raftConfigurationLocked = locked })
+	TestUpdate(func(cfg *Configuration) { cfg.Raft.NodeID = "existing-node" })
+	TestUpdate(func(cfg *Configuration) { cfg.Raft.DataDir = t.TempDir() })
+	if err := PrepareRaft(); err != nil {
 		t.Fatal(err)
 	}
 	LockRaftConfiguration()
 	if _, err := ForceRead(writeConfigFixture(t, `{"raft":{"nodeID":"replacement-node"},"logging":{"debug":false}}`)); err == nil || !strings.Contains(err.Error(), "restart") {
 		t.Fatalf("identity reload: %v", err)
 	}
-	if Config.Raft.NodeID != "existing-node" || Config.Logging.Debug != previous.Logging.Debug {
+	if Current().Raft.NodeID != "existing-node" || Current().Logging.Debug != previous.Logging.Debug {
 		t.Fatal("invalid reload partially changed running configuration")
 	}
 }
@@ -283,12 +283,14 @@ func TestForceReadReturnsMalformedConfigurationError(t *testing.T) {
 }
 
 func TestForceReadDoesNotApplyInvalidConfigurationPartially(t *testing.T) {
-	previous := *Config
-	Config.Logging.Debug = false
-	Config.Metadata.Type = "mysql"
-	Config.Topology.Classification.ClusterNameToAlias = map[string]string{"existing": "cluster"}
+	previous := *Current()
+	TestUpdate(func(cfg *Configuration) { cfg.Logging.Debug = false })
+	TestUpdate(func(cfg *Configuration) { cfg.Metadata.Type = "mysql" })
+	TestUpdate(func(cfg *Configuration) {
+		cfg.Topology.Classification.ClusterNameToAlias = map[string]string{"existing": "cluster"}
+	})
 	t.Cleanup(func() {
-		*Config = previous
+		TestUpdate(func(cfg *Configuration) { *cfg = previous })
 	})
 
 	configPath := writeConfigFixture(t, `{"logging":{"debug":true},"metadata":{"type":"sqlite3","sqlite":{"dataFile":""}},"topology":{"classification":{"clusterNameToAlias":{"new":"cluster"}}}}`)
@@ -296,13 +298,13 @@ func TestForceReadDoesNotApplyInvalidConfigurationPartially(t *testing.T) {
 	if err == nil {
 		t.Fatal("ForceRead() returned nil for invalid sqlite configuration")
 	}
-	if Config.Logging.Debug {
+	if Current().Logging.Debug {
 		t.Fatal("ForceRead() partially applied Debug from an invalid configuration")
 	}
-	if Config.Metadata.Type != "mysql" {
-		t.Fatalf("metadata.type = %q; want previous value %q", Config.Metadata.Type, "mysql")
+	if Current().Metadata.Type != "mysql" {
+		t.Fatalf("metadata.type = %q; want previous value %q", Current().Metadata.Type, "mysql")
 	}
-	if _, found := Config.Topology.Classification.ClusterNameToAlias["new"]; found {
+	if _, found := Current().Topology.Classification.ClusterNameToAlias["new"]; found {
 		t.Fatal("ForceRead() partially applied a map entry from an invalid configuration")
 	}
 }
@@ -321,26 +323,26 @@ func TestRaft(t *testing.T) {
 		c.Raft.Bind = "1.2.3.4:1008"
 		c.Raft.NodeID = "node-1"
 		c.Raft.DataDir = "/path/to/somewhere"
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.Raft.Advertise, c.Raft.Bind)
 	}
 	{
 		c := newConfiguration()
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
 		c.Raft.DataDir = "/path/to/somewhere"
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
 		c := newConfiguration()
 		c.Raft.DataDir = "/path/to/somewhere"
 		c.Raft.NodeID = "node-1"
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.Raft.Advertise, c.Raft.Bind)
 		test.S(t).ExpectEquals(c.Raft.NodeID, "node-1")
@@ -350,7 +352,7 @@ func TestRaft(t *testing.T) {
 		c.Raft.DataDir = "/path/to/somewhere"
 		c.Raft.NodeID = "node-1"
 		c.Raft.Bind = ""
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 	{
@@ -359,7 +361,7 @@ func TestRaft(t *testing.T) {
 		c.Raft.NodeID = "node-1"
 		c.Raft.Bind = "127.0.0.1"
 		c.Raft.DefaultPort = 10008
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.Raft.Bind, "127.0.0.1:10008")
 		test.S(t).ExpectEquals(c.Raft.Advertise, "127.0.0.1:10008")
@@ -371,7 +373,7 @@ func TestRaft(t *testing.T) {
 		c.Raft.Bind = "127.0.0.1:10008"
 		c.Raft.Advertise = "10.0.0.1"
 		c.Raft.DefaultPort = 10008
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(c.Raft.Advertise, "10.0.0.1:10008")
 		test.S(t).ExpectEquals(c.Raft.NodeID, "node-1")
@@ -380,7 +382,7 @@ func TestRaft(t *testing.T) {
 		c := newConfiguration()
 		c.Raft.DataDir = "/path/to/somewhere"
 		c.Raft.NodeID = "node 1"
-		err := c.ValidateRaft()
+		err := c.normalizeAndValidateRaft()
 		test.S(t).ExpectNotNil(err)
 	}
 }

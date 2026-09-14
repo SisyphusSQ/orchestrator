@@ -93,14 +93,14 @@ func init() {
 
 func initializeInstanceStore() {
 	config.WaitForConfigurationToBeLoaded()
-	instanceWriteBuffer = make(chan instanceUpdateObject, config.Config.Topology.WriteBuffer.Size)
+	instanceWriteBuffer = make(chan instanceUpdateObject, config.Current().Topology.WriteBuffer.Size)
 	observability.Gauge("orchestrator_write_buffer_items", "Current pending instance writes", func() int64 { return int64(len(instanceWriteBuffer)) })
-	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.Topology.Discovery.PollSeconds/2)*time.Second, time.Second)
-	forgetInstanceKeys = cache.New(time.Duration(config.Config.Topology.Discovery.PollSeconds*3)*time.Second, time.Second)
+	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Current().Topology.Discovery.PollSeconds/2)*time.Second, time.Second)
+	forgetInstanceKeys = cache.New(time.Duration(config.Current().Topology.Discovery.PollSeconds*3)*time.Second, time.Second)
 	clusterInjectedPseudoGTIDCache = cache.New(time.Minute, time.Second)
 	// spin off instance write buffer flushing
 	go func() {
-		flushTick := time.Tick(time.Duration(config.Config.Topology.WriteBuffer.FlushIntervalMilliseconds) * time.Millisecond)
+		flushTick := time.Tick(time.Duration(config.Current().Topology.WriteBuffer.FlushIntervalMilliseconds) * time.Millisecond)
 		for {
 			// it is time to flush
 			select {

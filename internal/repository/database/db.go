@@ -59,7 +59,7 @@ func OpenDiscoveryContext(ctx context.Context, host string, port int) (*sql.DB, 
 		topologyConnectionDiscovery,
 		host,
 		port,
-		time.Duration(config.Config.Topology.MySQL.DiscoveryReadTimeoutSeconds)*time.Second,
+		time.Duration(config.Current().Topology.MySQL.DiscoveryReadTimeoutSeconds)*time.Second,
 	)
 }
 
@@ -70,7 +70,7 @@ func OpenTopologyContext(ctx context.Context, host string, port int) (*sql.DB, e
 		topologyConnectionOperation,
 		host,
 		port,
-		time.Duration(config.Config.Topology.MySQL.ReadTimeoutSeconds)*time.Second,
+		time.Duration(config.Current().Topology.MySQL.ReadTimeoutSeconds)*time.Second,
 	)
 }
 
@@ -82,11 +82,11 @@ func openTopologyContext(
 	readTimeout time.Duration,
 ) (*sql.DB, error) {
 	cfg := newTopologyMySQLConfig(host, port, readTimeout)
-	if config.Config.Topology.MySQL.UseMutualTLS {
+	if config.Current().Topology.MySQL.UseMutualTLS {
 		if err := configureTopologyTLS(cfg); err != nil {
 			return nil, err
 		}
-	} else if config.Config.Topology.MySQL.UseMixedTLS {
+	} else if config.Current().Topology.MySQL.UseMixedTLS {
 		required, err := requiresTLSContext(ctx, host, port, cfg)
 		if err != nil {
 			return nil, err
@@ -101,7 +101,7 @@ func openTopologyContext(
 }
 
 func IsSQLite() bool {
-	return config.Config.IsSQLite()
+	return config.Current().IsSQLite()
 }
 
 // OpenOrchestrator returns the process-owned orchestrator backend pool.

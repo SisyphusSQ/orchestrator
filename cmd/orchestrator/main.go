@@ -111,26 +111,28 @@ func runCommand(options *commandOptions, command string) error {
 	if err := loadConfiguration(options.configFile); err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-	if *config.RuntimeCLIFlags.EnableDatabaseUpdate {
-		config.Config.Metadata.Schema.SkipUpdate = false
+	if *config.RuntimeCLIFlags.EnableDatabaseUpdate || command == "migrate-metadata-id" {
+		if err := config.EnableDatabaseUpdate(); err != nil {
+			return err
+		}
 	}
-	if config.Config.Logging.Debug {
+	if config.Current().Logging.Debug {
 		log.SetLevel(log.DEBUG)
 	}
 	if options.quiet {
 		// Override!!
 		log.SetLevel(log.ERROR)
 	}
-	if err := configureSyslog(config.Config.Logging.Syslog.Enabled, log.EnableSyslogWriter); err != nil {
+	if err := configureSyslog(config.Current().Logging.Syslog.Enabled, log.EnableSyslogWriter); err != nil {
 		return err
 	}
-	if config.Config.Audit.ToSyslog {
+	if config.Current().Audit.ToSyslog {
 		if err := instaudit.EnableAuditSyslog(); err != nil {
 			return fmt.Errorf("initialize audit syslog: %w", err)
 		}
 	}
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
-	telemetry, err := observability.New(context.Background(), config.Config.Observability.Tracing.Endpoint, config.Config.Observability.Tracing.SampleRatio, AppVersion)
+	telemetry, err := observability.New(context.Background(), config.Current().Observability.Tracing.Endpoint, config.Current().Observability.Tracing.SampleRatio, AppVersion)
 	if err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}
@@ -146,12 +148,11 @@ func runCommand(options *commandOptions, command string) error {
 	}
 	switch command {
 	case "dump-config":
-		fmt.Println(config.Config.ToJSONString())
+		fmt.Println(config.Current().ToJSONString())
 		return nil
 	case "migrate-metadata-id":
 		config.RuntimeCLIFlags.MigrateMetadataIDs = true
 		config.RuntimeCLIFlags.ConfiguredVersion = ""
-		config.Config.Metadata.Schema.SkipUpdate = false
 		return repository.InitializeMetadata(context.Background())
 	case "redeploy-internal-db":
 		config.RuntimeCLIFlags.ConfiguredVersion = ""
@@ -180,7 +181,7 @@ func runCommand(options *commandOptions, command string) error {
 		if !found || instance == nil {
 			return fmt.Errorf("destination not found")
 		}
-		result, _, err := recovery.SuggestReplacementForPromotedReplica(&recovery.TopologyRecovery{}, key, instance, nil)
+		result, _, err := recovery.SuggestReplacementForPromotedReplica(context.Background(), &recovery.TopologyRecovery{}, key, instance, nil)
 		if err != nil {
 			return err
 		}

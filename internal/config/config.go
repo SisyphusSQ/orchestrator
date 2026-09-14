@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/goccy/go-yaml"
 	"gopkg.in/gcfg.v1"
@@ -46,9 +47,14 @@ const (
 var raftConfigurationLocked bool
 
 // LockRaftConfiguration freezes node identity and transport settings for the running process.
-func LockRaftConfiguration() { raftConfigurationLocked = true }
+func LockRaftConfiguration() {
+	configurationMu.Lock()
+	defer configurationMu.Unlock()
+	raftConfigurationLocked = true
+}
 
-var configurationLoaded chan bool = make(chan bool)
+var configurationLoaded = make(chan struct{})
+var configurationLoadedOnce sync.Once
 
 const (
 	HealthPollSeconds                            = 1
@@ -78,8 +84,6 @@ func (cfg *Configuration) ToJSONString() string {
 	return string(b)
 }
 
-// Config is *the* configuration instance, used globally to get configuration data
-var Config = newConfiguration()
 var readFileNames []string
 
 func newConfiguration() *Configuration {
@@ -173,6 +177,7 @@ func newConfiguration() *Configuration {
 }
 
 func (cfg *Configuration) postReadAdjustments() error {
+	cfg.Topology.Hostname.ResolveExpiryMinutes = max(1, cfg.Topology.Hostname.ResolveExpiryMinutes)
 	if err := cfg.validateTelemetry(); err != nil {
 		return err
 	}
@@ -301,8 +306,8 @@ func (cfg *Configuration) IsMySQL() bool {
 	return cfg.Metadata.Type == "mysql" || cfg.Metadata.Type == ""
 }
 
-// ValidateRaft validates the mandatory server runtime; offline admin commands do not start Raft.
-func (cfg *Configuration) ValidateRaft() error {
+// normalizeAndValidateRaft validates the mandatory server runtime; offline admin commands do not start Raft.
+func (cfg *Configuration) normalizeAndValidateRaft() error {
 	if cfg.Raft.DataDir == "" {
 		return fmt.Errorf("raft.dataDir must be defined for server startup")
 	}
@@ -443,9 +448,10 @@ func cloneConfiguration(configuration *Configuration) (*Configuration, error) {
 }
 
 func applyFiles(fileNames []string, skipMissing bool) (*Configuration, error) {
-	candidate, err := cloneConfiguration(Config)
+	current := Current()
+	candidate, err := cloneConfiguration(current)
 	if err != nil {
-		return Config, err
+		return current, err
 	}
 	appliedFiles := make([]string, 0, len(fileNames))
 	for _, fileName := range fileNames {
@@ -456,44 +462,51 @@ func applyFiles(fileNames []string, skipMissing bool) (*Configuration, error) {
 			if skipMissing && errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			return Config, err
+			return current, err
 		}
 		appliedFiles = append(appliedFiles, fileName)
 	}
 	if raftConfigurationLocked {
-		if err := candidate.ValidateRaft(); err != nil {
-			return Config, err
+		if err := candidate.normalizeAndValidateRaft(); err != nil {
+			return current, err
 		}
-		if candidate.Raft.NodeID != Config.Raft.NodeID || candidate.Raft.DataDir != Config.Raft.DataDir ||
-			candidate.Raft.Bind != Config.Raft.Bind || candidate.Raft.Advertise != Config.Raft.Advertise ||
-			candidate.Server.HTTPAdvertise != Config.Server.HTTPAdvertise || candidate.Server.Listen.Address != Config.Server.Listen.Address ||
-			candidate.Raft.DefaultPort != Config.Raft.DefaultPort {
-			return Config, fmt.Errorf("raft identity and address changes require a process restart")
+		if candidate.Raft.NodeID != current.Raft.NodeID || candidate.Raft.DataDir != current.Raft.DataDir ||
+			candidate.Raft.Bind != current.Raft.Bind || candidate.Raft.Advertise != current.Raft.Advertise ||
+			candidate.Server.HTTPAdvertise != current.Server.HTTPAdvertise || candidate.Server.Listen.Address != current.Server.Listen.Address ||
+			candidate.Raft.DefaultPort != current.Raft.DefaultPort {
+			return current, fmt.Errorf("raft identity and address changes require a process restart")
 		}
 	}
-	if telemetryConfigurationLocked && (candidate.Observability.Tracing.Endpoint != Config.Observability.Tracing.Endpoint || candidate.Observability.Tracing.SampleRatio != Config.Observability.Tracing.SampleRatio) {
-		return Config, fmt.Errorf("telemetry configuration changes require a process restart")
+	if telemetryConfigurationLocked && (candidate.Observability.Tracing.Endpoint != current.Observability.Tracing.Endpoint || candidate.Observability.Tracing.SampleRatio != current.Observability.Tracing.SampleRatio) {
+		return current, fmt.Errorf("telemetry configuration changes require a process restart")
 	}
-	*Config = *candidate
+	if err := validateReload(current, candidate); err != nil {
+		return current, err
+	}
+	activeConfiguration.Store(candidate)
 	for _, fileName := range appliedFiles {
 		log.Infof("Read config: %s", fileName)
 	}
-	return Config, nil
+	return candidate, nil
 }
 
 // Read reads configuration from zero, either, some or all given files, in order of input.
 // A file can override configuration provided in previous file.
 func Read(fileNames ...string) (*Configuration, error) {
+	configurationMu.Lock()
+	defer configurationMu.Unlock()
 	configuration, err := applyFiles(fileNames, true)
 	if err != nil {
 		return configuration, err
 	}
-	readFileNames = fileNames
+	readFileNames = append([]string(nil), fileNames...)
 	return configuration, nil
 }
 
 // ForceRead reads configuration from a required file.
 func ForceRead(fileName string) (*Configuration, error) {
+	configurationMu.Lock()
+	defer configurationMu.Unlock()
 	configuration, err := applyFiles([]string{fileName}, false)
 	if err != nil {
 		return configuration, err
@@ -504,6 +517,8 @@ func ForceRead(fileName string) (*Configuration, error) {
 
 // Reload re-reads configuration from last used files
 func Reload(extraFileNames ...string) (*Configuration, error) {
+	configurationMu.Lock()
+	defer configurationMu.Unlock()
 	fileNames := make([]string, 0, len(readFileNames)+len(extraFileNames))
 	fileNames = append(fileNames, readFileNames...)
 	fileNames = append(fileNames, extraFileNames...)
@@ -513,14 +528,10 @@ func Reload(extraFileNames ...string) (*Configuration, error) {
 // MarkConfigurationLoaded is called once configuration has first been loaded.
 // Listeners on ConfigurationLoaded will get a notification
 func MarkConfigurationLoaded() {
+	configurationMu.Lock()
 	telemetryConfigurationLocked = true
-	go func() {
-		for {
-			configurationLoaded <- true
-		}
-	}()
-	// wait for it
-	<-configurationLoaded
+	configurationMu.Unlock()
+	configurationLoadedOnce.Do(func() { close(configurationLoaded) })
 }
 
 // WaitForConfigurationToBeLoaded does just that. It will return after

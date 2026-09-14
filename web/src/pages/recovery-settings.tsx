@@ -526,7 +526,7 @@ export function HooksPanel() {
     if (
       !editing?.id.trim() ||
       !editing.name.trim() ||
-      !editing.commands.some((command) => command.trim()) ||
+      !(editing.commands ?? []).some((command) => command.trim()) ||
       !editing.changeReason?.trim()
     ) {
       void message.warning("请完整填写标识、名称、至少一条命令和变更原因");
@@ -537,7 +537,7 @@ export function HooksPanel() {
       await executeJSON("/recovery-hook-profiles", {
         profile: {
           ...editing,
-          commands: editing.commands.map((item) => item.trim()).filter(Boolean),
+          commands: (editing.commands ?? []).map((item) => item.trim()).filter(Boolean),
         },
         expectedRevision: editing.revision,
       });
@@ -616,7 +616,7 @@ export function HooksPanel() {
             { title: "名称", dataIndex: "name" },
             {
               title: "命令数",
-              render: (_, row: HookProfile) => row.commands.length,
+              render: (_, row: HookProfile) => (row.commands ?? []).length,
             },
             {
               title: "超时",
@@ -802,7 +802,7 @@ export function HooksPanel() {
             </Typography.Text>
             <Input.TextArea
               rows={5}
-              value={editing.commands.join("\n")}
+              value={(editing.commands ?? []).join("\n")}
               onChange={(event) =>
                 setEditing({
                   ...editing,

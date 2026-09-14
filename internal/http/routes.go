@@ -67,7 +67,8 @@ var registeredPaths []string
 
 // Routes composes capability handlers into the stable HTTP route surface.
 type Routes struct {
-	URLPrefix string
+	URLPrefix   string
+	InstanceAPI instanceapi.API
 }
 
 func (api *Routes) getSynonymPath(path string) (synonymPath string) {
@@ -138,7 +139,7 @@ func (api *Routes) registerAPIMethod(m *transport.Router, method, path string, h
 func (api *Routes) RegisterRequests(m *transport.Router) {
 	agentAPI := httpagent.ManagementAPI{}
 	clusterAPI := clusterapi.API{}
-	instanceAPI := instanceapi.API{}
+	instanceAPI := api.InstanceAPI
 	maintenanceAPI := maintenanceapi.API{}
 	raftAPI := httpraft.API{}
 	recoveryAPI := recoveryapi.API{}
@@ -412,10 +413,10 @@ func (api *Routes) RegisterRequests(m *transport.Router) {
 	api.registerAPIRequest(m, "seeds", agentAPI.Seeds)
 
 	// Configurable status check endpoint
-	if config.Config.Server.Status.Endpoint == config.DefaultStatusAPIEndpoint {
+	if config.Current().Server.Status.Endpoint == config.DefaultStatusAPIEndpoint {
 		api.registerAPIRequestNoProxy(m, "status", systemAPI.StatusCheck)
 	} else {
-		m.Get(config.Config.Server.Status.Endpoint, systemAPI.StatusCheck)
+		m.Get(config.Current().Server.Status.Endpoint, systemAPI.StatusCheck)
 	}
 
 	presenter.SetupMessagePrefix()

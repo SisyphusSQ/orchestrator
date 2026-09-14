@@ -17,9 +17,10 @@
 package instance_test
 
 import (
-	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	"math/rand"
 	"testing"
+
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -27,7 +28,7 @@ import (
 )
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

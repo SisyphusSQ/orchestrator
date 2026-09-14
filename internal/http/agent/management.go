@@ -22,7 +22,7 @@ func execute(req *http.Request, user transport.Principal, r transport.Responder,
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: "Unauthorized"})
 		return
 	}
-	if !config.Config.Agents.ServeHTTP {
+	if !config.Current().Agents.ServeHTTP {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: "Agents not served"})
 		return
 	}

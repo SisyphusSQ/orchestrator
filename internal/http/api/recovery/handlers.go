@@ -112,7 +112,7 @@ func (api *API) Recover(params transport.Params, r transport.Responder, req *htt
 	}
 
 	skipProcesses := (req.URL.Query().Get("skipProcesses") == "true") || (params["skipProcesses"] == "true")
-	recoveryAttempted, promotedInstanceKey, err := logicrecovery.CheckAndRecover(&instanceKey, candidateKey, skipProcesses)
+	recoveryAttempted, promotedInstanceKey, err := logicrecovery.CheckAndRecover(context.WithoutCancel(req.Context()), &instanceKey, candidateKey, skipProcesses)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: instanceKey})
 		return
@@ -141,7 +141,7 @@ func (api *API) gracefulMasterTakeover(params transport.Params, r transport.Resp
 	}
 	designatedKey, _ := request.ResolveInstanceKey(params["designatedHost"], params["designatedPort"])
 	// designatedKey may be empty/invalid
-	topologyRecovery, _, err := logicrecovery.GracefulMasterTakeover(clusterName, &designatedKey, auto)
+	topologyRecovery, _, err := logicrecovery.GracefulMasterTakeover(context.WithoutCancel(req.Context()), clusterName, &designatedKey, auto)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err)), Details: topologyRecovery})
 		return
@@ -176,7 +176,7 @@ func (api *API) ForceMasterFailover(params transport.Params, r transport.Respond
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
 	}
-	topologyRecovery, err := logicrecovery.ForceMasterFailover(clusterName)
+	topologyRecovery, err := logicrecovery.ForceMasterFailover(context.WithoutCancel(req.Context()), clusterName)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return
@@ -210,7 +210,7 @@ func (api *API) ForceMasterTakeover(params transport.Params, r transport.Respond
 		return
 	}
 
-	topologyRecovery, err := logicrecovery.ForceMasterTakeover(clusterName, designatedInstance)
+	topologyRecovery, err := logicrecovery.ForceMasterTakeover(context.WithoutCancel(req.Context()), clusterName, designatedInstance)
 	if err != nil {
 		presenter.Respond(r, &contract.Response{Code: contract.ERROR, Message: err.Error(), ErrorClass: string(orcraft.ClassOf(err))})
 		return

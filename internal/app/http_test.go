@@ -2,23 +2,25 @@ package app
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openark/orchestrator/internal/config"
 )
 
 func TestStandardHTTPReturnsInvalidMultiAuthConfiguration(t *testing.T) {
-	previousMethod := config.Config.Authentication.Method
-	previousUser := config.Config.Authentication.Basic.User
-	config.Config.Authentication.Method = "multi"
-	config.Config.Authentication.Basic.User = ""
+	previousMethod := config.Current().Authentication.Method
+	previousUser := config.Current().Authentication.Basic.User
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = "multi" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Basic.User = "" })
 	t.Cleanup(func() {
-		config.Config.Authentication.Method = previousMethod
-		config.Config.Authentication.Basic.User = previousUser
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = previousMethod })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Basic.User = previousUser })
 	})
 
 	err := standardHttp(context.Background(), false, nil)
@@ -31,30 +33,30 @@ func TestStandardHTTPReturnsInvalidMultiAuthConfiguration(t *testing.T) {
 }
 
 func TestHTTPRoutersApplyConfiguredMutualTLSVerification(t *testing.T) {
-	previousUseMutualTLS := config.Config.Server.TLS.MutualTLS
-	previousValidOUs := config.Config.Server.TLS.ValidOUs
-	previousAgentsUseMutualTLS := config.Config.Agents.TLS.MutualTLS
-	previousAgentValidOUs := config.Config.Agents.TLS.ValidOUs
-	previousPrefix := config.Config.Server.URLPrefix
-	previousMethod := config.Config.Authentication.Method
-	config.Config.Server.TLS.MutualTLS = true
-	config.Config.Server.TLS.ValidOUs = []string{"standard"}
-	config.Config.Agents.TLS.MutualTLS = true
-	config.Config.Agents.TLS.ValidOUs = []string{"agent"}
-	config.Config.Server.URLPrefix = "/orchestrator"
-	config.Config.Authentication.Method = ""
+	previousUseMutualTLS := config.Current().Server.TLS.MutualTLS
+	previousValidOUs := config.Current().Server.TLS.ValidOUs
+	previousAgentsUseMutualTLS := config.Current().Agents.TLS.MutualTLS
+	previousAgentValidOUs := config.Current().Agents.TLS.ValidOUs
+	previousPrefix := config.Current().Server.URLPrefix
+	previousMethod := config.Current().Authentication.Method
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.MutualTLS = true })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.ValidOUs = []string{"standard"} })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Agents.TLS.MutualTLS = true })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Agents.TLS.ValidOUs = []string{"agent"} })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.URLPrefix = "/orchestrator" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = "" })
 	t.Cleanup(func() {
-		config.Config.Server.TLS.MutualTLS = previousUseMutualTLS
-		config.Config.Server.TLS.ValidOUs = previousValidOUs
-		config.Config.Agents.TLS.MutualTLS = previousAgentsUseMutualTLS
-		config.Config.Agents.TLS.ValidOUs = previousAgentValidOUs
-		config.Config.Server.URLPrefix = previousPrefix
-		config.Config.Authentication.Method = previousMethod
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.MutualTLS = previousUseMutualTLS })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.ValidOUs = previousValidOUs })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Agents.TLS.MutualTLS = previousAgentsUseMutualTLS })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Agents.TLS.ValidOUs = previousAgentValidOUs })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.URLPrefix = previousPrefix })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = previousMethod })
 	})
 
-	standard, err := newStandardHTTPRouter()
+	standard, err := newStandardHTTPRouter(nil)
 	if err != nil {
-		t.Fatalf("newStandardHTTPRouter() error = %v", err)
+		t.Fatalf("newStandardHTTPRouter(nil) error = %v", err)
 	}
 	agents, err := newAgentsHTTPRouter()
 	if err != nil {
@@ -83,16 +85,18 @@ func TestHTTPRoutersApplyConfiguredMutualTLSVerification(t *testing.T) {
 }
 
 func TestStandardHTTPReturnsUnixListenerError(t *testing.T) {
-	previousMethod := config.Config.Authentication.Method
-	previousSocket := config.Config.Server.Listen.Socket
-	previousUseSSL := config.Config.Server.TLS.Enabled
-	config.Config.Authentication.Method = ""
-	config.Config.Server.Listen.Socket = filepath.Join(t.TempDir(), "missing", "orchestrator.sock")
-	config.Config.Server.TLS.Enabled = false
+	previousMethod := config.Current().Authentication.Method
+	previousSocket := config.Current().Server.Listen.Socket
+	previousUseSSL := config.Current().Server.TLS.Enabled
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = "" })
+	config.TestUpdate(func(cfg *config.Configuration) {
+		cfg.Server.Listen.Socket = filepath.Join(t.TempDir(), "missing", "orchestrator.sock")
+	})
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.Enabled = false })
 	t.Cleanup(func() {
-		config.Config.Authentication.Method = previousMethod
-		config.Config.Server.Listen.Socket = previousSocket
-		config.Config.Server.TLS.Enabled = previousUseSSL
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = previousMethod })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Listen.Socket = previousSocket })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.TLS.Enabled = previousUseSSL })
 	})
 
 	err := standardHttp(context.Background(), false, nil)
@@ -101,5 +105,52 @@ func TestStandardHTTPReturnsUnixListenerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "orchestrator.sock") {
 		t.Fatalf("standardHttp() error = %q; want unix socket path", err)
+	}
+}
+
+func TestHTTPServiceCancellationStopsListenerAndRequest(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	entered := make(chan struct{})
+	finished := make(chan error, 1)
+	go func() {
+		finished <- serveHTTPContext(ctx, listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(entered)
+			<-r.Context().Done()
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+	}()
+	requestFinished := make(chan error, 1)
+	go func() {
+		client := &http.Client{Timeout: 3 * time.Second}
+		response, err := client.Get("http://" + listener.Addr().String())
+		if response != nil {
+			response.Body.Close()
+		}
+		requestFinished <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("request did not enter handler")
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("server did not stop")
+	}
+	select {
+	case <-requestFinished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("request did not stop")
 	}
 }

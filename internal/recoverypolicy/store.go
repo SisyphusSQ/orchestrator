@@ -2,10 +2,8 @@ package recoverypolicy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"sync"
 
 	"github.com/openark/orchestrator/internal/models/domain"
@@ -272,32 +270,6 @@ func EffectiveHooks(ctx context.Context, clusterName string) (map[string][]domai
 		}
 	}
 	return resolved, modes, nil
-}
-
-// Revisions returns deterministic fingerprints of the policy and hook inputs
-// selected for a recovery, so historical records can identify what was used.
-func Revisions(ctx context.Context, clusterName string) (int64, int64, error) {
-	state, err := loadCache(ctx)
-	if err != nil {
-		return 0, 0, err
-	}
-	policyHash, hookHash := fnv.New64a(), fnv.New64a()
-	write := func(hash interface{ Write([]byte) (int, error) }, value any) {
-		payload, _ := json.Marshal(value)
-		_, _ = hash.Write(payload)
-	}
-	write(policyHash, state.global)
-	alias := state.aliases[clusterName]
-	if alias != "" {
-		write(policyHash, state.clusters[alias])
-	}
-	hooks, modes, err := EffectiveHooks(ctx, clusterName)
-	if err != nil {
-		return 0, 0, err
-	}
-	write(hookHash, modes)
-	write(hookHash, hooks)
-	return int64(policyHash.Sum64() & 0x7fffffffffffffff), int64(hookHash.Sum64() & 0x7fffffffffffffff), nil
 }
 
 func invalidateAfter(err error) error {

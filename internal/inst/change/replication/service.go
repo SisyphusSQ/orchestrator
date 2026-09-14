@@ -270,7 +270,7 @@ func RestartReplicationQuick(instance *instmodel.Instance, instanceKey *instmode
 // StopReplicationNicely stops a replica such that SQL_thread and IO_thread are aligned (i.e.
 // SQL_thread consumes all relay log entries)
 // It will actually START the sql_thread even if the replica is completely stopped.
-func StopReplicationNicely(instanceKey *instmodel.InstanceKey, timeout time.Duration) (*instmodel.Instance, error) {
+func StopReplicationNicely(ctx context.Context, instanceKey *instmodel.InstanceKey, timeout time.Duration) (*instmodel.Instance, error) {
 	instance, err := instdiscovery.ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -289,7 +289,7 @@ func StopReplicationNicely(instanceKey *instmodel.InstanceKey, timeout time.Dura
 
 	if instance.SQLDelay == 0 {
 		// Otherwise we don't bother.
-		if instance, err = WaitForSQLThreadUpToDate(instanceKey, timeout, 0); err != nil {
+		if instance, err = WaitForSQLThreadUpToDate(ctx, instanceKey, timeout, 0); err != nil {
 			return instance, err
 		}
 	}
@@ -310,7 +310,7 @@ func StopReplicationNicely(instanceKey *instmodel.InstanceKey, timeout time.Dura
 	return instance, err
 }
 
-func WaitForSQLThreadUpToDate(instanceKey *instmodel.InstanceKey, overallTimeout time.Duration, staleCoordinatesTimeout time.Duration) (instance *instmodel.Instance, err error) {
+func WaitForSQLThreadUpToDate(ctx context.Context, instanceKey *instmodel.InstanceKey, overallTimeout time.Duration, staleCoordinatesTimeout time.Duration) (instance *instmodel.Instance, err error) {
 	// Otherwise we don't bother.
 	var lastExecBinlogCoordinates instmodel.BinlogCoordinates
 
@@ -318,7 +318,7 @@ func WaitForSQLThreadUpToDate(instanceKey *instmodel.InstanceKey, overallTimeout
 		overallTimeout = 24 * time.Hour
 	}
 	if staleCoordinatesTimeout == 0 {
-		staleCoordinatesTimeout = time.Duration(recoverypolicy.Current("").ReasonableReplicationLagSeconds) * time.Second
+		staleCoordinatesTimeout = time.Duration(recoverypolicy.FromContext(ctx, "").ReasonableReplicationLagSeconds) * time.Second
 	}
 	generalTimer := time.NewTimer(overallTimeout)
 	staleTimer := time.NewTimer(staleCoordinatesTimeout)
@@ -362,7 +362,7 @@ func WaitForSQLThreadUpToDate(instanceKey *instmodel.InstanceKey, overallTimeout
 
 // StopReplicas will stop replication concurrently on given set of replicas.
 // It will potentially do nothing, or attempt to stop _nicely_ or just stop normally, all according to stopReplicationMethod
-func StopReplicas(replicas []*instmodel.Instance, stopReplicationMethod StopReplicationMethod, timeout time.Duration) []*instmodel.Instance {
+func StopReplicas(ctx context.Context, replicas []*instmodel.Instance, stopReplicationMethod StopReplicationMethod, timeout time.Duration) []*instmodel.Instance {
 	if stopReplicationMethod == NoStopReplication {
 		return replicas
 	}
@@ -379,7 +379,7 @@ func StopReplicas(replicas []*instmodel.Instance, stopReplicationMethod StopRepl
 			// Wait your turn to read a replica
 			ExecuteOnTopology(func() {
 				if stopReplicationMethod == StopReplicationNice && !replica.IsMariaDB() {
-					StopReplicationNicely(&replica.Key, timeout)
+					StopReplicationNicely(ctx, &replica.Key, timeout)
 				}
 				replica, _ = StopReplication(&replica.Key)
 				updatedReplica = &replica
@@ -443,7 +443,7 @@ func WaitForReplicationState(instance *instmodel.Instance, instanceKey *instmode
 }
 
 // StartReplication starts replication on a given instance.
-func StartReplication(instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
+func StartReplication(ctx context.Context, instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
 	instance, err := instdiscovery.ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -463,7 +463,7 @@ func StartReplication(instanceKey *instmodel.InstanceKey) (*instmodel.Instance, 
 	// some replicas (those that must never be promoted) should never ACK.
 	// Note: We assume that replicas use 'skip-slave-start' so they won't
 	//       START SLAVE on their own upon restart.
-	instance, err = MaybeEnableSemiSyncReplica(instance)
+	instance, err = MaybeEnableSemiSyncReplica(ctx, instance)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
@@ -487,17 +487,17 @@ func StartReplication(instanceKey *instmodel.InstanceKey) (*instmodel.Instance, 
 }
 
 // RestartReplication stops & starts replication on a given instance
-func RestartReplication(instanceKey *instmodel.InstanceKey) (instance *instmodel.Instance, err error) {
+func RestartReplication(ctx context.Context, instanceKey *instmodel.InstanceKey) (instance *instmodel.Instance, err error) {
 	instance, err = StopReplication(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
-	instance, err = StartReplication(instanceKey)
+	instance, err = StartReplication(ctx, instanceKey)
 	return instance, log.Errore(err)
 }
 
 // StartReplicas will do concurrent start-replica
-func StartReplicas(replicas []*instmodel.Instance) {
+func StartReplicas(ctx context.Context, replicas []*instmodel.Instance) {
 	// use concurrency but wait for all to complete
 	log.Debugf("Starting %d replicas", len(replicas))
 	barrier := make(chan instmodel.InstanceKey)
@@ -506,7 +506,7 @@ func StartReplicas(replicas []*instmodel.Instance) {
 			// Signal compelted replica
 			defer func() { barrier <- instance.Key }()
 			// Wait your turn to read a replica
-			ExecuteOnTopology(func() { StartReplication(&instance.Key) })
+			ExecuteOnTopology(func() { StartReplication(ctx, &instance.Key) })
 		}()
 	}
 	for range replicas {
@@ -537,7 +537,7 @@ func WaitForExecBinlogCoordinatesToReach(instanceKey *instmodel.InstanceKey, coo
 }
 
 // StartReplicationUntilMasterCoordinates issues a START SLAVE UNTIL... statement on given instance
-func StartReplicationUntilMasterCoordinates(instanceKey *instmodel.InstanceKey, masterCoordinates *instmodel.BinlogCoordinates) (*instmodel.Instance, error) {
+func StartReplicationUntilMasterCoordinates(ctx context.Context, instanceKey *instmodel.InstanceKey, masterCoordinates *instmodel.BinlogCoordinates) (*instmodel.Instance, error) {
 	instance, err := instdiscovery.ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -556,7 +556,7 @@ func StartReplicationUntilMasterCoordinates(instanceKey *instmodel.InstanceKey, 
 	if err != nil {
 		return instance, log.Errore(err)
 	}
-	instance, err = MaybeEnableSemiSyncReplica(instance)
+	instance, err = MaybeEnableSemiSyncReplica(ctx, instance)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
@@ -605,10 +605,10 @@ func MaybeDisableSemiSyncMaster(replicaInstance *instmodel.Instance) (*instmodel
 // only if the given instance is supposed to be enabled according to the semi-sync priority order and the number of desired semi-sync replicas.
 // If the flags are both turned off, the legacy behavior kicks in: If SemiSyncPriority > 0 and the instance is promotable (not "must_not"),
 // semi-sync is enabled.
-func MaybeEnableSemiSyncReplica(replicaInstance *instmodel.Instance) (*instmodel.Instance, error) {
+func MaybeEnableSemiSyncReplica(ctx context.Context, replicaInstance *instmodel.Instance) (*instmodel.Instance, error) {
 	// Backwards compatible logic: Enable semi-sync if SemiSyncPriority > 0 (formerly SemiSyncEnforced)
 	// Note that this logic NEVER enables semi-sync if the promotion rule is "must_not".
-	policy := recoverypolicy.Current(replicaInstance.ClusterName)
+	policy := recoverypolicy.FromContext(ctx, replicaInstance.ClusterName)
 	if !policy.EnforceExactSemiSyncReplicas && !policy.RecoverLockedSemiSyncMaster {
 		return maybeEnableSemiSyncReplicaLegacy(replicaInstance)
 	}
@@ -1142,7 +1142,7 @@ func ChangeMasterTo(instanceKey *instmodel.InstanceKey, masterKey *instmodel.Ins
 // SkipToNextBinaryLog changes master position to beginning of next binlog
 // USE WITH CARE!
 // Use case is binlog servers where the master was gone & replaced by another.
-func SkipToNextBinaryLog(instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
+func SkipToNextBinaryLog(ctx context.Context, instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
 	instance, err := instdiscovery.ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -1160,7 +1160,7 @@ func SkipToNextBinaryLog(instanceKey *instmodel.InstanceKey) (*instmodel.Instanc
 		return instance, log.Errore(err)
 	}
 	instaudit.AuditOperation("skip-binlog", instanceKey, fmt.Sprintf("Skipped replication to next binary log: %+v", nextFileCoordinates.LogFile))
-	return StartReplication(instanceKey)
+	return StartReplication(ctx, instanceKey)
 }
 
 // ResetReplication resets a replica, breaking the replication
@@ -1274,7 +1274,7 @@ func skipQueryOracleGtid(instance *instmodel.Instance) error {
 }
 
 // SkipQuery skip a single query in a failed replication instance
-func SkipQuery(instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
+func SkipQuery(ctx context.Context, instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
 	instance, err := instdiscovery.ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -1306,7 +1306,7 @@ func SkipQuery(instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) 
 		return instance, log.Errore(err)
 	}
 	instaudit.AuditOperation("skip-query", instanceKey, "Skipped one query")
-	return StartReplication(instanceKey)
+	return StartReplication(ctx, instanceKey)
 }
 
 // MasterPosWait issues a MASTER_POS_WAIT() an given instance according to given coordinates.
@@ -1329,13 +1329,13 @@ func MasterPosWait(instanceKey *instmodel.InstanceKey, binlogCoordinates *instmo
 // Attempt to read and return replication credentials from the mysql.slave_master_info system table
 func ReadReplicationCredentials(instanceKey *instmodel.InstanceKey) (creds *modeldomain.ReplicationCredentials, err error) {
 	creds = &modeldomain.ReplicationCredentials{}
-	if config.Config.Topology.Replication.CredentialsQuery != "" {
+	if config.Current().Topology.Replication.CredentialsQuery != "" {
 		db, err := topology.Open(instanceKey.Hostname, instanceKey.Port)
 		if err != nil {
 			return creds, log.Errore(err)
 		}
 		{
-			resultData, err := db.ReadResultData(config.Config.Topology.Replication.CredentialsQuery)
+			resultData, err := db.ReadResultData(config.Current().Topology.Replication.CredentialsQuery)
 			if err != nil {
 				return creds, log.Errore(err)
 			}
@@ -1409,7 +1409,7 @@ func SetReadOnly(instanceKey *instmodel.InstanceKey, readOnly bool) (*instmodel.
 	if err := ExecuteInstanceCommand(instanceKey, "set global read_only = ?", readOnly); err != nil {
 		return instance, log.Errore(err)
 	}
-	if config.Config.Topology.Operations.UseSuperReadOnly {
+	if config.Current().Topology.Operations.UseSuperReadOnly {
 		if err := ExecuteInstanceCommand(instanceKey, "set global super_read_only = ?", readOnly); err != nil {
 			// We don't bail out here. super_read_only is only available on
 			// MySQL 5.7.8 and Percona Server 5.6.21-70

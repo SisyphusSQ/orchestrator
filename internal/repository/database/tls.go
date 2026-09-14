@@ -50,7 +50,7 @@ const (
 	orchestratorTLSConfigName = "orchestrator"
 )
 
-var requireTLSCache = cache.New(time.Duration(config.Config.Topology.MySQL.TLSCacheTTLFactor*config.Config.Topology.Discovery.PollSeconds)*time.Second, time.Second)
+var requireTLSCache = cache.New(time.Duration(config.Current().Topology.MySQL.TLSCacheTTLFactor*config.Current().Topology.Discovery.PollSeconds)*time.Second, time.Second)
 
 var writeInstanceTLSCounter = observability.NewCounter("orchestrator_instance_tls_write_total", "instance_tls.write events")
 var readInstanceTLSCacheCounter = observability.NewCounter("orchestrator_instance_tls_read_cache_total", "instance_tls.read_cache events")
@@ -153,16 +153,16 @@ func ensureMySQLTopologyTLSConfig() (string, error) {
 	if topologyTLSConfigured {
 		return topologyTLSConfigName, nil
 	}
-	tlsConfig, err := ssl.NewTLSConfig(config.Config.Topology.MySQL.SSLCAFile, !config.Config.Topology.MySQL.SSLSkipVerify)
+	tlsConfig, err := ssl.NewTLSConfig(config.Current().Topology.MySQL.SSLCAFile, !config.Current().Topology.MySQL.SSLSkipVerify)
 	if err != nil {
 		return "", fmt.Errorf("create TLS configuration for topology connection: %w", err)
 	}
 	// Preserve compatibility with MySQL deployments that still negotiate TLS 1.0.
 	tlsConfig.MinVersion = tls.VersionTLS10
-	tlsConfig.InsecureSkipVerify = config.Config.Topology.MySQL.SSLSkipVerify
-	if config.Config.Topology.MySQL.UseMutualTLS && !config.Config.Topology.MySQL.SSLSkipVerify &&
-		config.Config.Topology.MySQL.SSLCertFile != "" && config.Config.Topology.MySQL.SSLPrivateKeyFile != "" {
-		if err := ssl.AppendKeyPair(tlsConfig, config.Config.Topology.MySQL.SSLCertFile, config.Config.Topology.MySQL.SSLPrivateKeyFile); err != nil {
+	tlsConfig.InsecureSkipVerify = config.Current().Topology.MySQL.SSLSkipVerify
+	if config.Current().Topology.MySQL.UseMutualTLS && !config.Current().Topology.MySQL.SSLSkipVerify &&
+		config.Current().Topology.MySQL.SSLCertFile != "" && config.Current().Topology.MySQL.SSLPrivateKeyFile != "" {
+		if err := ssl.AppendKeyPair(tlsConfig, config.Current().Topology.MySQL.SSLCertFile, config.Current().Topology.MySQL.SSLPrivateKeyFile); err != nil {
 			return "", fmt.Errorf("set up TLS key pair for topology connection: %w", err)
 		}
 	}
@@ -179,16 +179,16 @@ func ensureMySQLOrchestratorTLSConfig() (string, error) {
 	if orchestratorTLSConfigured {
 		return orchestratorTLSConfigName, nil
 	}
-	tlsConfig, err := ssl.NewTLSConfig(config.Config.Metadata.MySQL.SSLCAFile, !config.Config.Metadata.MySQL.SSLSkipVerify)
+	tlsConfig, err := ssl.NewTLSConfig(config.Current().Metadata.MySQL.SSLCAFile, !config.Current().Metadata.MySQL.SSLSkipVerify)
 	if err != nil {
 		return "", fmt.Errorf("create TLS configuration for orchestrator connection: %w", err)
 	}
 	// Preserve compatibility with MySQL deployments that still negotiate TLS 1.0.
 	tlsConfig.MinVersion = tls.VersionTLS10
-	tlsConfig.InsecureSkipVerify = config.Config.Metadata.MySQL.SSLSkipVerify
-	if !config.Config.Metadata.MySQL.SSLSkipVerify &&
-		config.Config.Metadata.MySQL.SSLCertFile != "" && config.Config.Metadata.MySQL.SSLPrivateKeyFile != "" {
-		if err := ssl.AppendKeyPair(tlsConfig, config.Config.Metadata.MySQL.SSLCertFile, config.Config.Metadata.MySQL.SSLPrivateKeyFile); err != nil {
+	tlsConfig.InsecureSkipVerify = config.Current().Metadata.MySQL.SSLSkipVerify
+	if !config.Current().Metadata.MySQL.SSLSkipVerify &&
+		config.Current().Metadata.MySQL.SSLCertFile != "" && config.Current().Metadata.MySQL.SSLPrivateKeyFile != "" {
+		if err := ssl.AppendKeyPair(tlsConfig, config.Current().Metadata.MySQL.SSLCertFile, config.Current().Metadata.MySQL.SSLPrivateKeyFile); err != nil {
 			return "", fmt.Errorf("set up TLS key pair for orchestrator connection: %w", err)
 		}
 	}
@@ -200,7 +200,7 @@ func ensureMySQLOrchestratorTLSConfig() (string, error) {
 }
 
 func configureOrchestratorTLS(cfg *mysql.Config) error {
-	if !config.Config.Metadata.MySQL.UseMutualTLS {
+	if !config.Current().Metadata.MySQL.UseMutualTLS {
 		return nil
 	}
 	name, err := ensureMySQLOrchestratorTLSConfig()

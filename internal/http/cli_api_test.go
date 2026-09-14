@@ -2,15 +2,17 @@ package http
 
 import (
 	"encoding/json"
-	"github.com/openark/orchestrator/internal/http/transport"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/openark/orchestrator/internal/http/transport"
+
 	"github.com/openark/orchestrator/internal/config"
 	httpcli "github.com/openark/orchestrator/internal/http/cli"
+	"github.com/openark/orchestrator/internal/http/contract"
 )
 
 // 将独立客户端的静态契约与实际注册路由对照，避免命令存在却调用不存在的 API。
@@ -19,9 +21,20 @@ func TestClientCatalogRoutesExist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var specs []struct{ Name, Path, Method string }
+	var specs []struct {
+		Name, Path, Method string
+		ReadOnly           bool
+	}
 	if err := json.Unmarshal(data, &specs); err != nil {
 		t.Fatal(err)
+	}
+	canonical, err := contract.ReadSpecification()
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := map[string]bool{}
+	for _, endpoint := range canonical.Endpoints {
+		metadata[endpoint.Method+" "+endpoint.Path] = endpoint.ReadOnly
 	}
 	router := mustRouter(t, transport.RouterOptions{})
 	api := Routes{}
@@ -50,6 +63,9 @@ func TestClientCatalogRoutesExist(t *testing.T) {
 			pattern := "^" + regexp.MustCompile(`:[^/]+`).ReplaceAllString(route.Path, `[^/]+`) + "$"
 			if regexp.MustCompile(pattern).MatchString(path) {
 				found = true
+				if readOnly, ok := metadata[method+" "+route.Path]; !ok || readOnly != spec.ReadOnly {
+					t.Errorf("%s: CLI readOnly=%v differs from contract %v", spec.Name, spec.ReadOnly, readOnly)
+				}
 				break
 			}
 		}
@@ -59,9 +75,9 @@ func TestClientCatalogRoutesExist(t *testing.T) {
 	}
 }
 func TestDiagnosticsRequireAuthorizationBeforeDatabaseAccess(t *testing.T) {
-	old := config.Config.Server.ReadOnly
-	config.Config.Server.ReadOnly = true
-	t.Cleanup(func() { config.Config.Server.ReadOnly = old })
+	old := config.Current().Server.ReadOnly
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = true })
+	t.Cleanup(func() { config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = old }) })
 	router := mustRouter(t, transport.RouterOptions{})
 	api := Routes{}
 	httpcli.Register(func(path string, handler transport.Handler) {
@@ -74,9 +90,9 @@ func TestDiagnosticsRequireAuthorizationBeforeDatabaseAccess(t *testing.T) {
 }
 
 func TestMigratedMutationsRejectReadOnlyBeforeDatabaseAccess(t *testing.T) {
-	old := config.Config.Server.ReadOnly
-	config.Config.Server.ReadOnly = true
-	t.Cleanup(func() { config.Config.Server.ReadOnly = old })
+	old := config.Current().Server.ReadOnly
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = true })
+	t.Cleanup(func() { config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = old }) })
 	router := mustRouter(t, transport.RouterOptions{})
 	api := Routes{}
 	api.RegisterRequests(router)

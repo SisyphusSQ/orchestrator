@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }
@@ -61,10 +61,10 @@ func TestKnownPaths(t *testing.T) {
 }
 
 func TestCompleteRouteRegistrationContract(t *testing.T) {
-	previousStatusEndpoint := config.Config.Server.Status.Endpoint
-	config.Config.Server.Status.Endpoint = config.DefaultStatusAPIEndpoint
+	previousStatusEndpoint := config.Current().Server.Status.Endpoint
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Status.Endpoint = config.DefaultStatusAPIEndpoint })
 	t.Cleanup(func() {
-		config.Config.Server.Status.Endpoint = previousStatusEndpoint
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Status.Endpoint = previousStatusEndpoint })
 	})
 
 	standard := mustRouter(t, transport.RouterOptions{})
@@ -119,10 +119,10 @@ func assertExactRouteRegistered(t *testing.T, router *transport.Router, method, 
 }
 
 func TestCustomStatusEndpointRegistration(t *testing.T) {
-	previousStatusEndpoint := config.Config.Server.Status.Endpoint
-	config.Config.Server.Status.Endpoint = "/custom-status"
+	previousStatusEndpoint := config.Current().Server.Status.Endpoint
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Status.Endpoint = "/custom-status" })
 	t.Cleanup(func() {
-		config.Config.Server.Status.Endpoint = previousStatusEndpoint
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.Status.Endpoint = previousStatusEndpoint })
 	})
 
 	router := mustRouter(t, transport.RouterOptions{})

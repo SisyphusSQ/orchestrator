@@ -36,7 +36,7 @@ func WriteClusterDomainName(clusterName string, domainName string) error {
 // ExpireClusterDomainName expires cluster_domain_name entries that haven't been updated recently.
 func ExpireClusterDomainName() error {
 	writeFunc := func() error {
-		err := metadata.ExpireClusterDomainNames(context.Background(), config.Config.Topology.Hostname.ResolveExpiryMinutes)
+		err := metadata.ExpireClusterDomainNames(context.Background(), config.Current().Topology.Hostname.ResolveExpiryMinutes)
 		return log.Errore(err)
 	}
 	return metadata.ExecuteWrite(context.Background(), writeFunc)

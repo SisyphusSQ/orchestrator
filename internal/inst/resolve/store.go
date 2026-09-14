@@ -140,7 +140,7 @@ func DeleteHostnameUnresolve(instanceKey *instmodel.InstanceKey) error {
 // ExpireHostnameUnresolve expires hostname_unresolve entries that haven't been updated recently.
 func ExpireHostnameUnresolve() error {
 	writeFunc := func() error {
-		err := metadata.ExpireHostnameUnresolve(context.Background(), config.Config.Topology.Hostname.ResolveExpiryMinutes)
+		err := metadata.ExpireHostnameUnresolve(context.Background(), config.Current().Topology.Hostname.ResolveExpiryMinutes)
 		return log.Errore(err)
 	}
 	return metadata.ExecuteWrite(context.Background(), writeFunc)
@@ -149,7 +149,7 @@ func ExpireHostnameUnresolve() error {
 // ForgetExpiredHostnameResolves
 func ForgetExpiredHostnameResolves() error {
 	return metadata.ForgetExpiredHostnameResolves(
-		context.Background(), 2*config.Config.Topology.Hostname.ResolveExpiryMinutes,
+		context.Background(), 2*config.Current().Topology.Hostname.ResolveExpiryMinutes,
 	)
 }
 

@@ -82,7 +82,7 @@ function RecoveryDetails({
               {
                 key: "successor",
                 label: "接任实例",
-                children: <InstanceLink value={recovery.SuccessorKey} />,
+                children: <InstanceLink value={recovery.SuccessorKey ?? undefined} />,
               },
               {
                 key: "start",

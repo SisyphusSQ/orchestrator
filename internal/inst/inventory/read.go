@@ -243,8 +243,8 @@ func readInstanceRow(row modeldomain.BackendInstanceRecord) *instmodel.Instance 
 	instance.ReplicationCredentialsAvailable = row.ReplicationCredentialsAvailable
 	instance.HasReplicationCredentials = row.HasReplicationCredentials
 	secondsSinceLastChecked := modeldomain.NonNegativeUint(row.SecondsSinceLastChecked)
-	instance.IsUpToDate = secondsSinceLastChecked <= config.Config.Topology.Discovery.PollSeconds
-	instance.IsRecentlyChecked = secondsSinceLastChecked <= config.Config.Topology.Discovery.PollSeconds*5
+	instance.IsUpToDate = secondsSinceLastChecked <= config.Current().Topology.Discovery.PollSeconds
+	instance.IsRecentlyChecked = secondsSinceLastChecked <= config.Current().Topology.Discovery.PollSeconds*5
 	instance.LastSeenTimestamp = row.LastSeen.String
 	instance.IsLastCheckValid = row.LastCheckValid
 	instance.SecondsSinceLastSeen = modeldomain.NullInt64(row.SecondsSinceLastSeen)
@@ -400,7 +400,10 @@ func ReadWriteableClustersMasters() (instances []*instmodel.Instance, err error)
 
 // ReadReplicaInstances reads replicas of a given master
 func ReadReplicaInstances(masterKey *instmodel.InstanceKey) ([]*instmodel.Instance, error) {
-	return readInstances(func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
+	return ReadReplicaInstancesContext(context.Background(), masterKey)
+}
+func ReadReplicaInstancesContext(ctx context.Context, masterKey *instmodel.InstanceKey) ([]*instmodel.Instance, error) {
+	return readInstancesContext(ctx, func(ctx context.Context) ([]modeldomain.BackendInstanceRecord, error) {
 		return metadata.ReadReplicaInstanceRows(ctx, masterKey.Hostname, masterKey.Port)
 	})
 }
@@ -443,7 +446,7 @@ func ReadProblemInstances(clusterName string) ([]*instmodel.Instance, error) {
 		return metadata.ReadProblemInstanceRows(
 			ctx,
 			clusterName,
-			config.Config.Topology.Discovery.PollSeconds*5,
+			config.Current().Topology.Discovery.PollSeconds*5,
 			policy.ReasonableReplicationLagSeconds,
 		)
 	})
@@ -589,7 +592,7 @@ func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstan
 func filterOSCInstances(instances []*instmodel.Instance) []*instmodel.Instance {
 	result := []*instmodel.Instance{}
 	for _, instance := range instances {
-		if instmodel.FiltersMatchInstanceKey(&instance.Key, config.Config.OSC.IgnoreHostnames) {
+		if instmodel.FiltersMatchInstanceKey(&instance.Key, config.Current().OSC.IgnoreHostnames) {
 			continue
 		}
 		if instance.IsBinlogServer() {
@@ -912,11 +915,11 @@ func InjectUnseenMasters(probe func(*instmodel.InstanceKey) bool) error {
 	operations := 0
 	for _, masterKey := range unseenMasterKeys {
 
-		if instmodel.FiltersMatchInstanceKey(&masterKey, config.Config.Topology.Discovery.IgnoreMasterHostnames) {
+		if instmodel.FiltersMatchInstanceKey(&masterKey, config.Current().Topology.Discovery.IgnoreMasterHostnames) {
 			log.Debugf("InjectUnseenMasters: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", masterKey)
 			continue
 		}
-		if instmodel.FiltersMatchInstanceKey(&masterKey, config.Config.Topology.Discovery.IgnoreHostnames) {
+		if instmodel.FiltersMatchInstanceKey(&masterKey, config.Current().Topology.Discovery.IgnoreHostnames) {
 			log.Debugf("InjectUnseenMasters: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", masterKey)
 			continue
 		}
@@ -937,7 +940,7 @@ func InjectUnseenMasters(probe func(*instmodel.InstanceKey) bool) error {
 		// skip them.
 		skipped := probe(&masterKey)
 		if skipped {
-			if config.Config.Topology.Discovery.FilterLogsEnabled {
+			if config.Current().Topology.Discovery.FilterLogsEnabled {
 				log.Infof("InjectUnseenMasters: Skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", masterKey)
 			}
 			continue
@@ -1003,7 +1006,7 @@ func ResolveUnknownMasterHostnameResolves() error {
 // ReadCountMySQLSnapshots is a utility method to return registered number of snapshots for a given list of hosts
 func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 	res := make(map[string]int)
-	if !config.Config.Agents.ServeHTTP || len(hostnames) == 0 {
+	if !config.Current().Agents.ServeHTTP || len(hostnames) == 0 {
 		return res, nil
 	}
 	rows, err := metadata.ReadHostSnapshotCounts(context.Background(), hostnames)
@@ -1216,7 +1219,7 @@ func ReadAllMinimalInstances() ([]instmodel.MinimalInstance, error) {
 // the instance.
 func ReadOutdatedInstanceKeys() ([]instmodel.InstanceKey, error) {
 	res := []instmodel.InstanceKey{}
-	rows, err := metadata.ReadOutdatedInstanceKeys(context.Background(), config.Config.Topology.Discovery.PollSeconds)
+	rows, err := metadata.ReadOutdatedInstanceKeys(context.Background(), config.Current().Topology.Discovery.PollSeconds)
 	for _, row := range rows {
 		instanceKey, merr := instresolve.NewInstanceKey(row.Hostname, row.Port)
 		if merr != nil {

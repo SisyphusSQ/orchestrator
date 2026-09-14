@@ -188,12 +188,12 @@ func TestMetadataIDMigrationRejectsUnexpectedShapeBeforeWrites(t *testing.T) {
 func TestOldCanonicalBootstrapRequiresExplicitMigration(t *testing.T) {
 	useSQLiteMetadataBackend(t)
 	previous := config.RuntimeCLIFlags
-	previousPanic := config.Config.Metadata.Schema.PanicOnDifferentDeployment
+	previousPanic := config.Current().Metadata.Schema.PanicOnDifferentDeployment
 	config.RuntimeCLIFlags.ConfiguredVersion = ""
-	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = false })
 	t.Cleanup(func() {
 		config.RuntimeCLIFlags = previous
-		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanic
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = previousPanic })
 	})
 	for _, count := range []int{1, 12, len(metadataschema.StatementsV1())} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {

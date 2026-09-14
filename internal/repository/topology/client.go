@@ -16,7 +16,8 @@ import (
 // database handle intentionally remains private so callers cannot bypass the
 // repository boundary.
 type Client struct {
-	db *sql.DB
+	db  *sql.DB
+	ctx context.Context
 }
 
 type Row struct {
@@ -35,7 +36,7 @@ func Open(host string, port int) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{db: db}, nil
+	return &Client{db: db, ctx: context.Background()}, nil
 }
 
 func OpenContext(ctx context.Context, host string, port int) (*Client, error) {
@@ -43,7 +44,7 @@ func OpenContext(ctx context.Context, host string, port int) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{db: db}, nil
+	return &Client{db: db, ctx: ctx}, nil
 }
 
 func OpenDiscovery(host string, port int) (*Client, error) {
@@ -55,7 +56,7 @@ func OpenDiscoveryContext(ctx context.Context, host string, port int) (*Client, 
 	if err != nil {
 		return nil, err
 	}
-	return &Client{db: db}, nil
+	return &Client{db: db, ctx: ctx}, nil
 }
 
 func (c *Client) CheckConnection(ctx context.Context) error {
@@ -66,7 +67,7 @@ func (c *Client) CheckConnection(ctx context.Context) error {
 }
 
 func (c *Client) Execute(query string, args ...any) error {
-	return c.ExecuteContext(context.Background(), query, args...)
+	return c.ExecuteContext(c.Context(), query, args...)
 }
 
 func (c *Client) ExecuteContext(ctx context.Context, query string, args ...any) error {
@@ -78,7 +79,7 @@ func (c *Client) ExecuteContext(ctx context.Context, query string, args ...any) 
 }
 
 func (c *Client) Read(query string, dest ...any) error {
-	return c.ReadContext(context.Background(), query, dest...)
+	return c.ReadContext(c.Context(), query, dest...)
 }
 
 func (c *Client) ReadContext(ctx context.Context, query string, dest ...any) error {
@@ -89,7 +90,7 @@ func (c *Client) ReadContext(ctx context.Context, query string, dest ...any) err
 }
 
 func (c *Client) ReadRow(query string, args ...any) *Row {
-	return c.ReadRowContext(context.Background(), query, args...)
+	return c.ReadRowContext(c.Context(), query, args...)
 }
 
 func (c *Client) ReadRowContext(ctx context.Context, query string, args ...any) *Row {
@@ -103,11 +104,11 @@ func (c *Client) ReadArgs(query string, args []any, dest ...any) error {
 	if c == nil || c.db == nil {
 		return errors.New("topology repository client is nil")
 	}
-	return c.db.QueryRowContext(context.Background(), query, args...).Scan(dest...)
+	return c.db.QueryRowContext(c.Context(), query, args...).Scan(dest...)
 }
 
 func (c *Client) ReadDynamicRows(query string, onRow func(modeldomain.DynamicRow) error, args ...any) error {
-	return c.ReadDynamicRowsContext(context.Background(), query, onRow, args...)
+	return c.ReadDynamicRowsContext(c.Context(), query, onRow, args...)
 }
 
 func (c *Client) ReadDynamicRowsContext(ctx context.Context, query string, onRow func(modeldomain.DynamicRow) error, args ...any) error {
@@ -118,7 +119,7 @@ func (c *Client) ReadDynamicRowsContext(ctx context.Context, query string, onRow
 }
 
 func (c *Client) ReadResultData(query string, args ...any) (modeldomain.ResultData, error) {
-	return c.ReadResultDataContext(context.Background(), query, args...)
+	return c.ReadResultDataContext(c.Context(), query, args...)
 }
 
 func (c *Client) ReadResultDataContext(ctx context.Context, query string, args ...any) (modeldomain.ResultData, error) {
@@ -221,4 +222,12 @@ func (c *Client) ReadGroupReplicationMembers(ctx context.Context) (members []mod
 		return members, rowErrors, true, err
 	}
 	return members, rowErrors, true, nil
+}
+
+// Context is the operation context bound when the topology client was opened.
+func (c *Client) Context() context.Context {
+	if c != nil && c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
 }

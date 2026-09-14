@@ -14,20 +14,20 @@ import (
 
 func useSQLiteBackendRuntime(t *testing.T) {
 	t.Helper()
-	previousBackendDB := config.Config.Metadata.Type
-	previousSQLiteFile := config.Config.Metadata.SQLite.DataFile
-	previousSkipUpdate := config.Config.Metadata.Schema.SkipUpdate
+	previousBackendDB := config.Current().Metadata.Type
+	previousSQLiteFile := config.Current().Metadata.SQLite.DataFile
+	previousSkipUpdate := config.Current().Metadata.Schema.SkipUpdate
 	previousRuntime := processDatabaseRuntime
-	config.Config.Metadata.Type = "sqlite3"
-	config.Config.Metadata.SQLite.DataFile = ":memory:"
-	config.Config.Metadata.Schema.SkipUpdate = true
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = "sqlite3" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.SQLite.DataFile = ":memory:" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.SkipUpdate = true })
 	processDatabaseRuntime = newDatabaseRuntime()
 	t.Cleanup(func() {
 		_ = processDatabaseRuntime.Close()
 		processDatabaseRuntime = previousRuntime
-		config.Config.Metadata.Type = previousBackendDB
-		config.Config.Metadata.SQLite.DataFile = previousSQLiteFile
-		config.Config.Metadata.Schema.SkipUpdate = previousSkipUpdate
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = previousBackendDB })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.SQLite.DataFile = previousSQLiteFile })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.SkipUpdate = previousSkipUpdate })
 	})
 }
 
