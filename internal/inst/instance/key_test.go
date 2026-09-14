@@ -27,7 +27,7 @@ import (
 )
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

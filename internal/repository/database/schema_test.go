@@ -42,10 +42,10 @@ func openMetadataSchemaSQLite(t *testing.T) *sql.DB {
 
 func useSQLiteMetadataBackend(t *testing.T) {
 	t.Helper()
-	previousBackend := config.Config.Metadata.Type
-	config.Config.Metadata.Type = "sqlite3"
+	previousBackend := config.Current().Metadata.Type
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = "sqlite3" })
 	t.Cleanup(func() {
-		config.Config.Metadata.Type = previousBackend
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = previousBackend })
 	})
 }
 
@@ -155,12 +155,14 @@ func TestCanonicalMetadataSchemaResumesSQLite(t *testing.T) {
 		t.Fatalf("deploy interrupted canonical schema: %v", err)
 	}
 
-	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
+	previousPanicIfDifferent := config.Current().Metadata.Schema.PanicOnDifferentDeployment
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = false })
 	config.RuntimeCLIFlags.ConfiguredVersion = "canonical-resume-test"
 	t.Cleanup(func() {
-		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
+		config.TestUpdate(func(cfg *config.Configuration) {
+			cfg.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
+		})
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
 	if err := initOrchestratorDBContext(ctx, database); err != nil {
@@ -385,12 +387,14 @@ func TestLegacyMetadataSchemaRequiresExplicitMigration(t *testing.T) {
 		t.Fatalf("historical layout = %d; want legacy", layout)
 	}
 
-	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
+	previousPanicIfDifferent := config.Current().Metadata.Schema.PanicOnDifferentDeployment
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = false })
 	config.RuntimeCLIFlags.ConfiguredVersion = "legacy-schema-test"
 	t.Cleanup(func() {
-		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
+		config.TestUpdate(func(cfg *config.Configuration) {
+			cfg.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
+		})
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
 	if err := initOrchestratorDBContext(ctx, database); err == nil {
@@ -428,12 +432,12 @@ func TestPendingBootstrapIsNotSkippedByDeploymentVersion(t *testing.T) {
 	database := openMetadataSchemaSQLite(t)
 	ctx := context.Background()
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	previousPanic := config.Config.Metadata.Schema.PanicOnDifferentDeployment
+	previousPanic := config.Current().Metadata.Schema.PanicOnDifferentDeployment
 	config.RuntimeCLIFlags.ConfiguredVersion = "already-recorded"
-	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = false })
 	t.Cleanup(func() {
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
-		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanic
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = previousPanic })
 	})
 	if err := deployCanonicalStatementsContext(ctx, database, metadataschema.Statements()[:12]); err != nil {
 		t.Fatal(err)

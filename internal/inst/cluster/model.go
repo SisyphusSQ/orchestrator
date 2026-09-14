@@ -29,7 +29,7 @@ import (
 )
 
 func GetClusterMasterKVKey(clusterAlias string) string {
-	return fmt.Sprintf("%s%s", config.Config.Consul.KV.ClusterMasterPrefix, clusterAlias)
+	return fmt.Sprintf("%s%s", config.Current().Consul.KV.ClusterMasterPrefix, clusterAlias)
 }
 
 func getClusterMasterKVPair(clusterAlias string, masterKey *instmodel.InstanceKey) *kv.KVPair {
@@ -68,7 +68,7 @@ func GetClusterMasterKVPairs(clusterAlias string, masterKey *instmodel.InstanceK
 // MappedNameToAlias attempts to match a cluster with an alias based on
 // configured ClusterNameToAlias map
 func MappedNameToAlias(clusterName string) string {
-	for pattern, alias := range config.Config.Topology.Classification.ClusterNameToAlias {
+	for pattern, alias := range config.Current().Topology.Classification.ClusterNameToAlias {
 		if pattern == "" {
 			// sanity
 			continue

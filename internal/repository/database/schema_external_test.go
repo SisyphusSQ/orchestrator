@@ -55,15 +55,17 @@ func TestCanonicalMetadataSchemaExternalMySQL(t *testing.T) {
 		t.Fatalf("empty external metadata schema layout = %d; want bootstrap", layout)
 	}
 
-	previousBackend := config.Config.Metadata.Type
-	previousPanicIfDifferent := config.Config.Metadata.Schema.PanicOnDifferentDeployment
+	previousBackend := config.Current().Metadata.Type
+	previousPanicIfDifferent := config.Current().Metadata.Schema.PanicOnDifferentDeployment
 	previousVersion := config.RuntimeCLIFlags.ConfiguredVersion
-	config.Config.Metadata.Type = "mysql"
-	config.Config.Metadata.Schema.PanicOnDifferentDeployment = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = "mysql" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Schema.PanicOnDifferentDeployment = false })
 	config.RuntimeCLIFlags.ConfiguredVersion = "metadata-schema-compatibility-test"
 	t.Cleanup(func() {
-		config.Config.Metadata.Type = previousBackend
-		config.Config.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = previousBackend })
+		config.TestUpdate(func(cfg *config.Configuration) {
+			cfg.Metadata.Schema.PanicOnDifferentDeployment = previousPanicIfDifferent
+		})
 		config.RuntimeCLIFlags.ConfiguredVersion = previousVersion
 	})
 	statements := metadataschema.Statements()
@@ -206,9 +208,9 @@ func TestMetadataIDMigrationExternalMySQL(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("migration fixture database is not empty: %d tables", count)
 	}
-	previous := config.Config.Metadata.Type
-	config.Config.Metadata.Type = "mysql"
-	t.Cleanup(func() { config.Config.Metadata.Type = previous })
+	previous := config.Current().Metadata.Type
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = "mysql" })
+	t.Cleanup(func() { config.TestUpdate(func(cfg *config.Configuration) { cfg.Metadata.Type = previous }) })
 	if err := deployCanonicalStatementsContext(ctx, database, metadataschema.StatementsV1()); err != nil {
 		t.Fatal(err)
 	}

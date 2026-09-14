@@ -1,18 +1,19 @@
 package instance_test
 
 import (
+	"testing"
+
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 	test "github.com/openark/orchestrator/internal/golib/tests"
 	instmodel "github.com/openark/orchestrator/internal/inst/instance"
-	"testing"
 )
 
 var testCoordinates = instmodel.BinlogCoordinates{LogFile: "mysql-bin.000010", LogPos: 108}
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
-	config.Config.Consul.KV.ClusterMasterPrefix = "test/master/"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = "test/master/" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

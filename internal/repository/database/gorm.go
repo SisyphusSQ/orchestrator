@@ -126,6 +126,9 @@ func OpenOrchestratorGORMContext(ctx context.Context) (*gorm.DB, error) {
 	if ctx == nil {
 		return nil, errors.New("GORM backend context is nil")
 	}
+	if tx, ok := ctx.Value(readSnapshotKey{}).(*gorm.DB); ok {
+		return tx.WithContext(ctx), nil
+	}
 	return processDatabaseRuntime.openBackendGORM(ctx)
 }
 

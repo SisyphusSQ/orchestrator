@@ -87,3 +87,9 @@ Test Run executes a real command. After timeout, inspect revision, audit, and ex
 ## Upgrade and rollback
 
 Legacy recovery/Hook YAML keys are rejected and not imported. Record values before upgrade, configure and read them afterward, and verify metadata compatibility before rollback. Restoring older metadata rolls policy, assignments, and revisions back; reconfirm before recovery is enabled.
+
+## Recovery execution snapshot
+
+At recovery entry, one metadata read transaction captures global/cluster overrides, the explicit alias, Hook profiles, and assignments. Candidate selection, topology changes, and Hooks use the same effective policy and ordered phase content. Saves during execution affect later recoveries. Snapshot read failure returns an error instead of continuing with defaults.
+
+`PolicyRevision` fingerprints the effective policy; `HookAssignmentRevision` fingerprints the effective Hook content including profile revisions. They are not database row revisions or monotonic sequence numbers. Historical values remain unchanged and fingerprints from different implementations cannot establish temporal order. Deserializing history no longer reads current policy. Snapshots remain in memory; full commands are not added to the recovery API.

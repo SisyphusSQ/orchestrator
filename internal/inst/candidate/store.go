@@ -18,6 +18,7 @@ package candidate
 
 import (
 	"context"
+
 	instaudit "github.com/openark/orchestrator/internal/inst/audit"
 	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
@@ -48,7 +49,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 // ExpireCandidateInstances removes stale master candidate suggestions.
 func ExpireCandidateInstances() error {
 	writeFunc := func() error {
-		err := metadata.ExpireCandidateInstances(context.Background(), config.Config.Topology.Candidate.ExpireMinutes)
+		err := metadata.ExpireCandidateInstances(context.Background(), config.Current().Topology.Candidate.ExpireMinutes)
 		return log.Errore(err)
 	}
 	return metadata.ExecuteWrite(context.Background(), writeFunc)
@@ -70,7 +71,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 	var candidateDatabaseInstances []CandidateDatabaseInstance
 
 	// Read all promotion rules from the table
-	rows, err := metadata.ReadCandidateInstances(context.Background(), config.Config.Topology.Candidate.ExpireMinutes)
+	rows, err := metadata.ReadCandidateInstances(context.Background(), config.Current().Topology.Candidate.ExpireMinutes)
 	for _, row := range rows {
 		cdi := CandidateDatabaseInstance{
 			Hostname:            row.Hostname,

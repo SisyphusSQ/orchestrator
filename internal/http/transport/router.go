@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openark/orchestrator/internal/config"
+
 	"github.com/gin-gonic/gin"
 	"github.com/openark/orchestrator/internal/golib/log"
 
@@ -123,6 +125,7 @@ func NewRouter(options RouterOptions) (*Router, error) {
 
 // ServeHTTP implements net/http.Handler.
 func (router *Router) ServeHTTP(writer nethttp.ResponseWriter, request *nethttp.Request) {
+	request = request.WithContext(config.WithSnapshot(request.Context()))
 	// Go may leave RawPath empty even when Path contains a literal percent.
 	// Always route the encoded path, then decode each captured parameter exactly once.
 	request.URL.RawPath = request.URL.EscapedPath()

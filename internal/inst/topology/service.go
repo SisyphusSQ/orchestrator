@@ -18,6 +18,7 @@
 package topology
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -61,9 +62,9 @@ func getASCIITopologyEntry(depth int, instance *instmodel.Instance, replicationM
 	entry := fmt.Sprintf("%s%s%s", prefix, instance.Key.DisplayString(), entryAlias)
 	if extendedOutput {
 		if tabulated {
-			entry = fmt.Sprintf("%s%s%s", entry, tabulatorScharacter, instance.TabulatedDescription(tabulatorScharacter))
+			entry = fmt.Sprintf("%s%s%s", entry, tabulatorScharacter, instance.TabulatedDescription(context.Background(), tabulatorScharacter))
 		} else {
-			entry = fmt.Sprintf("%s%s%s", entry, fillerCharacter, instance.HumanReadableDescription())
+			entry = fmt.Sprintf("%s%s%s", entry, fillerCharacter, instance.HumanReadableDescription(context.Background()))
 		}
 		if printTags {
 			tags, _ := insttag.ReadInstanceTags(&instance.Key)

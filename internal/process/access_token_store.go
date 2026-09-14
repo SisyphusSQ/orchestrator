@@ -24,7 +24,7 @@ func AcquireAccessToken(publicToken string) (string, error) {
 	secretToken, acquired, err := metadata.AcquireAccessToken(
 		context.Background(),
 		publicToken,
-		config.Config.Authentication.AccessToken.UseExpirySeconds,
+		config.Current().Authentication.AccessToken.UseExpirySeconds,
 	)
 	if err != nil {
 		return "", log.Errore(err)
@@ -41,13 +41,13 @@ func TokenIsValid(publicToken, secretToken string) (bool, error) {
 		context.Background(),
 		publicToken,
 		secretToken,
-		config.Config.Authentication.AccessToken.ExpiryMinutes,
+		config.Current().Authentication.AccessToken.ExpiryMinutes,
 	)
 	return valid, log.Errore(err)
 }
 
 // ExpireAccessTokens removes old non-reentrant tokens.
 func ExpireAccessTokens() error {
-	err := metadata.ExpireAccessTokens(context.Background(), config.Config.Authentication.AccessToken.ExpiryMinutes)
+	err := metadata.ExpireAccessTokens(context.Background(), config.Current().Authentication.AccessToken.ExpiryMinutes)
 	return log.Errore(err)
 }

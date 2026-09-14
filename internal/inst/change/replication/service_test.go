@@ -1,15 +1,16 @@
 package replication
 
 import (
+	"testing"
+
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 	test "github.com/openark/orchestrator/internal/golib/tests"
 	instmodel "github.com/openark/orchestrator/internal/inst/instance"
-	"testing"
 )
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }

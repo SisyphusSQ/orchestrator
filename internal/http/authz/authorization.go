@@ -13,7 +13,7 @@ import (
 )
 
 func proxyUser(req *http.Request) string {
-	for _, user := range req.Header[config.Config.Authentication.Proxy.UserHeader] {
+	for _, user := range req.Header[config.FromContext(req.Context()).Authentication.Proxy.UserHeader] {
 		return user
 	}
 	return ""
@@ -21,23 +21,23 @@ func proxyUser(req *http.Request) string {
 
 // ForWrite reports whether the authenticated principal may mutate local state.
 func ForWrite(req *http.Request, user transport.Principal) bool {
-	if config.Config.Server.ReadOnly {
+	if config.FromContext(req.Context()).Server.ReadOnly {
 		return false
 	}
 
-	switch strings.ToLower(config.Config.Authentication.Method) {
+	switch strings.ToLower(config.FromContext(req.Context()).Authentication.Method) {
 	case "basic":
 		return true
 	case "multi":
 		return string(user) != "readonly"
 	case "proxy":
 		authUser := proxyUser(req)
-		for _, allowed := range config.Config.Authentication.Power.Users {
+		for _, allowed := range config.FromContext(req.Context()).Authentication.Power.Users {
 			if allowed == "*" || allowed == authUser {
 				return true
 			}
 		}
-		return len(config.Config.Authentication.Power.Groups) > 0 && os.UserInGroups(authUser, config.Config.Authentication.Power.Groups)
+		return len(config.FromContext(req.Context()).Authentication.Power.Groups) > 0 && os.UserInGroups(authUser, config.FromContext(req.Context()).Authentication.Power.Groups)
 	case "token":
 		cookie, err := req.Cookie("access-token")
 		if err != nil {
@@ -67,16 +67,16 @@ func ForConfiguration(req *http.Request, user transport.Principal) bool {
 	if !ForAction(req, user) {
 		return false
 	}
-	if strings.TrimSpace(config.Config.Authentication.Method) == "" {
+	if strings.TrimSpace(config.FromContext(req.Context()).Authentication.Method) == "" {
 		return true
 	}
 	userID := UserID(req, user)
-	for _, allowed := range config.Config.Authentication.ConfigurationAdmins.Users {
+	for _, allowed := range config.FromContext(req.Context()).Authentication.ConfigurationAdmins.Users {
 		if allowed == "*" || allowed == userID {
 			return true
 		}
 	}
-	return userID != "" && len(config.Config.Authentication.ConfigurationAdmins.Groups) > 0 && os.UserInGroups(userID, config.Config.Authentication.ConfigurationAdmins.Groups)
+	return userID != "" && len(config.FromContext(req.Context()).Authentication.ConfigurationAdmins.Groups) > 0 && os.UserInGroups(userID, config.FromContext(req.Context()).Authentication.ConfigurationAdmins.Groups)
 }
 
 // AuthenticateToken exchanges a public token for the cookie used by token auth.
@@ -93,10 +93,10 @@ func AuthenticateToken(publicToken string, resp http.ResponseWriter) error {
 // UserID returns the authenticated user identifier when the configured method
 // exposes one.
 func UserID(req *http.Request, user transport.Principal) string {
-	if config.Config.Server.ReadOnly {
+	if config.FromContext(req.Context()).Server.ReadOnly {
 		return ""
 	}
-	switch strings.ToLower(config.Config.Authentication.Method) {
+	switch strings.ToLower(config.FromContext(req.Context()).Authentication.Method) {
 	case "basic", "multi":
 		return string(user)
 	case "proxy":

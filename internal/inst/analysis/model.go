@@ -228,5 +228,5 @@ func (analysis *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceT
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time
 // between last_attempted_check to last_checked before we consider the instance as invalid.
 func ValidSecondsFromSeenToLastAttemptedCheck() uint {
-	return config.Config.Topology.Discovery.PollSeconds + config.Config.Topology.Discovery.ReasonableCheckSeconds
+	return config.Current().Topology.Discovery.PollSeconds + config.Current().Topology.Discovery.ReasonableCheckSeconds
 }

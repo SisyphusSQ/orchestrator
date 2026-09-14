@@ -383,10 +383,10 @@ func TestNormalizeConsulEndpointErrorsDoNotLeakAddressSecrets(t *testing.T) {
 }
 
 func TestForceReadConsulDefaultsAndValidation(t *testing.T) {
-	previous := *Config
+	previous := *Current()
 	previousReadFileNames := append([]string(nil), readFileNames...)
 	t.Cleanup(func() {
-		*Config = previous
+		TestUpdate(func(cfg *Configuration) { *cfg = previous })
 		readFileNames = previousReadFileNames
 	})
 
@@ -395,26 +395,26 @@ func TestForceReadConsulDefaultsAndValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ForceRead() error: %v", err)
 		}
-		if Config.Consul.Address != "" {
-			t.Fatalf("ConsulAddress = %q, want empty", Config.Consul.Address)
+		if Current().Consul.Address != "" {
+			t.Fatalf("ConsulAddress = %q, want empty", Current().Consul.Address)
 		}
-		if Config.Consul.Scheme != "http" {
-			t.Fatalf("ConsulScheme = %q, want http", Config.Consul.Scheme)
+		if Current().Consul.Scheme != "http" {
+			t.Fatalf("ConsulScheme = %q, want http", Current().Consul.Scheme)
 		}
-		if Config.Consul.ACLToken != "" {
-			t.Fatalf("ConsulAclToken = %q, want empty", Config.Consul.ACLToken)
+		if Current().Consul.ACLToken != "" {
+			t.Fatalf("ConsulAclToken = %q, want empty", Current().Consul.ACLToken)
 		}
-		if Config.Consul.Datacenter != "" {
-			t.Fatalf("ConsulDatacenter = %q, want empty", Config.Consul.Datacenter)
+		if Current().Consul.Datacenter != "" {
+			t.Fatalf("ConsulDatacenter = %q, want empty", Current().Consul.Datacenter)
 		}
-		if Config.Consul.TLS.SkipVerify {
+		if Current().Consul.TLS.SkipVerify {
 			t.Fatal("ConsulTLSSkipVerify default is true; want false")
 		}
-		if Config.Consul.HTTPTimeoutSeconds != 60 {
-			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 60", Config.Consul.HTTPTimeoutSeconds)
+		if Current().Consul.HTTPTimeoutSeconds != 60 {
+			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 60", Current().Consul.HTTPTimeoutSeconds)
 		}
-		if Config.Consul.KV.Provider != "consul" {
-			t.Fatalf("ConsulKVStoreProvider = %q, want consul", Config.Consul.KV.Provider)
+		if Current().Consul.KV.Provider != "consul" {
+			t.Fatalf("ConsulKVStoreProvider = %q, want consul", Current().Consul.KV.Provider)
 		}
 	})
 
@@ -423,8 +423,8 @@ func TestForceReadConsulDefaultsAndValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ForceRead() error: %v", err)
 		}
-		if Config.Consul.HTTPTimeoutSeconds != 0 {
-			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 0", Config.Consul.HTTPTimeoutSeconds)
+		if Current().Consul.HTTPTimeoutSeconds != 0 {
+			t.Fatalf("ConsulHttpTimeoutSeconds = %d, want 0", Current().Consul.HTTPTimeoutSeconds)
 		}
 	})
 

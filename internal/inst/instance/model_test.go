@@ -17,8 +17,10 @@
 package instance_test
 
 import (
-	instmodel "github.com/openark/orchestrator/internal/inst/instance"
+	"context"
 	"testing"
+
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -26,7 +28,7 @@ import (
 )
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }
@@ -116,7 +118,7 @@ func TestCanReplicateFrom(t *testing.T) {
 	i56 := instmodel.Instance{Key: key2, Version: "5.6"}
 
 	var canReplicate bool
-	canReplicate, _ = i56.CanReplicateFrom(&i55)
+	canReplicate, _ = i56.CanReplicateFrom(context.Background(), &i55)
 	test.S(t).ExpectEquals(canReplicate, false) //binlog not yet enabled
 
 	i55.LogBinEnabled = true
@@ -124,15 +126,15 @@ func TestCanReplicateFrom(t *testing.T) {
 	i56.LogBinEnabled = true
 	i56.LogReplicationUpdatesEnabled = true
 
-	canReplicate, _ = i56.CanReplicateFrom(&i55)
+	canReplicate, _ = i56.CanReplicateFrom(context.Background(), &i55)
 	test.S(t).ExpectEquals(canReplicate, false) //serverid not set
 	i55.ServerID = 55
 	i56.ServerID = 56
 
-	canReplicate, err := i56.CanReplicateFrom(&i55)
+	canReplicate, err := i56.CanReplicateFrom(context.Background(), &i55)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectTrue(canReplicate)
-	canReplicate, _ = i55.CanReplicateFrom(&i56)
+	canReplicate, _ = i55.CanReplicateFrom(context.Background(), &i56)
 	test.S(t).ExpectFalse(canReplicate)
 
 	i80 := instmodel.Instance{Key: key3, Version: "8.0",
@@ -141,22 +143,22 @@ func TestCanReplicateFrom(t *testing.T) {
 		ServerID:                     80,
 	}
 
-	canReplicate, err = i56.CanReplicateFrom(&i80)
+	canReplicate, err = i56.CanReplicateFrom(context.Background(), &i80)
 	test.S(t).ExpectNotNil(err)
 	test.S(t).ExpectEquals(canReplicate, false)
 
-	config.Config.Topology.Compatibility.LowerReplicaVersionAllowed = true
-	canReplicate, err = i56.CanReplicateFrom(&i80)
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Compatibility.LowerReplicaVersionAllowed = true })
+	canReplicate, err = i56.CanReplicateFrom(context.Background(), &i80)
 	test.S(t).ExpectNotNil(err)
 	test.S(t).ExpectEquals(canReplicate, true)
-	config.Config.Topology.Compatibility.LowerReplicaVersionAllowed = false
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Compatibility.LowerReplicaVersionAllowed = false })
 
 	iStatement := instmodel.Instance{Key: key1, Binlog_format: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
 	iRow := instmodel.Instance{Key: key2, Binlog_format: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
-	canReplicate, err = iRow.CanReplicateFrom(&iStatement)
+	canReplicate, err = iRow.CanReplicateFrom(context.Background(), &iStatement)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectTrue(canReplicate)
-	canReplicate, _ = iStatement.CanReplicateFrom(&iRow)
+	canReplicate, _ = iStatement.CanReplicateFrom(context.Background(), &iRow)
 	test.S(t).ExpectFalse(canReplicate)
 }
 
@@ -211,7 +213,7 @@ func TestRemoveInstance(t *testing.T) {
 func TestHumanReadableDescription(t *testing.T) {
 	i57 := instmodel.Instance{Version: "5.7.8-log"}
 	{
-		desc := i57.HumanReadableDescription()
+		desc := i57.HumanReadableDescription(context.Background())
 		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,nobinlog]")
 	}
 	{
@@ -219,7 +221,7 @@ func TestHumanReadableDescription(t *testing.T) {
 		i57.LogBinEnabled = true
 		i57.Binlog_format = "ROW"
 		i57.LogReplicationUpdatesEnabled = true
-		desc := i57.HumanReadableDescription()
+		desc := i57.HumanReadableDescription(context.Background())
 		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,ROW,>>,P-GTID]")
 	}
 }
@@ -227,7 +229,7 @@ func TestHumanReadableDescription(t *testing.T) {
 func TestTabulatedDescription(t *testing.T) {
 	i57 := instmodel.Instance{Version: "5.7.8-log"}
 	{
-		desc := i57.TabulatedDescription("|")
+		desc := i57.TabulatedDescription(context.Background(), "|")
 		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|nobinlog|")
 	}
 	{
@@ -235,7 +237,7 @@ func TestTabulatedDescription(t *testing.T) {
 		i57.LogBinEnabled = true
 		i57.Binlog_format = "ROW"
 		i57.LogReplicationUpdatesEnabled = true
-		desc := i57.TabulatedDescription("|")
+		desc := i57.TabulatedDescription(context.Background(), "|")
 		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|ROW|>>,P-GTID")
 	}
 }

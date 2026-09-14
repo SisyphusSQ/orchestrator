@@ -69,7 +69,7 @@ func GetReplicationAnalysis(clusterName string, hints *dto.ReplicationAnalysisHi
 		ValidCheckSeconds:     validCheckSeconds,
 		ReasonableLagSeconds:  policy.ReasonableReplicationLagSeconds,
 		ClusterName:           clusterName,
-		ReduceCount:           config.Config.Topology.Analysis.ReduceCount,
+		ReduceCount:           config.Current().Topology.Analysis.ReduceCount,
 		ReductionCheckSeconds: validCheckSeconds,
 	})
 	if err != nil {
@@ -416,7 +416,7 @@ func auditInstanceAnalysisInChangelog(instanceKey *instmodel.InstanceKey, analys
 // ExpireInstanceAnalysisChangelog removes old-enough analysis entries from the changelog
 func ExpireInstanceAnalysisChangelog() error {
 	err := metadata.ExpireInstanceAnalysisChangelog(
-		context.Background(), config.Config.Topology.Discovery.UnseenForgetHours,
+		context.Background(), config.Current().Topology.Discovery.UnseenForgetHours,
 	)
 	return log.Errore(err)
 }

@@ -84,42 +84,30 @@ func IsLeaderOrActive() bool { return orcraft.IsReady() }
 
 // used in several places
 func instancePollSecondsDuration() time.Duration {
-	return time.Duration(config.Config.Topology.Discovery.PollSeconds) * time.Second
+	return time.Duration(config.Current().Topology.Discovery.PollSeconds) * time.Second
 }
 
-// AcceptSignals installs the process signal handler once, including HTTP without discovery.
-func AcceptSignals() { acceptSignalsOnce() }
-
-var acceptSignalsOnce = sync.OnceFunc(acceptSignals)
-
-// acceptSignals registers for OS signals
-func acceptSignals() {
+// AcceptReloadSignals binds SIGHUP handling to the HTTP service lifetime.
+// Termination signals belong to the application, which can drain its tasks.
+func AcceptReloadSignals(ctx context.Context) func() {
 	c := make(chan os.Signal, 1)
-
 	signal.Notify(c, syscall.SIGHUP)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		for sig := range c {
-			switch sig {
-			case syscall.SIGHUP:
+		defer signal.Stop(c)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-c:
 				log.Infof("Received SIGHUP. Reloading configuration")
 				instaudit.AuditOperation("reload-configuration", nil, "Triggered via SIGHUP")
 				if _, err := config.Reload(); err != nil {
 					log.Sugar().Errorw("configuration reload failed", "trigger", "SIGHUP", "error", err)
 				}
-			case syscall.SIGTERM, syscall.SIGINT:
-				log.Infof("Received SIGTERM. Shutting down orchestrator")
-				// probably should poke other go routines to stop cleanly here ...
-				instaudit.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
-				exitCode := 0
-				if err := log.Close(); err != nil {
-					fmt.Fprintf(os.Stderr, "logger close failed: %v\n", err)
-					exitCode = 1
-				}
-				os.Exit(exitCode)
 			}
 		}
 	}()
+	return func() { signal.Stop(c) }
 }
 
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
@@ -128,7 +116,7 @@ func handleDiscoveryRequests() {
 	defaultDiscoveryQueue = CreateOrReturnQueue("DEFAULT")
 
 	// create a pool of discovery workers
-	for i := uint(0); i < config.Config.Topology.Discovery.MaxConcurrency; i++ {
+	for i := uint(0); i < config.Current().Topology.Discovery.MaxConcurrency; i++ {
 		go func() {
 			for {
 				instanceKey := defaultDiscoveryQueue.Consume()
@@ -147,13 +135,13 @@ func handleDiscoveryRequests() {
 		}()
 	}
 
-	if config.Config.Topology.Discovery.DeadMaxConcurrency > 0 {
+	if config.Current().Topology.Discovery.DeadMaxConcurrency > 0 {
 		deadInstancesDiscoveryQueue = CreateOrReturnQueue("DEADINSTANCES")
 
 		// Register dead instances queue gauge only if the queue exists
 
 		// create a pool of discovery workers
-		for i := uint(0); i < config.Config.Topology.Discovery.DeadMaxConcurrency; i++ {
+		for i := uint(0); i < config.Current().Topology.Discovery.DeadMaxConcurrency; i++ {
 			go func() {
 				for {
 					instanceKey := deadInstancesDiscoveryQueue.Consume()
@@ -184,7 +172,7 @@ func DiscoverInstance(instanceKey instmodel.InstanceKey) {
 		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
 		return
 	}
-	if instmodel.FiltersMatchInstanceKey(&instanceKey, config.Config.Topology.Discovery.IgnoreHostnames) {
+	if instmodel.FiltersMatchInstanceKey(&instanceKey, config.Current().Topology.Discovery.IgnoreHostnames) {
 		log.Debugf("discoverInstance: skipping discovery of %+v because it matches DiscoveryIgnoreHostnameFilters", instanceKey)
 		return
 	}
@@ -245,7 +233,7 @@ func DiscoverInstance(instanceKey instmodel.InstanceKey) {
 
 	// First we've ever heard of this instance. Continue investigation:
 	skipped := false
-	instance, skipped, err = instdiscovery.ReadTopologyInstanceBufferableContext(ctx, &instanceKey, config.Config.Topology.WriteBuffer.Enabled, latency)
+	instance, skipped, err = instdiscovery.ReadTopologyInstanceBufferableContext(ctx, &instanceKey, config.Current().Topology.WriteBuffer.Enabled, latency)
 	observationResult = observability.Result(err)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
@@ -255,7 +243,7 @@ func DiscoverInstance(instanceKey instmodel.InstanceKey) {
 
 	if skipped {
 		observationResult = "skipped"
-		if config.Config.Topology.Discovery.FilterLogsEnabled {
+		if config.Current().Topology.Discovery.FilterLogsEnabled {
 			log.Infof("discoverInstance: skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", instanceKey)
 		}
 		return
@@ -286,7 +274,7 @@ func DiscoverInstance(instanceKey instmodel.InstanceKey) {
 	for _, replicaKey := range append(instance.ReplicationGroupMembers.GetInstanceKeys(), instance.Replicas.GetInstanceKeys()...) {
 
 		// Avoid noticing some hosts we would otherwise discover
-		if instmodel.FiltersMatchInstanceKey(&replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
+		if instmodel.FiltersMatchInstanceKey(&replicaKey, config.Current().Topology.Discovery.IgnoreReplicaHostnames) {
 			continue
 		}
 
@@ -307,7 +295,7 @@ func DiscoverInstance(instanceKey instmodel.InstanceKey) {
 	}
 	// Investigate master:
 	if instance.MasterKey.IsValid() {
-		if !instmodel.FiltersMatchInstanceKey(&instance.MasterKey, config.Config.Topology.Discovery.IgnoreMasterHostnames) {
+		if !instmodel.FiltersMatchInstanceKey(&instance.MasterKey, config.Current().Topology.Discovery.IgnoreMasterHostnames) {
 			dead, recheck := instdiscovery.DeadInstancesFilter.InstanceRecheckNeeded(&instance.MasterKey)
 
 			if dead {
@@ -464,7 +452,7 @@ func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs []*kv.KVPa
 
 func injectSeeds(seedOnce *sync.Once) {
 	seedOnce.Do(func() {
-		for _, seed := range config.Config.Topology.Discovery.Seeds {
+		for _, seed := range config.Current().Topology.Discovery.Seeds {
 			instanceKey, err := instresolve.ParseRawInstanceKey(seed)
 			if err == nil {
 				instinventory.InjectSeed(instanceKey)
@@ -508,8 +496,8 @@ func ContinuousDiscovery(ctx context.Context) error {
 	var recoveryEntrance atomic.Int64
 	var snapshotTopologiesTick <-chan time.Time
 	var snapshotTopologiesTicker *time.Ticker
-	if config.Config.Topology.Snapshot.IntervalHours > 0 {
-		snapshotTopologiesTicker = time.NewTicker(time.Duration(config.Config.Topology.Snapshot.IntervalHours) * time.Hour)
+	if config.Current().Topology.Snapshot.IntervalHours > 0 {
+		snapshotTopologiesTicker = time.NewTicker(time.Duration(config.Current().Topology.Snapshot.IntervalHours) * time.Hour)
 		defer snapshotTopologiesTicker.Stop()
 		snapshotTopologiesTick = snapshotTopologiesTicker.C
 	}
@@ -519,8 +507,6 @@ func ContinuousDiscovery(ctx context.Context) error {
 	}
 
 	var seedOnce sync.Once
-
-	AcceptSignals()
 
 	log.Infof("continuous discovery: starting")
 	for {
@@ -544,7 +530,7 @@ func ContinuousDiscovery(ctx context.Context) error {
 			}()
 		case <-autoPseudoGTIDTicker.C:
 			go func() {
-				if config.Config.PseudoGTID.Auto && IsLeader() {
+				if config.Current().PseudoGTID.Auto && IsLeader() {
 					go InjectPseudoGTIDOnWriters()
 				}
 			}()
@@ -597,8 +583,8 @@ func ContinuousDiscovery(ctx context.Context) error {
 		case <-recoveryTicker.C:
 			go func() {
 				if IsLeaderOrActive() {
-					go recovery.ClearActiveFailureDetections()
-					go recovery.ClearActiveRecoveries()
+					go recovery.ClearActiveFailureDetections(ctx)
+					go recovery.ClearActiveRecoveries(ctx)
 					go recovery.ExpireBlockedRecoveries()
 					go recovery.AcknowledgeCrashedRecoveries()
 					go analysis.ExpireInstanceAnalysisChangelog()
@@ -611,7 +597,7 @@ func ContinuousDiscovery(ctx context.Context) error {
 							return
 						}
 						if runCheckAndRecoverOperationsTimeRipe() {
-							recovery.CheckAndRecover(nil, nil, false)
+							recovery.CheckAndRecover(ctx, nil, nil, false)
 						} else {
 							log.Debugf("Waiting for %+v seconds to pass before running failure detection/recovery", checkAndRecoverWaitPeriod.Seconds())
 						}

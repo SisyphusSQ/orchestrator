@@ -57,7 +57,7 @@ type ClusterPoolInstance struct {
 }
 
 func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
-	if submission.CreatedAt.Add(time.Duration(config.Config.Topology.Pools.ExpiryMinutes) * time.Minute).Before(time.Now()) {
+	if submission.CreatedAt.Add(time.Duration(config.Current().Topology.Pools.ExpiryMinutes) * time.Minute).Before(time.Now()) {
 		// already expired; no need to persist
 		return nil
 	}
@@ -67,7 +67,7 @@ func ApplyPoolInstances(submission *PoolInstancesSubmission) error {
 		for instanceString := range instancesStrings {
 			instanceString = strings.TrimSpace(instanceString)
 			instanceKey, err := instresolve.ParseInstanceKey(instanceString)
-			if config.Config.Topology.Pools.SupportFuzzyHostnames {
+			if config.Current().Topology.Pools.SupportFuzzyHostnames {
 				instanceKey = readFuzzyInstanceKeyIfPossible(instanceKey)
 			}
 			if err != nil {

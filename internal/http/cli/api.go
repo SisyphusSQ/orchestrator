@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -145,10 +146,10 @@ func diagnostic(name string, params transport.Params, req *http.Request) (any, e
 		}
 		return masters[0].Key, instaudit.AuditOperation(name, &masters[0].Key, cluster)
 	case "get-candidate-replica":
-		candidate, _, _, _, _, err := instregroup.GetCandidateReplica(&key, false)
+		candidate, _, _, _, _, err := instregroup.GetCandidateReplica(context.WithoutCancel(req.Context()), &key, false)
 		return candidate, err
 	case "rematch":
-		instance, _, err := instrelocation.RematchReplica(&key, true)
+		instance, _, err := instrelocation.RematchReplica(context.WithoutCancel(req.Context()), &key, true)
 		return instance, err
 	case "instance-status":
 		instance, found, err := instinventory.ReadInstance(&key)
@@ -158,7 +159,7 @@ func diagnostic(name string, params transport.Params, req *http.Request) (any, e
 		if !found || instance == nil {
 			return nil, fmt.Errorf("instance not found")
 		}
-		return instance.HumanReadableDescription(), nil
+		return instance.HumanReadableDescription(context.WithoutCancel(req.Context())), nil
 	}
 	// 以下命令只查询拓扑/日志，不修改全局 CLI 参数。
 	instance, err := instdiscovery.ReadTopologyInstance(&key)
@@ -186,7 +187,7 @@ func diagnostic(name string, params transport.Params, req *http.Request) (any, e
 		if pattern == "" {
 			return nil, fmt.Errorf("pattern is required")
 		}
-		return instbinlog.SearchEntryInInstanceBinlogs(instance, pattern, false, nil)
+		return instbinlog.SearchEntryInInstanceBinlogs(context.WithoutCancel(req.Context()), instance, pattern, false, nil)
 	case "last-executed-relay-entry":
 		minimum, err := instinventory.GetPreviousKnownRelayLogCoordinatesForInstance(instance)
 		if err != nil {
@@ -212,7 +213,7 @@ func diagnostic(name string, params transport.Params, req *http.Request) (any, e
 			if coordinates == nil {
 				coordinates = &instance.SelfBinlogCoordinates
 			}
-			result, _, err := instrelocation.CorrelateBinlogCoordinates(instance, coordinates, other)
+			result, _, err := instrelocation.CorrelateBinlogCoordinates(context.WithoutCancel(req.Context()), instance, coordinates, other)
 			return result, err
 		}
 		source, correlated, next, found, err := instrelocation.CorrelateRelaylogCoordinates(instance, coordinates, other)

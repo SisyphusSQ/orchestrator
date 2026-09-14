@@ -56,3 +56,9 @@ orch --endpoint https://orchestrator.example topology --cluster production
 ```
 
 A 200 response is not enough. Identity must be unique, replication edges correct, classification intentional, and state stable after the next poll. Monitor queue depth, last successful check, problem instances, resolution cache, and filter logs. Stop mutations and automatic recovery when discovery is stale.
+
+## Manual discovery lifetime
+
+Synchronous `discover` binds connection and topology SQL to the request Context; cancellation stops reads that have not been submitted. `async-discover` responds once on acceptance and transfers ownership to the HTTP service. Client disconnect does not cancel accepted work or trigger another response write. Concurrency uses `topology.discovery.maxConcurrency`; capacity exhaustion explicitly rejects submission. Each read deadline is connect timeout plus discovery read timeout, at least one second. Completion/failure is recorded through `async-discover` audit and error logs. Service shutdown cancels and waits for its tasks.
+
+Once Raft publication starts, its own outcome semantics apply. Timeout/disconnect does not imply rollback of a submitted command and must not cause automatic replay. Acceptance does not prove discovery success; reread instance state and audit.

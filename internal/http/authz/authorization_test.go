@@ -1,30 +1,31 @@
 package authz
 
 import (
-	"github.com/openark/orchestrator/internal/http/transport"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/openark/orchestrator/internal/http/transport"
 
 	"github.com/openark/orchestrator/internal/config"
 )
 
 func TestAuthorizationModesPreservePrincipalContracts(t *testing.T) {
-	previousReadOnly := config.Config.Server.ReadOnly
-	previousMethod := config.Config.Authentication.Method
-	previousHeader := config.Config.Authentication.Proxy.UserHeader
-	previousPowerUsers := config.Config.Authentication.Power.Users
-	previousPowerGroups := config.Config.Authentication.Power.Groups
+	previousReadOnly := config.Current().Server.ReadOnly
+	previousMethod := config.Current().Authentication.Method
+	previousHeader := config.Current().Authentication.Proxy.UserHeader
+	previousPowerUsers := config.Current().Authentication.Power.Users
+	previousPowerGroups := config.Current().Authentication.Power.Groups
 	t.Cleanup(func() {
-		config.Config.Server.ReadOnly = previousReadOnly
-		config.Config.Authentication.Method = previousMethod
-		config.Config.Authentication.Proxy.UserHeader = previousHeader
-		config.Config.Authentication.Power.Users = previousPowerUsers
-		config.Config.Authentication.Power.Groups = previousPowerGroups
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = previousReadOnly })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = previousMethod })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Proxy.UserHeader = previousHeader })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Power.Users = previousPowerUsers })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Power.Groups = previousPowerGroups })
 	})
 
 	request := httptest.NewRequest("GET", "/", nil)
-	config.Config.Server.ReadOnly = false
-	config.Config.Authentication.Power.Groups = nil
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = false })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Power.Groups = nil })
 
 	tests := []struct {
 		name      string
@@ -41,8 +42,8 @@ func TestAuthorizationModesPreservePrincipalContracts(t *testing.T) {
 			name:   "proxy power user",
 			method: "proxy",
 			prepare: func() {
-				config.Config.Authentication.Proxy.UserHeader = "X-Auth-User"
-				config.Config.Authentication.Power.Users = []string{"admin"}
+				config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Proxy.UserHeader = "X-Auth-User" })
+				config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Power.Users = []string{"admin"} })
 				request.Header.Set("X-Auth-User", "admin")
 			},
 			want: true,
@@ -55,9 +56,9 @@ func TestAuthorizationModesPreservePrincipalContracts(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			request.Header = make(map[string][]string)
-			config.Config.Authentication.Proxy.UserHeader = ""
-			config.Config.Authentication.Power.Users = nil
-			config.Config.Authentication.Method = tc.method
+			config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Proxy.UserHeader = "" })
+			config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Power.Users = nil })
+			config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = tc.method })
 			if tc.prepare != nil {
 				tc.prepare()
 			}
@@ -67,17 +68,17 @@ func TestAuthorizationModesPreservePrincipalContracts(t *testing.T) {
 		})
 	}
 
-	config.Config.Server.ReadOnly = true
-	config.Config.Authentication.Method = "basic"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = true })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Authentication.Method = "basic" })
 	if ForWrite(request, "writer") {
 		t.Fatal("read-only configuration allowed a mutating action")
 	}
 }
 
 func TestUninitializedRaftNeverAuthorizesBusinessWrites(t *testing.T) {
-	previous := config.Config.Server.ReadOnly
-	config.Config.Server.ReadOnly = false
-	t.Cleanup(func() { config.Config.Server.ReadOnly = previous })
+	previous := config.Current().Server.ReadOnly
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = false })
+	t.Cleanup(func() { config.TestUpdate(func(cfg *config.Configuration) { cfg.Server.ReadOnly = previous }) })
 	if ForAction(httptest.NewRequest("POST", "/api/discover/db/3306", nil), "writer") {
 		t.Fatal("uninitialized Raft authorized a topology write")
 	}

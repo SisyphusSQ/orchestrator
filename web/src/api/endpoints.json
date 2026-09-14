@@ -1,0 +1,1682 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/cli/get-candidate-replica/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/rematch/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/master-pos-wait/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/last-executed-relay-entry/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/correlate-relaylog-pos/:host/:port/:belowHost/:belowPort",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/find-binlog-entry/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/correlate-binlog-pos/:host/:port/:belowHost/:belowPort",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/find",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/which-heuristic-domain-instance/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/which-cluster-gh-ost-replicas/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/which-lost-in-recovery",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/instance-status/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/get-cluster-heuristic-lag/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/cluster-pool-instances",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/set-heuristic-domain-instance/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/active-nodes",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/show-resolve-hosts",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cli/show-unresolve-hosts",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/relocate/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/relocate/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/relocate-below/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/relocate-slaves/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/relocate-replicas/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/relocate-replicas/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-slaves/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/regroup-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-up/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/move-up/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-up-slaves/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-up-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/move-up-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-below/:host/:port/:siblingHost/:siblingPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/move-below/:host/:port/:siblingHost/:siblingPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-equivalent/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/move-equivalent/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/repoint/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/repoint/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/repoint/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/repoint/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/repoint-slaves/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/repoint-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/repoint-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/make-co-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/make-co-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/enslave-siblings/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/take-siblings/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/take-siblings/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/enslave-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/take-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/take-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/master-equivalent/:host/:port/:logFile/:logPos",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-slaves-bls/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-replicas-bls/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-below-gtid/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/move-below-gtid/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-slaves-gtid/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/move-replicas-gtid/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/move-replicas-gtid/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-slaves-gtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-replicas-gtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match-below/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/match-below/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match-up/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match-slaves/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match-replicas/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/match-replicas/:host/:port/:belowHost/:belowPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match-up-slaves/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/match-up-replicas/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-slaves-pgtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/regroup-replicas-pgtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/make-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/make-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/make-local-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/make-local-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/enable-gtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/enable-gtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/disable-gtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/disable-gtid/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/locate-gtid-errant/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/gtid-errant-reset-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/gtid-errant-reset-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/gtid-errant-inject-empty/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/gtid-errant-inject-empty/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/skip-query/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/skip-query/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/start-slave/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/start-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/start-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/restart-slave/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/restart-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/restart-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/stop-slave/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/stop-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/stop-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/stop-slave-nice/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/stop-replica-nice/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/reset-slave/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/reset-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/reset-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/change-master-credentials/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/detach-slave/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/detach-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/detach-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/reattach-slave/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/reattach-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/reattach-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/detach-slave-master-host/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/detach-replica-master-host/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/reattach-slave-master-host/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/reattach-replica-master-host/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/reattach-replica-master-host/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/flush-binary-logs/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/purge-binary-logs/:host/:port/:logFile",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/restart-slave-statements/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/restart-replica-statements/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/enable-semi-sync-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/enable-semi-sync-source/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/disable-semi-sync-master/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/disable-semi-sync-source/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/enable-semi-sync-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/disable-semi-sync-replica/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/delay-replication/:host/:port/:seconds",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/can-replicate-from/:host/:port/:belowHost/:belowPort",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/can-replicate-from-gtid/:host/:port/:belowHost/:belowPort",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/set-read-only/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/set-read-only/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/set-writeable/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/set-writeable/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/kill-query/:host/:port/:process",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/last-pseudo-gtid/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/submit-pool-instances/:pool",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/submit-pool-instances/:pool",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster-pool-instances/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster-pool-instances/:clusterName/:pool",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/heuristic-cluster-pool-instances/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/heuristic-cluster-pool-instances/:clusterName/:pool",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/heuristic-cluster-pool-lag/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/heuristic-cluster-pool-lag/:clusterName/:pool",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/search/:searchString",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/search",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster/alias/:clusterAlias",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster/instance/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster-info/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster-info/alias/:clusterAlias",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster-osc-slaves/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/cluster-osc-replicas/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/set-cluster-alias/:clusterName",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/set-cluster-alias/:clusterName",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/clusters",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/clusters-info",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/masters",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/master/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/instance-replicas/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/all-instances",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/downtimed",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/downtimed/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology-tabulated/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology-tabulated/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology-tags/:clusterHint",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology-tags/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/snapshot-topologies",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/submit-masters-to-kv-stores",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/submit-masters-to-kv-stores/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/tagged",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/tags/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/tag-value/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/tag-value/:host/:port/:tagName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/tag/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/tag/:host/:port/:tagName/:tagValue",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/untag/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/untag/:host/:port/:tagName",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/untag-all",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/untag-all/:tagName/:tagValue",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/instance/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/discover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/discover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/async-discover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/refresh/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/refresh/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/forget/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/forget/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/forget-cluster/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/begin-maintenance/:host/:port/:owner/:reason",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/begin-maintenance/:host/:port/:owner/:reason",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/end-maintenance/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/end-maintenance/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/in-maintenance/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/end-maintenance/:maintenanceKey",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/end-maintenance/:maintenanceKey",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/maintenance",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/begin-downtime/:host/:port/:owner/:reason",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/begin-downtime/:host/:port/:owner/:reason",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/begin-downtime/:host/:port/:owner/:reason/:duration",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/begin-downtime/:host/:port/:owner/:reason/:duration",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/end-downtime/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/end-downtime/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/recovery-policy/:scopeType/:scopeKey",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recovery-policy",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/recovery-hook-profiles",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recovery-hook-profiles",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recovery-hook-test",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/recovery-hook-assignments/:scopeType/:scopeKey",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recovery-hook-assignments",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/replication-analysis",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/replication-analysis/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/replication-analysis/instance/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/recover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/recover/:host/:port/:candidateHost/:candidatePort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recover/:host/:port/:candidateHost/:candidatePort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/recover-lite/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recover-lite/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/recover-lite/:host/:port/:candidateHost/:candidatePort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/recover-lite/:host/:port/:candidateHost/:candidatePort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/graceful-master-takeover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover/:host/:port/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/graceful-master-takeover/:host/:port/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/graceful-master-takeover/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover-auto/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover-auto/:host/:port/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover-auto/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/graceful-master-takeover-auto/:clusterHint/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/force-master-failover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/force-master-failover/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/force-master-failover/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/force-master-failover/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/force-master-takeover/:clusterHint/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/force-master-takeover/:host/:port/:designatedHost/:designatedPort",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/register-candidate/:host/:port/:promotionRule",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/register-candidate/:host/:port/:promotionRule",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/automated-recovery-filters",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-failure-detection",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-failure-detection/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-failure-detection/id/:id",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-failure-detection/alias/:clusterAlias",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-failure-detection/alias/:clusterAlias/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/replication-analysis-changelog",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/id/:id",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/uid/:uid",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/cluster/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/cluster/:clusterName/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/alias/:clusterAlias",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery/alias/:clusterAlias/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-recovery-steps/:uid",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/active-cluster-recovery/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/recently-active-cluster-recovery/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/recently-active-instance-recovery/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/ack-recovery/cluster/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/ack-recovery/cluster/:clusterHint",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/ack-recovery/cluster/alias/:clusterAlias",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/ack-recovery/cluster/alias/:clusterAlias",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/ack-recovery/instance/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/ack-recovery/instance/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/ack-recovery/:recoveryId",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/ack-recovery/:recoveryId",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/ack-recovery/uid/:uid",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/ack-recovery/uid/:uid",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/ack-all-recoveries",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/blocked-recoveries",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/blocked-recoveries/cluster/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/disable-global-recoveries",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/disable-global-recoveries",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/enable-global-recoveries",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/enable-global-recoveries",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/check-global-recoveries",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/problems",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/problems/:clusterName",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit/instance/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit/instance/:host/:port/:page",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/resolve/:host/:port",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/headers",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/lb-check",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/_ping",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/leader-check",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/leader-check/:errorStatusCode",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/raft/configuration",
+    "readOnly": true
+  },
+  {
+    "method": "POST",
+    "path": "/api/raft/bootstrap",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/raft/members",
+    "readOnly": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/raft/members/:id",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/raft/leadership/transfer",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/raft/snapshot",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/raft-state",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/raft-leader",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/raft-health",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/raft-status",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/reload-configuration",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/reload-configuration",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/hostname-resolve-cache",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/reset-hostname-resolve-cache",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/reset-hostname-resolve-cache",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/routed-leader-check",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/reload-cluster-alias",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/deregister-hostname-unresolve/:host/:port",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/register-hostname-unresolve/:host/:port/:virtualname",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/bulk-instances",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/bulk-promotion-rules",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agents",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent/:host",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-umount/:host",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-umount/:host",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-mount/:host",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-mount/:host",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-create-snapshot/:host",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-create-snapshot/:host",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-removelv/:host",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-removelv/:host",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-mysql-stop/:host",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-mysql-stop/:host",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-mysql-start/:host",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-mysql-start/:host",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-seed/:targetHost/:sourceHost",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-seed/:targetHost/:sourceHost",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-active-seeds/:host",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-recent-seeds/:host",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-seed-details/:seedId",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-seed-states/:seedId",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-abort-seed/:seedId",
+    "readOnly": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/agent-abort-seed/:seedId",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/agent-custom-command/:host/:command",
+    "readOnly": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/seeds",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/status",
+    "readOnly": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/web-config",
+    "readOnly": true
+  }
+]

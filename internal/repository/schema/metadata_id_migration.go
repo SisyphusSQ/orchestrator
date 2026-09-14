@@ -33,7 +33,7 @@ func Columns(ctx context.Context, database *sql.DB, table string) ([]Column, err
 func metadataColumns(ctx context.Context, database *sql.DB, table string) ([]Column, error) {
 	query := `SELECT column_name, column_type, is_nullable = 'NO', extra LIKE '%auto_increment%', IF(column_key = 'PRI', ordinal_position, 0) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position`
 	args := []any{table}
-	if config.Config.IsSQLite() {
+	if config.Current().IsSQLite() {
 		query = "PRAGMA table_info(" + quoteMetadataIdentifier(table) + ")"
 		args = nil
 	}
@@ -45,7 +45,7 @@ func metadataColumns(ctx context.Context, database *sql.DB, table string) ([]Col
 	var columns []Column
 	for rows.Next() {
 		var column Column
-		if config.Config.IsSQLite() {
+		if config.Current().IsSQLite() {
 			var sequence int
 			var defaultValue sql.NullString
 			if err := rows.Scan(&sequence, &column.Name, &column.Kind, &column.NotNull, &defaultValue, &column.PrimaryPosition); err != nil {
@@ -61,7 +61,7 @@ func metadataColumns(ctx context.Context, database *sql.DB, table string) ([]Col
 }
 
 func metadataPrimaryKey(ctx context.Context, database *sql.DB, table string, columns []Column) ([]string, error) {
-	if !config.Config.IsSQLite() {
+	if !config.Current().IsSQLite() {
 		rows, err := database.QueryContext(ctx, `SELECT column_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = 'PRIMARY' ORDER BY seq_in_index`, table)
 		if err != nil {
 			return nil, err
@@ -96,7 +96,7 @@ func metadataHasBusinessKey(ctx context.Context, database *sql.DB, table string,
 		return true, nil
 	}
 	indexes := make(map[string][]string)
-	if config.Config.IsSQLite() {
+	if config.Current().IsSQLite() {
 		rows, err := database.QueryContext(ctx, "PRAGMA index_list("+quoteMetadataIdentifier(table)+")")
 		if err != nil {
 			return false, err
@@ -176,7 +176,7 @@ func validateMetadataTableID(ctx context.Context, database *sql.DB, table string
 		return fmt.Errorf("%s primary key is %v; expected id", table, primary)
 	}
 	for _, column := range columns {
-		if column.Name == "id" && (!column.Auto || (!config.Config.IsSQLite() && (!column.NotNull || !strings.HasPrefix(strings.ToLower(column.Kind), "bigint") || !strings.Contains(strings.ToLower(column.Kind), "unsigned")))) {
+		if column.Name == "id" && (!column.Auto || (!config.Current().IsSQLite() && (!column.NotNull || !strings.HasPrefix(strings.ToLower(column.Kind), "bigint") || !strings.Contains(strings.ToLower(column.Kind), "unsigned")))) {
 			return fmt.Errorf("%s.id is not an auto-increment integer of the required type", table)
 		}
 	}
@@ -262,7 +262,7 @@ func migrateMetadataIDs(ctx context.Context, database *sql.DB) error {
 		if reflect.DeepEqual(primary, []string{"id"}) {
 			continue
 		}
-		if config.Config.IsSQLite() {
+		if config.Current().IsSQLite() {
 			err = migrateSQLiteTableID(ctx, database, table, columns)
 		} else {
 			err = migrateMySQLTableID(ctx, database, table)
@@ -283,7 +283,7 @@ func migrateMetadataIDs(ctx context.Context, database *sql.DB) error {
 	}
 	defer tx.Rollback()
 	insert := `INSERT IGNORE INTO orchestrator_schema_migrations (migration_id, applied_at) VALUES (?, CURRENT_TIMESTAMP)`
-	if config.Config.IsSQLite() {
+	if config.Current().IsSQLite() {
 		insert = ToSQLiteDialect(insert)
 	}
 	if _, err := tx.ExecContext(ctx, insert, metadataschema.CanonicalMigration); err != nil {

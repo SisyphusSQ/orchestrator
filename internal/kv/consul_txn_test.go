@@ -18,14 +18,14 @@ import (
 )
 
 func TestGroupKVPairsByKeyPrefix(t *testing.T) {
-	originalMax := config.Config.Consul.KV.MaxKVsPerTransaction
-	originalPrefix := config.Config.Consul.KV.ClusterMasterPrefix
+	originalMax := config.Current().Consul.KV.MaxKVsPerTransaction
+	originalPrefix := config.Current().Consul.KV.ClusterMasterPrefix
 	t.Cleanup(func() {
-		config.Config.Consul.KV.MaxKVsPerTransaction = originalMax
-		config.Config.Consul.KV.ClusterMasterPrefix = originalPrefix
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.MaxKVsPerTransaction = originalMax })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = originalPrefix })
 	})
-	config.Config.Consul.KV.MaxKVsPerTransaction = 12 // only 10 (5 x 2) KVs should fit into a max of 12
-	config.Config.Consul.KV.ClusterMasterPrefix = "mysql/master"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.MaxKVsPerTransaction = 12 }) // only 10 (5 x 2) KVs should fit into a max of 12
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = "mysql/master" })
 
 	// make 100 KVs for 20 clusters
 	kvPairs := consulapi.KVPairs{}
@@ -33,23 +33,23 @@ func TestGroupKVPairsByKeyPrefix(t *testing.T) {
 	for cluster < 20 {
 		kvPairs = append(kvPairs,
 			&consulapi.KVPair{
-				Key:   fmt.Sprintf("%s/cluster%d", config.Config.Consul.KV.ClusterMasterPrefix, cluster),
+				Key:   fmt.Sprintf("%s/cluster%d", config.Current().Consul.KV.ClusterMasterPrefix, cluster),
 				Value: []byte("mysql.example.com:3306"),
 			},
 			&consulapi.KVPair{
-				Key:   fmt.Sprintf("%s/cluster%d/hostname", config.Config.Consul.KV.ClusterMasterPrefix, cluster),
+				Key:   fmt.Sprintf("%s/cluster%d/hostname", config.Current().Consul.KV.ClusterMasterPrefix, cluster),
 				Value: []byte("mysql.example.com"),
 			},
 			&consulapi.KVPair{
-				Key:   fmt.Sprintf("%s/cluster%d/ipv4", config.Config.Consul.KV.ClusterMasterPrefix, cluster),
+				Key:   fmt.Sprintf("%s/cluster%d/ipv4", config.Current().Consul.KV.ClusterMasterPrefix, cluster),
 				Value: []byte("10.20.30.40"),
 			},
 			&consulapi.KVPair{
-				Key:   fmt.Sprintf("%s/cluster%d/ipv6", config.Config.Consul.KV.ClusterMasterPrefix, cluster),
+				Key:   fmt.Sprintf("%s/cluster%d/ipv6", config.Current().Consul.KV.ClusterMasterPrefix, cluster),
 				Value: []byte("fdf0:7a53:0b88:d147:xxxx:xxxx:xxxx:xxxx"),
 			},
 			&consulapi.KVPair{
-				Key:   fmt.Sprintf("%s/cluster%d/port", config.Config.Consul.KV.ClusterMasterPrefix, cluster),
+				Key:   fmt.Sprintf("%s/cluster%d/port", config.Current().Consul.KV.ClusterMasterPrefix, cluster),
 				Value: []byte("3306"),
 			},
 		)
@@ -90,14 +90,14 @@ func TestGroupKVPairsByKeyPrefix(t *testing.T) {
 }
 
 func TestGroupKVPairsByKeyPrefixStableOrder(t *testing.T) {
-	originalMax := config.Config.Consul.KV.MaxKVsPerTransaction
-	originalPrefix := config.Config.Consul.KV.ClusterMasterPrefix
+	originalMax := config.Current().Consul.KV.MaxKVsPerTransaction
+	originalPrefix := config.Current().Consul.KV.ClusterMasterPrefix
 	t.Cleanup(func() {
-		config.Config.Consul.KV.MaxKVsPerTransaction = originalMax
-		config.Config.Consul.KV.ClusterMasterPrefix = originalPrefix
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.MaxKVsPerTransaction = originalMax })
+		config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = originalPrefix })
 	})
-	config.Config.Consul.KV.MaxKVsPerTransaction = 5
-	config.Config.Consul.KV.ClusterMasterPrefix = "mysql/master"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.MaxKVsPerTransaction = 5 })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = "mysql/master" })
 
 	forward := consulapi.KVPairs{}
 	reverse := consulapi.KVPairs{}
@@ -484,7 +484,7 @@ func TestConsulTxnStoreDistributePairs(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, true)
-	config.Config.Consul.KV.ClusterMasterPrefix = "test"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = "test" })
 
 	store := newTestConsulTxnStore(t)
 	if err := store.DistributePairs([]*KVPair{
@@ -557,8 +557,8 @@ func TestConsulTxnStoreDistributePairsReturnsFailure(t *testing.T) {
 	})
 	defer server.Close()
 	configureConsulTest(t, server.URL, true)
-	config.Config.Consul.KV.ClusterMasterPrefix = "test"
-	config.Config.Consul.KV.MaxKVsPerTransaction = 5
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.ClusterMasterPrefix = "test" })
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Consul.KV.MaxKVsPerTransaction = 5 })
 
 	store := newTestConsulTxnStore(t)
 	err := store.DistributePairs([]*KVPair{{Key: "test/cluster1", Value: "new"}})

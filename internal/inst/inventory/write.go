@@ -3,11 +3,12 @@ package inventory
 import (
 	"context"
 	"fmt"
-	instaudit "github.com/openark/orchestrator/internal/inst/audit"
-	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	"sort"
 	"strings"
 	"time"
+
+	instaudit "github.com/openark/orchestrator/internal/inst/audit"
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -147,7 +148,7 @@ var forceFlushInstanceWriteBuffer = make(chan bool)
 
 // EnqueueInstanceWrite buffers one discovered instance for backend persistence.
 func EnqueueInstanceWrite(instance *instmodel.Instance, instanceWasActuallyFound bool, lastError error) {
-	if len(instanceWriteBuffer) == config.Config.Topology.WriteBuffer.Size {
+	if len(instanceWriteBuffer) == config.Current().Topology.WriteBuffer.Size {
 		// Signal the "flushing" goroutine that there's work.
 		// We prefer doing all bulk flushes from one goroutine.
 		// Non blocking send to avoid blocking goroutines on sending a flush,
@@ -173,7 +174,7 @@ func flushInstanceWriteBuffer() {
 	// when one instance is flushed from the buffer then one discovery goroutine is ready to enqueue a new instance
 	// this is why we want to flush all instances in the buffer until a max of `InstanceWriteBufferSize`.
 	// Otherwise we can flush way more instances than what's expected.
-	for i := 0; i < config.Config.Topology.WriteBuffer.Size && len(instanceWriteBuffer) > 0; i++ {
+	for i := 0; i < config.Current().Topology.WriteBuffer.Size && len(instanceWriteBuffer) > 0; i++ {
 		upd := <-instanceWriteBuffer
 		if upd.instanceWasActuallyFound && upd.lastError == nil {
 			lastseen = append(lastseen, upd.instance)
@@ -240,13 +241,17 @@ func UpdateInstanceLastChecked(instanceKey *instmodel.InstanceKey, partialSucces
 // wish to access the instance again: if last_attempted_check is *newer* than last_checked, that's bad news and means
 // we have a "hanging" issue.
 func UpdateInstanceLastAttemptedCheck(instanceKey *instmodel.InstanceKey) error {
+	return UpdateInstanceLastAttemptedCheckContext(context.Background(), instanceKey)
+}
+
+func UpdateInstanceLastAttemptedCheckContext(ctx context.Context, instanceKey *instmodel.InstanceKey) error {
 	writeFunc := func() error {
 		err := metadata.UpdateInstanceLastAttemptedCheck(
-			context.Background(), instanceKey.Hostname, instanceKey.Port,
+			ctx, instanceKey.Hostname, instanceKey.Port,
 		)
 		return log.Errore(err)
 	}
-	return metadata.ExecuteWrite(context.Background(), writeFunc)
+	return metadata.ExecuteWrite(ctx, writeFunc)
 }
 
 func InstanceIsForgotten(instanceKey *instmodel.InstanceKey) bool {
@@ -299,7 +304,7 @@ func ForgetCluster(clusterName string, unregister func(*instmodel.InstanceKey)) 
 // ForgetLongUnseenInstances will remove entries of all instacnes that have long since been last seen.
 func ForgetLongUnseenInstances() error {
 	rows, err := metadata.ForgetLongUnseenInstances(
-		context.Background(), config.Config.Topology.Discovery.UnseenForgetHours,
+		context.Background(), config.Current().Topology.Discovery.UnseenForgetHours,
 	)
 	if err != nil {
 		return log.Errore(err)

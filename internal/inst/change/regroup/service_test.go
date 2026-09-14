@@ -1,14 +1,17 @@
 package regroup
 
 import (
+	"context"
+	"math/rand"
+
 	instreplication "github.com/openark/orchestrator/internal/inst/change/replication"
 	instmodel "github.com/openark/orchestrator/internal/inst/instance"
-	"math/rand"
+
+	"testing"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
 	test "github.com/openark/orchestrator/internal/golib/tests"
-	"testing"
 )
 
 var (
@@ -21,7 +24,7 @@ var (
 )
 
 func init() {
-	config.Config.Topology.Hostname.ResolveMethod = "none"
+	config.TestUpdate(func(cfg *config.Configuration) { cfg.Topology.Hostname.ResolveMethod = "none" })
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }
@@ -246,7 +249,7 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 	{
 		instances, _ := generateTestInstances()
 		for _, instance := range instances {
-			test.S(t).ExpectFalse(IsBannedFromBeingCandidateReplica(instance))
+			test.S(t).ExpectFalse(IsBannedFromBeingCandidateReplica(context.Background(), instance))
 		}
 	}
 	{
@@ -255,7 +258,7 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 			instance.PromotionRule = instmodel.MustNotPromoteRule
 		}
 		for _, instance := range instances {
-			test.S(t).ExpectTrue(IsBannedFromBeingCandidateReplica(instance))
+			test.S(t).ExpectTrue(IsBannedFromBeingCandidateReplica(context.Background(), instance))
 		}
 	}
 	{
@@ -277,15 +280,15 @@ func TestChooseCandidateReplicaNoCandidateReplica(t *testing.T) {
 		instance.LogBinEnabled = true
 		instance.LogReplicationUpdatesEnabled = false
 	}
-	_, _, _, _, _, err := chooseCandidateReplica(instances)
+	_, _, _, _, _, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNotNil(err)
 }
 
 func TestChooseCandidateReplica(t *testing.T) {
 	instances, _ := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -299,8 +302,8 @@ func TestChooseCandidateReplica2(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].LogReplicationUpdatesEnabled = false
 	instancesMap[i820Key.StringCode()].LogBinEnabled = false
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i810Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 2)
@@ -317,8 +320,8 @@ func TestChooseCandidateReplicaSameCoordinatesDifferentVersions(t *testing.T) {
 	}
 	instancesMap[i810Key.StringCode()].Version = "5.5.1"
 	instancesMap[i720Key.StringCode()].Version = "5.7.8"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i810Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -331,8 +334,8 @@ func TestChooseCandidateReplicaPriorityVersionNoLoss(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].Version = "5.5.1"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -345,8 +348,8 @@ func TestChooseCandidateReplicaPriorityVersionLosesOne(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].Version = "5.7.8"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i820Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 1)
@@ -360,8 +363,8 @@ func TestChooseCandidateReplicaPriorityVersionLosesTwo(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].Version = "5.7.8"
 	instancesMap[i820Key.StringCode()].Version = "5.7.18"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i810Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 2)
@@ -377,8 +380,8 @@ func TestChooseCandidateReplicaPriorityVersionHigherVersionOverrides(t *testing.
 	instancesMap[i820Key.StringCode()].Version = "5.7.18"
 	instancesMap[i810Key.StringCode()].Version = "5.7.5"
 	instancesMap[i730Key.StringCode()].Version = "5.7.30"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -395,8 +398,8 @@ func TestChooseCandidateReplicaLosesOneDueToBinlogFormat(t *testing.T) {
 	}
 	instancesMap[i730Key.StringCode()].Binlog_format = "STATEMENT"
 
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -412,8 +415,8 @@ func TestChooseCandidateReplicaPriorityBinlogFormatNoLoss(t *testing.T) {
 		instance.Binlog_format = "MIXED"
 	}
 	instancesMap[i830Key.StringCode()].Binlog_format = "STATEMENT"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -426,8 +429,8 @@ func TestChooseCandidateReplicaPriorityBinlogFormatLosesOne(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].Binlog_format = "ROW"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i820Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 1)
@@ -441,8 +444,8 @@ func TestChooseCandidateReplicaPriorityBinlogFormatLosesTwo(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].Binlog_format = "ROW"
 	instancesMap[i820Key.StringCode()].Binlog_format = "ROW"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i810Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 2)
@@ -458,8 +461,8 @@ func TestChooseCandidateReplicaPriorityBinlogFormatRowOverrides(t *testing.T) {
 	instancesMap[i820Key.StringCode()].Binlog_format = "ROW"
 	instancesMap[i810Key.StringCode()].Binlog_format = "ROW"
 	instancesMap[i730Key.StringCode()].Binlog_format = "ROW"
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -472,8 +475,8 @@ func TestChooseCandidateReplicaMustNotPromoteRule(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].PromotionRule = instmodel.MustNotPromoteRule
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i820Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 1)
@@ -487,8 +490,8 @@ func TestChooseCandidateReplicaPreferNotPromoteRule(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	instancesMap[i830Key.StringCode()].PromotionRule = instmodel.MustNotPromoteRule
 	instancesMap[i820Key.StringCode()].PromotionRule = instmodel.PreferNotPromoteRule
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i820Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 1)
@@ -504,8 +507,8 @@ func TestChooseCandidateReplicaPreferNotPromoteRule2(t *testing.T) {
 		instance.PromotionRule = instmodel.PreferNotPromoteRule
 	}
 	instancesMap[i830Key.StringCode()].PromotionRule = instmodel.MustNotPromoteRule
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i820Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 1)
@@ -522,8 +525,8 @@ func TestChooseCandidateReplicaPromoteRuleOrdering(t *testing.T) {
 		instance.PromotionRule = instmodel.NeutralPromoteRule
 	}
 	instancesMap[i830Key.StringCode()].PromotionRule = instmodel.PreferPromoteRule
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i830Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -540,8 +543,8 @@ func TestChooseCandidateReplicaPromoteRuleOrdering2(t *testing.T) {
 		instance.PromotionRule = instmodel.PreferPromoteRule
 	}
 	instancesMap[i820Key.StringCode()].PromotionRule = instmodel.MustPromoteRule
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i820Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)
@@ -560,8 +563,8 @@ func TestChooseCandidateReplicaPromoteRuleOrdering3(t *testing.T) {
 	instancesMap[i730Key.StringCode()].PromotionRule = instmodel.MustPromoteRule
 	instancesMap[i810Key.StringCode()].PromotionRule = instmodel.PreferPromoteRule
 	instancesMap[i830Key.StringCode()].PromotionRule = instmodel.PreferNotPromoteRule
-	instances = sortedReplicas(instances, instreplication.NoStopReplication)
-	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(instances)
+	instances = sortedReplicas(context.Background(), instances, instreplication.NoStopReplication)
+	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := chooseCandidateReplica(context.Background(), instances)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectEquals(candidate.Key, i730Key)
 	test.S(t).ExpectEquals(len(aheadReplicas), 0)

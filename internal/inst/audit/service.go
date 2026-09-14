@@ -86,14 +86,14 @@ func AuditOperation(auditType string, instanceKey *instmodel.InstanceKey, messag
 	}
 
 	auditWritten := false
-	if config.Config.Audit.LogFile != "" {
+	if config.Current().Audit.LogFile != "" {
 		text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format(log.TimeFormat), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
-		if err := appendAuditFile(config.Config.Audit.LogFile, text); err != nil {
+		if err := appendAuditFile(config.Current().Audit.LogFile, text); err != nil {
 			return log.Errore(err)
 		}
 		auditWritten = true
 	}
-	if config.Config.Audit.ToBackend {
+	if config.Current().Audit.ToBackend {
 		err := metadata.WriteAudit(
 			context.Background(), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message,
 		)
@@ -169,5 +169,5 @@ func ReadRecentAudit(instanceKey *instmodel.InstanceKey, page int) ([]Audit, err
 
 // ExpireAudit removes old rows from the audit table
 func ExpireAudit() error {
-	return metadata.ExpireAudit(context.Background(), config.Config.Audit.PurgeDays)
+	return metadata.ExpireAudit(context.Background(), config.Current().Audit.PurgeDays)
 }

@@ -18,6 +18,7 @@
 package instance
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -488,7 +489,7 @@ func (instance *Instance) IsDescendantOf(other *Instance) bool {
 
 // CanReplicateFrom uses heuristics to decide whether this instacne can practically replicate from other instance.
 // Checks are made to binlog format, version number, binary logs etc.
-func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
+func (instance *Instance) CanReplicateFrom(ctx context.Context, other *Instance) (bool, error) {
 	var warningMsg error = nil
 
 	if instance.Key.Equals(&other.Key) {
@@ -506,7 +507,7 @@ func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 	}
 	if instance.IsSmallerMajorVersion(other) && !instance.IsBinlogServer() {
 		warningMsg = fmt.Errorf("instance %+v has version %s, which is lower than %s on %+v ", instance.Key, instance.Version, other.Version, other.Key)
-		if !config.Config.Topology.Compatibility.LowerReplicaVersionAllowed {
+		if !config.Current().Topology.Compatibility.LowerReplicaVersionAllowed {
 			return false, warningMsg
 		}
 	}
@@ -515,7 +516,7 @@ func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 			return false, fmt.Errorf("cannot replicate from %+v binlog format on %+v to %+v on %+v", other.Binlog_format, other.Key, instance.Binlog_format, instance.Key)
 		}
 	}
-	policy := recoverypolicy.Current(instance.ClusterName)
+	policy := recoverypolicy.FromContext(ctx, instance.ClusterName)
 	if policy.VerifyReplicationFilters {
 		if other.HasReplicationFilters && !instance.HasReplicationFilters {
 			return false, fmt.Errorf("%+v has replication filters", other.Key)
@@ -536,10 +537,10 @@ func (instance *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 const logPrefix = "Replicating from higher version source is enabled by LowerReplicaVersionAllowed config parameter. " +
 	"Note that such a configuration is not officially supported by MySQL."
 
-func (instance *Instance) CanReplicateFromEx(other *Instance, logContext string) (bool, error) {
-	canReplicate, err := instance.CanReplicateFrom(other)
+func (instance *Instance) CanReplicateFromEx(ctx context.Context, other *Instance, logContext string) (bool, error) {
+	canReplicate, err := instance.CanReplicateFrom(ctx, other)
 
-	if config.Config.Topology.Compatibility.LowerReplicaVersionAllowed && canReplicate && err != nil {
+	if config.Current().Topology.Compatibility.LowerReplicaVersionAllowed && canReplicate && err != nil {
 		log.Warningf("%v: %v Details: %v", logContext, logPrefix, err)
 		err = nil
 	}
@@ -547,8 +548,8 @@ func (instance *Instance) CanReplicateFromEx(other *Instance, logContext string)
 }
 
 // HasReasonableMaintenanceReplicationLag returns true when the replica lag is reasonable, and maintenance operations should have a green light to go.
-func (instance *Instance) HasReasonableMaintenanceReplicationLag() bool {
-	threshold := recoverypolicy.Current(instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds
+func (instance *Instance) HasReasonableMaintenanceReplicationLag(ctx context.Context) bool {
+	threshold := recoverypolicy.FromContext(ctx, instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds
 	// replicas with SQLDelay are a special case
 	if instance.SQLDelay > 0 {
 		return math.AbsInt64(instance.SecondsBehindMaster.Int64-int64(instance.SQLDelay)) <= int64(threshold)
@@ -558,7 +559,7 @@ func (instance *Instance) HasReasonableMaintenanceReplicationLag() bool {
 
 // CanMove returns true if this instance's state allows it to be repositioned. For example,
 // if this instance lags too much, it will not be moveable.
-func (instance *Instance) CanMove() (bool, error) {
+func (instance *Instance) CanMove(ctx context.Context) (bool, error) {
 	if !instance.IsLastCheckValid {
 		return false, fmt.Errorf("%+v: last check invalid", instance.Key)
 	}
@@ -574,7 +575,7 @@ func (instance *Instance) CanMove() (bool, error) {
 	if !instance.SecondsBehindMaster.Valid {
 		return false, fmt.Errorf("%+v: cannot determine replication lag", instance.Key)
 	}
-	if !instance.HasReasonableMaintenanceReplicationLag() {
+	if !instance.HasReasonableMaintenanceReplicationLag(ctx) {
 		return false, fmt.Errorf("%+v: lags too much", instance.Key)
 	}
 	return true, nil
@@ -603,7 +604,7 @@ func (instance *Instance) CanMoveViaMatch() (bool, error) {
 }
 
 // StatusString returns a human readable description of this instance's status
-func (instance *Instance) StatusString() string {
+func (instance *Instance) StatusString(ctx context.Context) string {
 	if !instance.IsLastCheckValid {
 		return "invalid"
 	}
@@ -613,7 +614,7 @@ func (instance *Instance) StatusString() string {
 	if instance.IsReplica() && !instance.ReplicaRunning() {
 		return "nonreplicating"
 	}
-	if instance.IsReplica() && !instance.HasReasonableMaintenanceReplicationLag() {
+	if instance.IsReplica() && !instance.HasReasonableMaintenanceReplicationLag(ctx) {
 		return "lag"
 	}
 	return "ok"
@@ -642,9 +643,9 @@ func (instance *Instance) LagStatusString() string {
 	return fmt.Sprintf("%+vs", instance.ReplicationLagSeconds.Int64)
 }
 
-func (instance *Instance) descriptionTokens() (tokens []string) {
+func (instance *Instance) descriptionTokens(ctx context.Context) (tokens []string) {
 	tokens = append(tokens, instance.LagStatusString())
-	tokens = append(tokens, instance.StatusString())
+	tokens = append(tokens, instance.StatusString(ctx))
 	tokens = append(tokens, instance.Version)
 	if instance.ReadOnly {
 		tokens = append(tokens, "ro")
@@ -687,8 +688,8 @@ func (instance *Instance) descriptionTokens() (tokens []string) {
 
 // HumanReadableDescription returns a simple readable string describing the status, version,
 // etc. properties of this instance
-func (instance *Instance) HumanReadableDescription() string {
-	tokens := instance.descriptionTokens()
+func (instance *Instance) HumanReadableDescription(ctx context.Context) string {
+	tokens := instance.descriptionTokens(ctx)
 	nonEmptyTokens := []string{}
 	for _, token := range tokens {
 		if token != "" {
@@ -700,8 +701,8 @@ func (instance *Instance) HumanReadableDescription() string {
 }
 
 // TabulatedDescription returns a simple tabulated string of various properties
-func (instance *Instance) TabulatedDescription(separator string) string {
-	tokens := instance.descriptionTokens()
+func (instance *Instance) TabulatedDescription(ctx context.Context, separator string) string {
+	tokens := instance.descriptionTokens(ctx)
 	description := strings.Join(tokens, separator)
 	return description
 }

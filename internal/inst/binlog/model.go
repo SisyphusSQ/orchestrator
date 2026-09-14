@@ -19,9 +19,10 @@ package binlog
 
 import (
 	"errors"
-	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	"regexp"
 	"strings"
+
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -167,7 +168,7 @@ func (cursor *BinlogEventCursor) nextRealEvent(recursionLevel int) (*BinlogEvent
 		// but we really don't expect a huge sequence of those.
 		return cursor.nextRealEvent(recursionLevel + 1)
 	}
-	for _, skipSubstring := range config.Config.PseudoGTID.SkipBinlogContaining {
+	for _, skipSubstring := range config.Current().PseudoGTID.SkipBinlogContaining {
 		if strings.Contains(event.Info, skipSubstring) {
 			// Recursion might go deeper here.
 			return cursor.nextRealEvent(recursionLevel + 1)

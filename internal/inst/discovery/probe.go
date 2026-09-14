@@ -106,9 +106,10 @@ func ReadTopologyInstance(instanceKey *instmodel.InstanceKey) (*instmodel.Instan
 }
 
 func ReadTopologyInstanceContext(ctx context.Context, instanceKey *instmodel.InstanceKey) (*instmodel.Instance, error) {
+	ctx = config.WithSnapshot(ctx)
 	instance, skipped, err := ReadTopologyInstanceBufferableContext(ctx, instanceKey, false, nil)
 	if skipped {
-		if config.Config.Topology.Discovery.FilterLogsEnabled {
+		if config.FromContext(ctx).Topology.Discovery.FilterLogsEnabled {
 			log.Infof("Skipping discovery of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", instanceKey)
 		}
 		instance = nil
@@ -158,7 +159,7 @@ func unrecoverableError(err error) bool {
 // Check if the instance is a MaxScale binlog server (a proxy not a real
 // MySQL server) and also update the resolved hostname
 func checkMaxScale(instance *instmodel.Instance, database *topology.Client, latency *stopwatch.NamedStopwatch) (isMaxScale bool, resolvedHostname string, err error) {
-	if config.Config.Topology.Compatibility.SkipMaxScaleCheck {
+	if config.FromContext(database.Context()).Topology.Compatibility.SkipMaxScaleCheck {
 		return isMaxScale, resolvedHostname, err
 	}
 
@@ -236,6 +237,10 @@ func ReadTopologyInstanceBufferable(instanceKey *instmodel.InstanceKey, bufferWr
 
 // ReadTopologyInstanceBufferableContext keeps discovery spans and SQL calls on the caller's context.
 func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *instmodel.InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *instmodel.Instance, skipped bool, err error) {
+	ctx = config.WithSnapshot(ctx)
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	ctx, span := observability.StartSpan(ctx, "topology.discover")
 	defer func() { observability.EndSpan(span, err) }()
 	defer func() {
@@ -272,12 +277,21 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		return instance, instanceDiscoverySkipped, fmt.Errorf("ReadTopologyInstance will not act on invalid instance key: %+v", *instanceKey)
 	}
 
+	timerCtx, cancelTimer := context.WithCancel(ctx)
+	timerDone := make(chan struct{})
 	lastAttemptedCheckTimer := time.AfterFunc(time.Second, func() {
-		go instinventory.UpdateInstanceLastAttemptedCheck(instanceKey)
+		defer close(timerDone)
+		_ = instinventory.UpdateInstanceLastAttemptedCheckContext(timerCtx, instanceKey)
 	})
+	defer func() {
+		cancelTimer()
+		if !lastAttemptedCheckTimer.Stop() {
+			<-timerDone
+		}
+	}()
 
 	latency.Start("instance")
-	topologyDB, err := topology.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
+	topologyDB, err := topology.OpenDiscoveryContext(ctx, instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		latency.Stop("instance")
 		DeadInstancesFilter.RegisterInstance(instanceKey)
@@ -354,7 +368,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 	err = topologyDB.ReadDynamicRowsContext(ctx, mysqlquery.Query(instance.Version, mysqlquery.ShowSlaveStatus), func(m modeldomain.DynamicRow) error {
 		user := m.GetString(mysqlquery.Query(instance.Version, mysqlquery.MasterUser))
 
-		if instmodel.FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
+		if instmodel.FiltersMatchReplicationIgnoreUsername(user, config.FromContext(ctx).Topology.Discovery.IgnoreReplicationUsernames) {
 			err = fmt.Errorf("host %+v is excluded from discovery by DiscoveryIgnoreReplicationUsernameFilters", *instanceKey)
 			instanceDiscoverySkipped = true
 			return err
@@ -444,7 +458,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 			goto Cleanup
 		}
 		partialSuccess = true // We at least managed to read something from the server.
-		switch strings.ToLower(config.Config.Topology.Hostname.MySQLResolveMethod) {
+		switch strings.ToLower(config.FromContext(ctx).Topology.Hostname.MySQLResolveMethod) {
 		case "none":
 			resolvedHostname = instance.Key.Hostname
 		case "default", "hostname", "@@hostname":
@@ -574,7 +588,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 				if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
 					instance.SupportsOracleGTID = true
 				}
-				if config.Config.Topology.Replication.CredentialsQuery != "" {
+				if config.FromContext(ctx).Topology.Replication.CredentialsQuery != "" {
 					instance.ReplicationCredentialsAvailable = true
 				} else if masterInfoRepositoryOnTable {
 					// mysql.slave_master_info remains available in MySQL 8.4.
@@ -595,8 +609,8 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		goto Cleanup
 	}
 	go instresolve.ResolveHostnameIPs(instance.Key.Hostname)
-	if config.Config.Topology.Classification.DataCenterPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.Topology.Classification.DataCenterPattern); err == nil {
+	if config.FromContext(ctx).Topology.Classification.DataCenterPattern != "" {
+		if pattern, err := regexp.Compile(config.FromContext(ctx).Topology.Classification.DataCenterPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
 			if len(match) != 0 {
 				instance.DataCenter = match[1]
@@ -604,8 +618,8 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		}
 		// This can be overridden by later invocation of DetectDataCenterQuery
 	}
-	if config.Config.Topology.Classification.RegionPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.Topology.Classification.RegionPattern); err == nil {
+	if config.FromContext(ctx).Topology.Classification.RegionPattern != "" {
+		if pattern, err := regexp.Compile(config.FromContext(ctx).Topology.Classification.RegionPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
 			if len(match) != 0 {
 				instance.Region = match[1]
@@ -613,8 +627,8 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		}
 		// This can be overridden by later invocation of DetectRegionQuery
 	}
-	if config.Config.Topology.Classification.PhysicalEnvironmentPattern != "" {
-		if pattern, err := regexp.Compile(config.Config.Topology.Classification.PhysicalEnvironmentPattern); err == nil {
+	if config.FromContext(ctx).Topology.Classification.PhysicalEnvironmentPattern != "" {
+		if pattern, err := regexp.Compile(config.FromContext(ctx).Topology.Classification.PhysicalEnvironmentPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
 			if len(match) != 0 {
 				instance.PhysicalEnvironment = match[1]
@@ -654,9 +668,9 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		goto Cleanup
 	}
 
-	if config.Config.Topology.Replication.LagQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Replication.LagQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
-			if err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Replication.LagQuery).Decode(&instance.ReplicationLagSeconds); err == nil {
+			if err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Replication.LagQuery).Decode(&instance.ReplicationLagSeconds); err == nil {
 				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
 					log.Warningf("Host: %+v, instance.SlaveLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
 					instance.ReplicationLagSeconds.Int64 = 0
@@ -692,7 +706,7 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 	// 2. In case of DiscoverByShowSlaveHosts=false, I_S.processlist table is used.
 	// 	  It contains replica's replication user name, so the replica will be skipped
 	//    always.
-	if config.Config.Topology.Discovery.UseShowReplicaHosts || isMaxScale {
+	if config.FromContext(ctx).Topology.Discovery.UseShowReplicaHosts || isMaxScale {
 		err := topologyDB.ReadDynamicRowsContext(ctx, mysqlquery.Query(instance.Version, mysqlquery.ShowSlaveHosts),
 			func(m modeldomain.DynamicRow) error {
 				// MaxScale 1.1 may trigger an error with this command, but
@@ -714,10 +728,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 
 				replicaKey, err := instresolve.NewInstanceKey(host, port)
 				if err == nil && replicaKey.IsValid() {
-					if !instmodel.FiltersMatchInstanceKey(replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
-						if !instmodel.FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
+					if !instmodel.FiltersMatchInstanceKey(replicaKey, config.FromContext(ctx).Topology.Discovery.IgnoreReplicaHostnames) {
+						if !instmodel.FiltersMatchReplicationIgnoreUsername(user, config.FromContext(ctx).Topology.Discovery.IgnoreReplicationUsernames) {
 							instance.AddReplicaKey(replicaKey)
-						} else if config.Config.Topology.Discovery.FilterLogsEnabled {
+						} else if config.FromContext(ctx).Topology.Discovery.FilterLogsEnabled {
 							log.Infof("Ignoring replica %+v of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", replicaKey, instanceKey)
 						}
 					}
@@ -742,10 +756,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 					// Note that here we assume that the replica port is the same as our port
 					// This is the best we can do, because there is no info about port in processlist.
 					replicaKey := instmodel.InstanceKey{Hostname: cname, Port: instance.Key.Port}
-					if !instmodel.FiltersMatchInstanceKey(&replicaKey, config.Config.Topology.Discovery.IgnoreReplicaHostnames) {
-						if !instmodel.FiltersMatchReplicationIgnoreUsername(user, config.Config.Topology.Discovery.IgnoreReplicationUsernames) {
+					if !instmodel.FiltersMatchInstanceKey(&replicaKey, config.FromContext(ctx).Topology.Discovery.IgnoreReplicaHostnames) {
+						if !instmodel.FiltersMatchReplicationIgnoreUsername(user, config.FromContext(ctx).Topology.Discovery.IgnoreReplicationUsernames) {
 							instance.AddReplicaKey(&replicaKey)
-						} else if config.Config.Topology.Discovery.FilterLogsEnabled {
+						} else if config.FromContext(ctx).Topology.Discovery.FilterLogsEnabled {
 							log.Infof("Ignoring replica %+v of %+v because its replication user matches DiscoveryIgnoreReplicationUsernameFilters", replicaKey, instanceKey)
 						}
 					}
@@ -781,37 +795,37 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		})
 	}
 
-	if config.Config.Topology.Classification.DetectDataCenterQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Classification.DetectDataCenterQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
-			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectDataCenterQuery).Decode(&instance.DataCenter)
+			err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectDataCenterQuery).Decode(&instance.DataCenter)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectDataCenterQuery", err)
 		})
 	}
 
-	if config.Config.Topology.Classification.DetectRegionQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Classification.DetectRegionQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
-			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectRegionQuery).Decode(&instance.Region)
+			err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectRegionQuery).Decode(&instance.Region)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectRegionQuery", err)
 		})
 	}
 
-	if config.Config.Topology.Classification.DetectPhysicalEnvironmentQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Classification.DetectPhysicalEnvironmentQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
-			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectPhysicalEnvironmentQuery).Decode(&instance.PhysicalEnvironment)
+			err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectPhysicalEnvironmentQuery).Decode(&instance.PhysicalEnvironment)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectPhysicalEnvironmentQuery", err)
 		})
 	}
 
-	if config.Config.Topology.Classification.DetectInstanceAliasQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Classification.DetectInstanceAliasQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
-			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectInstanceAliasQuery).Decode(&instance.InstanceAlias)
+			err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectInstanceAliasQuery).Decode(&instance.InstanceAlias)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectInstanceAliasQuery", err)
 		})
 	}
 
-	if config.Config.Topology.Classification.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Classification.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
-			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectSemiSyncEnforcedQuery).Decode(&instance.SemiSyncPriority)
+			err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectSemiSyncEnforcedQuery).Decode(&instance.SemiSyncPriority)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectSemiSyncEnforcedQuery", err)
 		})
 	}
@@ -827,13 +841,13 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 		// Pseudo GTID
 		// Depends on ReadInstanceClusterAttributes above
 		instance.UsingPseudoGTID = false
-		if config.Config.PseudoGTID.Auto {
+		if config.FromContext(ctx).PseudoGTID.Auto {
 			var err error
 			instance.UsingPseudoGTID, err = instinventory.IsInjectedPseudoGTID(instance.ClusterName)
 			log.Errore(err)
-		} else if config.Config.PseudoGTID.DetectQuery != "" {
+		} else if config.FromContext(ctx).PseudoGTID.DetectQuery != "" {
 			waitGroup.Go(func() {
-				if resultData, err := topologyDB.ReadResultDataContext(ctx, config.Config.PseudoGTID.DetectQuery); err == nil {
+				if resultData, err := topologyDB.ReadResultDataContext(ctx, config.FromContext(ctx).PseudoGTID.DetectQuery); err == nil {
 					if len(resultData) > 0 {
 						if len(resultData[0]) > 0 {
 							if resultData[0][0].Valid && resultData[0][0].String == "1" {
@@ -858,10 +872,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 	// Then check if the instance wants to set a different PromotionRule.
 	// We'll set it here on their behalf so there's no race between the first
 	// time an instance is discovered, and setting a rule like "must_not".
-	if config.Config.Topology.Classification.DetectPromotionRuleQuery != "" && !isMaxScale {
+	if config.FromContext(ctx).Topology.Classification.DetectPromotionRuleQuery != "" && !isMaxScale {
 		waitGroup.Go(func() {
 			var value string
-			err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectPromotionRuleQuery).Decode(&value)
+			err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectPromotionRuleQuery).Decode(&value)
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectPromotionRuleQuery", err)
 			promotionRule, err := instmodel.ParseCandidatePromotionRule(value)
 			logReadTopologyInstanceError(instanceKey, "ParseCandidatePromotionRule", err)
@@ -880,9 +894,9 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 	if !isMaxScale {
 		if instance.SuggestedClusterAlias == "" {
 			// Only need to do on masters
-			if config.Config.Topology.Classification.DetectClusterAliasQuery != "" {
+			if config.FromContext(ctx).Topology.Classification.DetectClusterAliasQuery != "" {
 				clusterAlias := ""
-				if err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectClusterAliasQuery).Decode(&clusterAlias); err != nil {
+				if err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectClusterAliasQuery).Decode(&clusterAlias); err != nil {
 					logReadTopologyInstanceError(instanceKey, "topology.classification.detectClusterAliasQuery", err)
 				} else {
 					instance.SuggestedClusterAlias = clusterAlias
@@ -897,10 +911,10 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 			}
 		}
 	}
-	if instance.ReplicationDepth == 0 && config.Config.Topology.Classification.DetectClusterDomainQuery != "" && !isMaxScale {
+	if instance.ReplicationDepth == 0 && config.FromContext(ctx).Topology.Classification.DetectClusterDomainQuery != "" && !isMaxScale {
 		// Only need to do on masters
 		domainName := ""
-		if err := topologyDB.ReadRowContext(ctx, config.Config.Topology.Classification.DetectClusterDomainQuery).Decode(&domainName); err != nil {
+		if err := topologyDB.ReadRowContext(ctx, config.FromContext(ctx).Topology.Classification.DetectClusterDomainQuery).Decode(&domainName); err != nil {
 			domainName = ""
 			logReadTopologyInstanceError(instanceKey, "topology.classification.detectClusterDomainQuery", err)
 		}
@@ -915,6 +929,9 @@ func ReadTopologyInstanceBufferableContext(ctx context.Context, instanceKey *ins
 Cleanup:
 	waitGroup.Wait()
 	close(errorChan)
+	if err := ctx.Err(); err != nil {
+		return nil, instanceDiscoverySkipped, err
+	}
 	err = func() error {
 		if err != nil {
 			return err
@@ -979,7 +996,6 @@ Cleanup:
 		} else {
 			instinventory.WriteInstance(instance, instanceFound, err)
 		}
-		lastAttemptedCheckTimer.Stop()
 		latency.Stop("backend")
 		return instance, instanceDiscoverySkipped, nil
 	}
@@ -990,7 +1006,7 @@ Cleanup:
 	//
 	// We also get here if the instance read was skipped because
 	// it was filtered by DiscoveryIgnoreReplicationUsernameFilters.
-	// As the configuration can be hot-reloaded, we want this instance
+	// When discovery is skipped, we want this instance
 	// to be reported as 'not recently checked' (instance.IsRecentlyChecked)
 	// rather than invalid.
 	if !instanceDiscoverySkipped {

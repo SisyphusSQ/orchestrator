@@ -18,8 +18,9 @@ package pool
 
 import (
 	"context"
-	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 	"time"
+
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -102,6 +103,6 @@ func ReadAllPoolInstancesSubmissions() ([]PoolInstancesSubmission, error) {
 
 // ExpirePoolInstances cleans up the database_instance_pool table from expired items
 func ExpirePoolInstances() error {
-	err := metadata.ExpirePoolInstances(context.Background(), config.Config.Topology.Pools.ExpiryMinutes)
+	err := metadata.ExpirePoolInstances(context.Background(), config.Current().Topology.Pools.ExpiryMinutes)
 	return log.Errore(err)
 }

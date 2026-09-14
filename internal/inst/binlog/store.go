@@ -17,13 +17,15 @@
 package binlog
 
 import (
+	"context"
 	"fmt"
-	instdiscovery "github.com/openark/orchestrator/internal/inst/discovery"
-	instmodel "github.com/openark/orchestrator/internal/inst/instance"
-	instinventory "github.com/openark/orchestrator/internal/inst/inventory"
 	"regexp"
 	"strings"
 	"time"
+
+	instdiscovery "github.com/openark/orchestrator/internal/inst/discovery"
+	instmodel "github.com/openark/orchestrator/internal/inst/instance"
+	instinventory "github.com/openark/orchestrator/internal/inst/inventory"
 
 	"github.com/openark/orchestrator/internal/config"
 	"github.com/openark/orchestrator/internal/golib/log"
@@ -50,18 +52,18 @@ func initializeBinlogStorePostConfiguration() {
 }
 
 func compilePseudoGTIDPattern() (pseudoGTIDRegexp *regexp.Regexp, err error) {
-	log.Debugf("pseudoGTID.patternIsFixedSubstring: %+v", config.Config.PseudoGTID.PatternIsFixedSubstring)
-	if config.Config.PseudoGTID.PatternIsFixedSubstring {
+	log.Debugf("pseudoGTID.patternIsFixedSubstring: %+v", config.Current().PseudoGTID.PatternIsFixedSubstring)
+	if config.Current().PseudoGTID.PatternIsFixedSubstring {
 		return nil, nil
 	}
-	log.Debugf("Compiling pseudoGTID.pattern: %q", config.Config.PseudoGTID.Pattern)
-	return regexp.Compile(config.Config.PseudoGTID.Pattern)
+	log.Debugf("Compiling pseudoGTID.pattern: %q", config.Current().PseudoGTID.Pattern)
+	return regexp.Compile(config.Current().PseudoGTID.Pattern)
 }
 
 // pseudoGTIDMatches attempts to match given string with pseudo GTID pattern/text.
 func pseudoGTIDMatches(pseudoGTIDRegexp *regexp.Regexp, binlogEntryInfo string) (found bool) {
-	if config.Config.PseudoGTID.PatternIsFixedSubstring {
-		return strings.Contains(binlogEntryInfo, config.Config.PseudoGTID.Pattern)
+	if config.Current().PseudoGTID.PatternIsFixedSubstring {
+		return strings.Contains(binlogEntryInfo, config.Current().PseudoGTID.Pattern)
 	}
 	return pseudoGTIDRegexp.MatchString(binlogEntryInfo)
 }
@@ -99,9 +101,9 @@ func getLastPseudoGTIDEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey
 	for moreRowsExpected {
 		query := ""
 		if binlogCoordinates.Type == instmodel.BinaryLog {
-			query = fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Config.PseudoGTID.BinlogEventsChunkSize)
+			query = fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Current().PseudoGTID.BinlogEventsChunkSize)
 		} else {
-			query = fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.PseudoGTID.BinlogEventsChunkSize), config.Config.PseudoGTID.BinlogEventsChunkSize)
+			query = fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Current().PseudoGTID.BinlogEventsChunkSize), config.Current().PseudoGTID.BinlogEventsChunkSize)
 		}
 
 		moreRowsExpected = false
@@ -268,7 +270,7 @@ func getLastExecutedEntryInRelaylog(instanceKey *instmodel.InstanceKey, binlog s
 
 	step := 0
 	for moreRowsExpected {
-		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.PseudoGTID.BinlogEventsChunkSize), config.Config.PseudoGTID.BinlogEventsChunkSize)
+		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Current().PseudoGTID.BinlogEventsChunkSize), config.Current().PseudoGTID.BinlogEventsChunkSize)
 
 		moreRowsExpected = false
 		err = db.ReadDynamicRows(query, func(m modeldomain.DynamicRow) error {
@@ -342,7 +344,7 @@ func searchEventInRelaylog(instanceKey *instmodel.InstanceKey, binlog string, se
 
 	step := 0
 	for moreRowsExpected {
-		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Config.PseudoGTID.BinlogEventsChunkSize), config.Config.PseudoGTID.BinlogEventsChunkSize)
+		query := fmt.Sprintf("show relaylog events in '%s' FROM %d LIMIT %d,%d", binlog, relyLogMinPos, (step * config.Current().PseudoGTID.BinlogEventsChunkSize), config.Current().PseudoGTID.BinlogEventsChunkSize)
 
 		// We don't know in advance when we will hit the end of the binlog. We will implicitly understand it when our
 		// `show binlog events` query does not return any row.
@@ -432,7 +434,7 @@ func SearchEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey *instmodel
 	}
 
 	for moreRowsExpected {
-		query := fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Config.PseudoGTID.BinlogEventsChunkSize)
+		query := fmt.Sprintf("show binlog events in '%s' FROM %d LIMIT %d", binlog, nextPos, config.Current().PseudoGTID.BinlogEventsChunkSize)
 
 		// We don't know in advance when we will hit the end of the binlog. We will implicitly understand it when our
 		// `show binlog events` query does not return any row.
@@ -488,7 +490,7 @@ func SearchEntryInBinlog(pseudoGTIDRegexp *regexp.Regexp, instanceKey *instmodel
 }
 
 // SearchEntryInInstanceBinlogs will search for a specific text entry within the binary logs of a given instance.
-func SearchEntryInInstanceBinlogs(instance *instmodel.Instance, entryText string, monotonicPseudoGTIDEntries bool, minBinlogCoordinates *instmodel.BinlogCoordinates) (*instmodel.BinlogCoordinates, error) {
+func SearchEntryInInstanceBinlogs(ctx context.Context, instance *instmodel.Instance, entryText string, monotonicPseudoGTIDEntries bool, minBinlogCoordinates *instmodel.BinlogCoordinates) (*instmodel.BinlogCoordinates, error) {
 	pseudoGTIDRegexp, err := compilePseudoGTIDPattern()
 	if err != nil {
 		return nil, err
@@ -516,12 +518,12 @@ func SearchEntryInInstanceBinlogs(instance *instmodel.Instance, entryText string
 				if err != nil {
 					break
 				}
-				if instance.HasReasonableMaintenanceReplicationLag() {
+				if instance.HasReasonableMaintenanceReplicationLag(ctx) {
 					// is good to go!
 					break
 				}
 				log.Debugf("lag is too high on %+v. Throttling the search for pseudo gtid entry", instance.Key)
-				time.Sleep(time.Duration(recoverypolicy.Current(instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds) * time.Second)
+				time.Sleep(time.Duration(recoverypolicy.FromContext(ctx, instance.ClusterName).ReasonableMaintenanceReplicationLagSeconds) * time.Second)
 			}
 		}
 		var resultCoordinates instmodel.BinlogCoordinates
@@ -562,7 +564,7 @@ func readBinlogEventsChunk(instanceKey *instmodel.InstanceKey, startingCoordinat
 	if startingCoordinates.LogFile == "" {
 		return events, log.Errorf("readBinlogEventsChunk: empty binlog file name for %+v.", *instanceKey)
 	}
-	query := fmt.Sprintf("show %s events in '%s' FROM %d LIMIT %d", commandToken, startingCoordinates.LogFile, startingCoordinates.LogPos, config.Config.PseudoGTID.BinlogEventsChunkSize)
+	query := fmt.Sprintf("show %s events in '%s' FROM %d LIMIT %d", commandToken, startingCoordinates.LogFile, startingCoordinates.LogPos, config.Current().PseudoGTID.BinlogEventsChunkSize)
 	err = db.ReadDynamicRows(query, func(m modeldomain.DynamicRow) error {
 		binlogEvent := BinlogEvent{}
 		binlogEvent.Coordinates.LogFile = m.GetString("Log_name")

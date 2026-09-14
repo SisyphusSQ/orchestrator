@@ -102,7 +102,7 @@ func commandRunContext(ctx context.Context, commandText string, env []string, ou
 }
 
 func generateShellScriptContext(ctx context.Context, commandText string, env []string, arguments ...string) (*exec.Cmd, string, error) {
-	shell := config.Config.Hooks.ShellCommand
+	shell := config.Current().Hooks.ShellCommand
 
 	commandBytes := []byte(commandText)
 	tmpFile, err := os.CreateTemp("", "orchestrator-process-cmd-")

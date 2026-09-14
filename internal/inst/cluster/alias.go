@@ -36,7 +36,7 @@ func firstClusterAlias(rows []modeldomain.ClusterAlias) string {
 }
 
 func IsSQLite() bool {
-	return config.Config.IsSQLite()
+	return config.Current().IsSQLite()
 }
 
 // ReadClusterNameByAlias
@@ -152,7 +152,7 @@ func UpdateClusterAliases() error {
 // This function is compatible with ForgetLongUnseenInstances
 func ForgetLongUnseenClusterAliases() error {
 	rows, err := metadata.ForgetLongUnseenClusterAliases(
-		context.Background(), config.Config.Topology.Discovery.UnseenForgetHours,
+		context.Background(), config.Current().Topology.Discovery.UnseenForgetHours,
 	)
 	if err != nil {
 		return log.Errore(err)

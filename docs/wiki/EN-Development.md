@@ -71,3 +71,9 @@ Edit both `EN-*.md` and `ZH-*.md`, keep `managed-pages.txt` and navigation synch
 Contributions should keep runtime contracts and upgrade documentation synchronized. Separate build success, automated tests, packaging, release publication, deployment, and real environment acceptance in delivery reports.
 
 The Wiki is the maintained home for user, operator, and contributor guides. Durable architecture decisions, machine-readable contracts, generated screenshots, and issue-specific verification stay next to their owners under `docs/architecture/`, `docs/schema/`, `docs/assets/`, and `docs/verification/`; historical prose remains available through Git history.
+
+## Contract and snapshot maintenance
+
+For API changes, edit `internal/http/contract/spec.json`, run `make api-contract`, and commit generated CLI catalog, Web types/endpoints, and endpoint reference. `make test-api-contract` checks drift without writing and is included in `make test-unit`. Go code still implements routes and response VOs; shared contract tests detect omissions and field type drift.
+
+Production reads configuration through `config.Current()` or `config.FromContext(ctx)` and must never mutate returned values or nested maps/slices. The config package owns publication. `TestUpdate` is test-only and architecture tests prohibit production calls. Recovery files separate models, candidates, master/secondary recovery, takeover, semi-sync, Hooks, and storage while remaining in one `internal/logic/recovery` package.

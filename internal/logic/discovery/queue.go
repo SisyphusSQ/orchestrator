@@ -84,7 +84,7 @@ func CreateOrReturnQueue(name string) *Queue {
 		name:         name,
 		queuedKeys:   make(map[instmodel.InstanceKey]time.Time),
 		consumedKeys: make(map[instmodel.InstanceKey]time.Time),
-		queue:        make(chan instmodel.InstanceKey, config.Config.Topology.Discovery.QueueCapacity),
+		queue:        make(chan instmodel.InstanceKey, config.Current().Topology.Discovery.QueueCapacity),
 	}
 	observability.Gauge("orchestrator_discovery_queue_items", "Current deduplicated queue entries", q.queuedItems.Load, attribute.String("queue", name), attribute.String("state", "queued"))
 	observability.Gauge("orchestrator_discovery_queue_items", "Current deduplicated queue entries", q.activeItems.Load, attribute.String("queue", name), attribute.String("state", "active"))
@@ -137,7 +137,7 @@ func (q *Queue) Consume() instmodel.InstanceKey {
 
 	// alarm if have been waiting for too long
 	timeOnQueue := time.Since(q.queuedKeys[key])
-	if timeOnQueue > time.Duration(config.Config.Topology.Discovery.PollSeconds)*time.Second {
+	if timeOnQueue > time.Duration(config.Current().Topology.Discovery.PollSeconds)*time.Second {
 		log.Warningf("key %v spent %.4fs waiting on a discoveryQueue", key, timeOnQueue.Seconds())
 	}
 

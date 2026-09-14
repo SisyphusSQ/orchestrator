@@ -17,14 +17,14 @@
 | --- | --- | --- | --- |
 | `observability` | `tracing.endpoint`, `sampleRatio` | endpoint 可携带环境敏感信息；采样影响成本 | 重启 |
 | `logging` | `debug`, `syslog.enabled` | syslog 初始化失败会阻止启动 | 重启验证 |
-| `server` | `listen`, `httpAdvertise`, `urlPrefix`, `readOnly`, `tls`, `status`, `web`, `responseIdentity` | 外部暴露、身份、写权限 | listener/TLS/prefix 重启 |
+| `server` | `listen`, `httpAdvertise`, `urlPrefix`, `readOnly`, `tls`, `status`, `web`, `responseIdentity` | 外部暴露、身份、写权限 | readOnly/web 支持 reload；其他重启 |
 | `raft` | `nodeID`, `bind`, `advertise`, `dataDir`, `defaultPort` | 持久身份与多数派 | 全部重启，禁止随意改 ID/目录 |
 | `mysql` | `connectTimeoutSeconds`, `connectionLifetimeSeconds` | 所有 MySQL 连接基础参数 | 连接池重启 |
 | `metadata` | `type`, `sqlite`, `schema`, `mysql` | 元数据库一致性与 Schema | 重启；迁移另行执行 |
-| `topology` | `mysql`, `replication`, `discovery`, `writeBuffer`, `compatibility`, `snapshot`, `hostname`, `candidate`, `classification`, `pools`, `analysis`, `operations` | 发现、候选与真实 MySQL 写入 | 连接/身份字段重启，其余需验证 reload |
+| `topology` | `mysql`, `replication`, `discovery`, `writeBuffer`, `compatibility`, `snapshot`, `hostname`, `candidate`, `classification`, `pools`, `analysis`, `operations` | 发现、候选与真实 MySQL 写入 | 全部重启 |
 | `authentication` | `method`, `basic`, `proxy`, `power`, `configurationAdmins`, `accessToken` | 身份冒用和越权 | 变更后重启并重新验收 |
-| `agents` | listener、poll、seed、`tls` | 额外管理端口与远程副作用 | listener/TLS 重启 |
-| `pseudoGTID` | marker、query、chunk、skip | 重排能力与 binlog 扫描成本 | 所有相关主库共同验证 |
+| `agents` | listener、poll、seed、`tls` | 额外管理端口与远程副作用 | 全部重启 |
+| `pseudoGTID` | marker、query、chunk、skip | 重排能力与 binlog 扫描成本 | 重启，所有相关主库共同验证 |
 | `hooks` | `shellCommand` | 服务身份执行外部命令 | 重启并安全测试 |
 | `osc` | `ignoreHostnames` | OSC 候选过滤 | reload 后回读 |
 | `audit` | `logFile`, `toSyslog`, `toBackend`, `purgeDays` | 证据缺失或敏感输出 | sink 变更后重启验证 |
@@ -112,3 +112,7 @@ Pseudo-GTID 完整字段为 `auto`, `pattern`, `patternIsFixedSubstring`, `monot
 3. 严格解析配置，再滚动重启一个 follower。
 4. 回读 health、Raft、连接池、发现、认证、metrics/log/audit 与外部集成。
 5. 保持自动恢复关闭，直到分类、候选、恢复策略与 Hook 再次确认。
+
+## 运行时配置快照
+
+运行中仅允许热更新 `server.readOnly`、`server.web` 和 `osc`。其他字段（包括发现过滤器、周期、认证、连接池和 Raft 参数）发生变化会明确报错，整份候选配置不发布；须重启进程。重载先在私有副本中解析、校验，再原子发布；在途请求/恢复保留已取得的快照，后续请求读取新配置。切换 readOnly 不会撤销已开始的拓扑写入。

@@ -51,3 +51,9 @@ Historical API compatibility includes some mutating GET routes. Therefore HTTP m
 Use TLS, authentication, and least-privilege network access. Never put credentials in a URL. With proxy authentication, strip user-supplied identity headers at the edge and set the trusted header only after successful proxy authentication. Prefer `orch` unless an integration needs the raw API; it already implements response checking and explicit unknown-result exits.
 
 API acceptance should cover representative reads and mutations, both slash forms, HEAD, authentication, gzip, mTLS rejection, URL prefixes, follower proxy termination, and the actual HTTP/HTTPS/Unix listener selected in deployment. Route-unit tests do not establish real certificate, proxy, Raft, MySQL, browser, or recovery behavior.
+
+## Machine-readable contract
+
+[`internal/http/contract/spec.json`](https://github.com/SisyphusSQ/orchestrator/blob/main/internal/http/contract/spec.json) owns methods, path parameters, operation read-only semantics, response models, and optional error classes. `make api-contract` generates the independent CLI catalog, Web types/route metadata, and [endpoint table](https://github.com/SisyphusSQ/orchestrator/blob/main/docs/architecture/api-contract.md). Server tests compare registered routes and serialized response VOs; Web action tests consume generated metadata instead of scanning Go source with regular expressions.
+
+Legacy methods and wire formats remain unchanged. `legacy` and empty schemas denote dynamic output, not full typing of every historical field. GET does not imply read-only.
