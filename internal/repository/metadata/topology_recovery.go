@@ -143,9 +143,14 @@ func RegisterTopologyRecovery(ctx context.Context, input TopologyRecoveryRegistr
 			cluster_alias,
 			count_affected_slaves,
 			slave_hosts,
+			participating_instances,
+			lost_slaves,
+			all_errors,
+			acknowledged_by,
+			acknowledge_comment,
 			last_detection_id
 		) values (
-			?, ?, ?, ?, 1, NOW(), 0, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			?, ?, ?, ?, 1, NOW(), 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '', '',
 			(select ifnull(max(id), 0) from topology_failure_detection where hostname = ? and port = ?)
 		)
 	`, nilIfZero(input.ID), input.UID, input.Hostname, input.Port,
