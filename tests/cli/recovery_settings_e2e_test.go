@@ -29,6 +29,7 @@ func TestRecoverySettingsLifecycle(t *testing.T) {
 	}
 	workDir := t.TempDir()
 	databasePath := filepath.Join(workDir, "orchestrator.db")
+	auditPath := filepath.Join(workDir, "audit.log")
 	httpPort, raftPort := freePort(t), freePort(t)
 	configuration := map[string]any{
 		"metadata": map[string]any{
@@ -47,7 +48,7 @@ func TestRecoverySettingsLifecycle(t *testing.T) {
 			"bind":    fmt.Sprintf("127.0.0.1:%d", raftPort),
 		},
 		"logging": map[string]any{"syslog": map[string]any{"enabled": false}},
-		"audit":   map[string]any{"toSyslog": false},
+		"audit":   map[string]any{"logFile": auditPath, "toSyslog": false},
 	}
 	configurationBytes, err := json.Marshal(configuration)
 	if err != nil {
@@ -174,6 +175,35 @@ func TestRecoverySettingsLifecycle(t *testing.T) {
 	if strings.Contains(output, "supersecret") || !strings.Contains(output, "[REDACTED]") {
 		t.Fatalf("hook output was not redacted: %q", output)
 	}
+	saveHook := func(id, failurePolicy string, commands []string, timeoutSeconds, outputLimitBytes int) {
+		t.Helper()
+		ok(http.MethodPost, "/api/recovery-hook-profiles", map[string]any{
+			"profile": map[string]any{
+				"id": id, "name": id, "commands": commands,
+				"timeoutSeconds": timeoutSeconds, "failurePolicy": failurePolicy, "outputLimitBytes": outputLimitBytes,
+				"enabled": true, "changeReason": "TOO-415 hook boundary E2E",
+			},
+			"expectedRevision": 0,
+		})
+	}
+	saveHook("e2e-timeout-abort", "abort", []string{"sleep 2; printf late", "printf must-not-run"}, 1, 1024)
+	timeoutResults := ok(http.MethodPost, "/api/recovery-hook-test", map[string]any{"profileId": "e2e-timeout-abort"})["Details"].([]any)
+	if len(timeoutResults) != 1 || timeoutResults[0].(map[string]any)["error"] == nil || strings.Contains(timeoutResults[0].(map[string]any)["output"].(string), "must-not-run") {
+		t.Fatalf("abort-on-timeout hook results: %v", timeoutResults)
+	}
+
+	saveHook("e2e-failure-continue", "continue", []string{"printf failed-output; exit 7", "printf continued-output"}, 5, 1024)
+	continueResults := ok(http.MethodPost, "/api/recovery-hook-test", map[string]any{"profileId": "e2e-failure-continue"})["Details"].([]any)
+	if len(continueResults) != 2 || continueResults[0].(map[string]any)["error"] == nil || continueResults[1].(map[string]any)["error"] != nil || continueResults[1].(map[string]any)["output"] != "continued-output" {
+		t.Fatalf("continue-on-failure hook results: %v", continueResults)
+	}
+
+	saveHook("e2e-output-limit", "abort", []string{"printf '%02048d' 0"}, 5, 1024)
+	limitedResults := ok(http.MethodPost, "/api/recovery-hook-test", map[string]any{"profileId": "e2e-output-limit"})["Details"].([]any)
+	limitedOutput := limitedResults[0].(map[string]any)["output"].(string)
+	if len(limitedResults) != 1 || len(limitedOutput) != 1024 || limitedResults[0].(map[string]any)["error"] != nil {
+		t.Fatalf("bounded hook output len=%d results=%v", len(limitedOutput), limitedResults)
+	}
 	for _, assignment := range []map[string]any{
 		{"scopeType": "global", "scopeKey": "*", "phase": "post_failover", "mode": "replace", "profileIds": []string{"e2e-hook"}, "revision": 0, "changeReason": "live E2E global hook"},
 		{"scopeType": "cluster", "scopeKey": "orders-prod", "phase": "post_failover", "mode": "disable", "profileIds": []string{}, "revision": 0, "changeReason": "live E2E cluster hook override"},
@@ -190,7 +220,7 @@ func TestRecoverySettingsLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	for table, want := range map[string]int{"recovery_policy": 2, "recovery_hook_profile": 1, "recovery_hook_assignment": 2} {
+	for table, want := range map[string]int{"recovery_policy": 2, "recovery_hook_profile": 4, "recovery_hook_assignment": 2} {
 		var count int
 		if err := database.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil || count != want {
 			t.Fatalf("%s row count=%d, want=%d, error=%v", table, count, want, err)
@@ -205,5 +235,12 @@ func TestRecoverySettingsLifecycle(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("recovery settings web route status=%d", response.StatusCode)
 	}
-	t.Log("live recovery settings E2E passed: defaults, sparse global/cluster precedence, revision conflict, hook redaction, inherit override storage and web route")
+	auditContents, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(auditContents), "test-recovery-hook") != 5 {
+		t.Fatalf("audit file hook entries=%d, want 5", strings.Count(string(auditContents), "test-recovery-hook"))
+	}
+	t.Log("live recovery settings E2E passed: defaults, sparse global/cluster precedence, revision conflict, hook redaction/timeout/output-limit/continue/abort, audit file, inherit override storage and web route")
 }

@@ -226,3 +226,79 @@ test("numeric target ports validate and submit exactly one confirmed action", as
   await expect(dialog.getByText("操作执行成功", { exact: true })).toBeVisible();
   expect(writes).toBe(1);
 });
+
+test("live lost acknowledgement commits once and is recovered by readback", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.ORCH_WEB_LIVE_DISCONNECT !== "1",
+    "requires an explicitly supplied live orchestrator endpoint",
+  );
+  const cluster = process.env.ORCH_WEB_LIVE_CLUSTER!;
+  const instance = process.env.ORCH_WEB_LIVE_INSTANCE!;
+  const separator = instance.lastIndexOf(":");
+  expect(separator).toBeGreaterThan(0);
+  const host = instance.slice(0, separator);
+  const port = Number(instance.slice(separator + 1));
+  expect(port).toBeGreaterThan(0);
+
+  let writes = 0;
+  let committed = false;
+  await page.route("**/api/begin-downtime/**", async (route) => {
+    writes++;
+    const response = await route.fetch();
+    committed = response.ok();
+    await route.abort("connectionreset");
+  });
+
+  await page.goto(`/web/cluster/${encodeURIComponent(cluster)}`);
+  await page.getByRole("button", { name: instance, exact: true }).click();
+  await page.getByRole("tab", { name: "维护与停机" }).click();
+  await page.getByRole("button", { name: "开始停机", exact: true }).click();
+  await page.getByLabel("负责人", { exact: true }).fill("too415-browser");
+  await page.getByLabel("原因", { exact: true }).fill("TOO-415 browser disconnect");
+  await page
+    .getByRole("button", { name: "确认执行", exact: true })
+    .dblclick();
+
+  await expect(page.getByText("操作结果未知", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "确认执行", exact: true }),
+  ).toHaveCount(0);
+  expect(writes).toBe(1);
+  expect(committed).toBe(true);
+
+  await page.getByRole("button", { name: "重新读取状态", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        async ({ host, port }) => {
+          const response = await fetch(
+            `/api/instance/${encodeURIComponent(host)}/${port}`,
+            { cache: "no-store" },
+          );
+          const value = await response.json();
+          const instance = value?.Details ?? value;
+          return {
+            isDowntimed: instance.IsDowntimed,
+            reason: instance.DowntimeReason,
+          };
+        },
+        { host, port },
+      ),
+    )
+    .toEqual({
+      isDowntimed: true,
+      reason: "TOO-415 browser disconnect",
+    });
+
+  await page
+    .locator(".ant-modal")
+    .getByRole("button", { name: /关\s*闭/ })
+    .last()
+    .click();
+  await expect(page.getByText("停机中", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("TOO-415 browser disconnect", { exact: true }),
+  ).toBeVisible();
+});

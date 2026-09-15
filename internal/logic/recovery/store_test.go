@@ -49,6 +49,9 @@ func TestTopologyRecoveryFromTypedRowPreservesNullableFields(t *testing.T) {
 	if recovery.AcknowledgedAt != "" || recovery.AcknowledgedBy != "" || recovery.AcknowledgedComment != "" {
 		t.Fatalf("NULL acknowledgement fields were not preserved as empty strings: %+v", recovery)
 	}
+	if len(recovery.AllErrors) != 0 {
+		t.Fatalf("empty persisted errors became synthetic entries: %q", recovery.AllErrors)
+	}
 	if !recovery.ParticipatingInstanceKeys.HasKey(instmodel.InstanceKey{Hostname: "successor.example", Port: 3307}) {
 		t.Fatalf("participating instances = %+v; want successor", recovery.ParticipatingInstanceKeys)
 	}

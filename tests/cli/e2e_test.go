@@ -237,27 +237,31 @@ func eventually(t *testing.T, timeout time.Duration, condition func() bool) {
 }
 func replicaSourcePort(t *testing.T, db *sql.DB) int {
 	t.Helper()
-	rows, err := db.QueryContext(t.Context(), "SHOW REPLICA STATUS")
-	if err != nil {
-		return 0
-	}
-	defer rows.Close()
-	columns, err := rows.Columns()
-	if err != nil || !rows.Next() {
-		return 0
-	}
-	values := make([]sql.RawBytes, len(columns))
-	args := make([]any, len(columns))
-	for i := range values {
-		args[i] = &values[i]
-	}
-	if err := rows.Scan(args...); err != nil {
-		return 0
-	}
-	for i, name := range columns {
-		if name == "Source_Port" {
-			port, _ := strconv.Atoi(string(values[i]))
-			return port
+	for _, query := range []string{"SHOW REPLICA STATUS", "SHOW SLAVE STATUS"} {
+		rows, err := db.QueryContext(t.Context(), query)
+		if err != nil {
+			continue
+		}
+		columns, err := rows.Columns()
+		if err != nil || !rows.Next() {
+			_ = rows.Close()
+			continue
+		}
+		values := make([]sql.RawBytes, len(columns))
+		args := make([]any, len(columns))
+		for i := range values {
+			args[i] = &values[i]
+		}
+		if err := rows.Scan(args...); err != nil {
+			_ = rows.Close()
+			continue
+		}
+		_ = rows.Close()
+		for i, name := range columns {
+			if name == "Source_Port" || name == "Master_Port" {
+				port, _ := strconv.Atoi(string(values[i]))
+				return port
+			}
 		}
 	}
 	return 0

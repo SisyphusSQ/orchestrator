@@ -2,6 +2,7 @@ package audit
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -9,6 +10,38 @@ import (
 
 	"github.com/openark/orchestrator/internal/config"
 )
+
+func TestRealAuditSyslogSmoke(t *testing.T) {
+	if os.Getenv("ORCHESTRATOR_REAL_SYSLOG") != "1" {
+		t.Skip("set ORCHESTRATOR_REAL_SYSLOG=1 to use the host syslog service")
+	}
+	marker := os.Getenv("ORCHESTRATOR_REAL_SYSLOG_MARKER")
+	if marker == "" {
+		t.Fatal("ORCHESTRATOR_REAL_SYSLOG_MARKER is required")
+	}
+	previousAuditLogFile := config.Current().Audit.LogFile
+	previousAuditToBackendDB := config.Current().Audit.ToBackend
+	config.TestUpdate(func(cfg *config.Configuration) {
+		cfg.Audit.LogFile = ""
+		cfg.Audit.ToBackend = false
+	})
+	t.Cleanup(func() {
+		_ = CloseAuditSyslog()
+		config.TestUpdate(func(cfg *config.Configuration) {
+			cfg.Audit.LogFile = previousAuditLogFile
+			cfg.Audit.ToBackend = previousAuditToBackendDB
+		})
+	})
+	if err := EnableAuditSyslog(); err != nil {
+		t.Fatalf("EnableAuditSyslog() error: %v", err)
+	}
+	if err := AuditOperation("too415-real-syslog", nil, marker+"-audit"); err != nil {
+		t.Fatalf("AuditOperation() error: %v", err)
+	}
+	if err := CloseAuditSyslog(); err != nil {
+		t.Fatalf("CloseAuditSyslog() error: %v", err)
+	}
+}
 
 func TestAuditOperationReturnsFileWriteFailure(t *testing.T) {
 	previousAuditLogFile := config.Current().Audit.LogFile

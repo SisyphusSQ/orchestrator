@@ -56,7 +56,9 @@ func topologyRecoveryFromRow(row modeldomain.TopologyRecoveryRecord) *TopologyRe
 	topologyRecovery.SuccessorKey = &instmodel.InstanceKey{Hostname: row.SuccessorHostname, Port: row.SuccessorPort}
 	topologyRecovery.SuccessorAlias = row.SuccessorAlias
 	topologyRecovery.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
-	topologyRecovery.AllErrors = strings.Split(row.AllErrors.String, "\n")
+	if row.AllErrors.Valid && row.AllErrors.String != "" {
+		topologyRecovery.AllErrors = strings.Split(row.AllErrors.String, "\n")
+	}
 	_ = instresolve.ReadCommaDelimitedList(&topologyRecovery.LostReplicas, row.LostReplicas.String)
 	_ = instresolve.ReadCommaDelimitedList(&topologyRecovery.ParticipatingInstanceKeys, row.ParticipatingInstances.String)
 	topologyRecovery.Acknowledged = row.Acknowledged

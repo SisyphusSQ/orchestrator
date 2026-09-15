@@ -186,6 +186,12 @@ func SetExplicitClusterAlias(ctx context.Context, clusterName, alias, clusterSco
 				insert into cluster_alias_override (cluster_name, alias) values (?, ?)
 			`, clusterName, alias)
 		}
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `
+			replace into cluster_alias (cluster_name, alias, last_registered) values (?, ?, CURRENT_TIMESTAMP)
+		`, clusterName, alias)
 		return err
 	})
 }
